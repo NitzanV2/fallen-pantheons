@@ -28,17 +28,24 @@ func _ready() -> void:
 	corner.add_theme_constant_override("separation", 10)
 	add_child(corner)
 
+	var sound := HBoxContainer.new()
+	sound.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	sound.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	sound.position = Vector2(12, -8)
+	sound.add_theme_constant_override("separation", 10)
+	add_child(sound)
+
 	mute_button = Button.new()
 	mute_button.tooltip_text = "Mute or unmute all sound (Ctrl+M)."
 	mute_button.focus_mode = Control.FOCUS_NONE
 	mute_button.custom_minimum_size = Vector2(84, 0)
 	mute_button.add_theme_font_size_override("font_size", 12)
 	mute_button.pressed.connect(_toggle_mute)
-	corner.add_child(mute_button)
+	sound.add_child(mute_button)
 	volume_slider = HSlider.new()
 	volume_slider.tooltip_text = "Volume"
 	volume_slider.focus_mode = Control.FOCUS_NONE
-	volume_slider.custom_minimum_size = Vector2(110, 0)
+	volume_slider.custom_minimum_size = Vector2(88, 0)
 	volume_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	volume_slider.min_value = 0.0
 	volume_slider.max_value = 1.0
@@ -46,7 +53,7 @@ func _ready() -> void:
 	volume_slider.value = Music.get_volume()
 	volume_slider.value_changed.connect(_on_volume_changed)
 	volume_slider.drag_ended.connect(func(_changed): Music.set_volume(volume_slider.value))
-	corner.add_child(volume_slider)
+	sound.add_child(volume_slider)
 	_update_mute_button()
 
 	var build := Label.new()

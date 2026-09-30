@@ -46,6 +46,7 @@ var push_row: HBoxContainer
 var skip_button: Button
 var menu_button: Button
 var run_info_row: HBoxContainer
+var abandon_button: Button
 var result_panel: PanelContainer
 var result_label: Label
 var single_buttons: HBoxContainer
@@ -77,6 +78,7 @@ func start_run_fight(run_combat, title: String) -> void:
 	_build()
 	menu_button.visible = false
 	run_info_row.visible = true
+	abandon_button.visible = true
 	combat = run_combat
 	_begin("[b]%s[/b]" % title)
 	_play_music()
@@ -250,7 +252,7 @@ func _build_sidebar() -> void:
 	var misc_row := HBoxContainer.new()
 	box.add_child(misc_row)
 	skip_button = _button("Skip animation", func(): skip_animation = true, misc_row)
-	var help_button := _button("? Rules (H)", _toggle_help, misc_row)
+	var help_button := _button("Rules (H)", _toggle_help, misc_row)
 	help_button.tooltip_text = "How battles work: round order, targeting, tiebreakers and keywords."
 	for b in [cancel_button, restart_button, skip_button, help_button]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -260,8 +262,7 @@ func _build_sidebar() -> void:
 	box.add_child(run_info_row)
 	var map_button := _button("Map (M)", func(): map_requested.emit(), run_info_row)
 	var deck_button := _button("Deck (D)", func(): deck_requested.emit(), run_info_row)
-	var abandon_button := _button("Abandon", func(): abandon_requested.emit(), run_info_row)
-	for b in [map_button, deck_button, abandon_button]:
+	for b in [map_button, deck_button]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var log_panel := PanelContainer.new()
@@ -279,6 +280,8 @@ func _build_sidebar() -> void:
 	log_label.add_theme_font_size_override("bold_font_size", 12)
 	log_label.add_theme_color_override("default_color", Color(0.82, 0.82, 0.88))
 	log_panel.add_child(log_label)
+	abandon_button = _button("Abandon run", func(): abandon_requested.emit(), box)
+	abandon_button.visible = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
