@@ -10,7 +10,7 @@ signal abandon_requested
 const Combat = preload("res://scripts/core/combat.gd")
 const Data = preload("res://scripts/core/data.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
-const RulesText = preload("res://scripts/ui/rules_text.gd")
+const RulesPanel = preload("res://scripts/ui/rules_panel.gd")
 const BoardView = preload("res://scripts/ui/board_view.gd")
 const Music = preload("res://scripts/ui/music.gd")
 
@@ -148,6 +148,13 @@ func _build() -> void:
 	hand_box.size = Vector2(BOARD_RECT.size.x - 20, CardWidget.CARD_SIZE.y)
 	add_child(hand_box)
 
+	var rules_button := _button("Rulebook (H)", _toggle_help, self)
+	rules_button.position = Vector2(14, 14)
+	rules_button.custom_minimum_size = Vector2(186, 50)
+	rules_button.add_theme_font_size_override("font_size", 16)
+	CardWidget.button_icon(rules_button, "rulebook", 36)
+	rules_button.tooltip_text = "How battles work: round order, targeting, keywords, enemies and terrain."
+
 	_build_sidebar()
 	_build_push_panel()
 	_build_result_panel()
@@ -247,12 +254,8 @@ func _build_sidebar() -> void:
 	cancel_button.tooltip_text = "Drop the current selection (right-click or Esc also works)."
 	restart_button = _button("Undo round", _on_restart_pressed, edit_row)
 	restart_button.tooltip_text = CardWidget.wrap_text("Take back every card played and unit moved since this planning phase began.")
-	var misc_row := HBoxContainer.new()
-	box.add_child(misc_row)
-	skip_button = _button("Skip animation", func(): skip_animation = true, misc_row)
-	var help_button := _button("Rules (H)", _toggle_help, misc_row)
-	help_button.tooltip_text = "How battles work: round order, targeting, tiebreakers and keywords."
-	for b in [cancel_button, restart_button, skip_button, help_button]:
+	skip_button = _button("Skip animation", func(): skip_animation = true, box)
+	for b in [cancel_button, restart_button]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	menu_button = _button("Back to menu", func(): exit_requested.emit(), box)
 	run_info_row = HBoxContainer.new()
@@ -303,72 +306,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _toggle_help() -> void:
 	if help_panel == null:
-		_build_help_panel()
+		help_panel = RulesPanel.new()
+		add_child(help_panel)
 	else:
 		help_panel.visible = not help_panel.visible
 	if help_panel.visible:
 		move_child(help_panel, get_child_count() - 1)
-
-
-func _build_help_panel() -> void:
-	help_panel = ColorRect.new()
-	help_panel.color = Color(0, 0, 0, 0.7)
-	help_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	help_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(help_panel)
-
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "right"]:
-		margin.add_theme_constant_override("margin_" + side, 160)
-	for side in ["top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 50)
-	help_panel.add_child(margin)
-
-	var panel := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.14)
-	style.border_color = Color(0.95, 0.75, 0.2)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
-	panel.add_theme_stylebox_override("panel", style)
-	margin.add_child(panel)
-	var inner := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		inner.add_theme_constant_override("margin_" + side, 18)
-	panel.add_child(inner)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	inner.add_child(box)
-
-	var header := HBoxContainer.new()
-	box.add_child(header)
-	var title := Label.new()
-	title.text = "How battles work"
-	title.add_theme_font_size_override("font_size", 28)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
-	var close := _button("Close (Esc)", func(): help_panel.visible = false, header)
-	close.custom_minimum_size = Vector2(130, 38)
-
-	var tabs := TabContainer.new()
-	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(tabs)
-	for section in RulesText.SECTIONS:
-		var text := RichTextLabel.new()
-		text.bbcode_enabled = true
-		text.text = section[1]
-		text.add_theme_font_size_override("normal_font_size", 17)
-		text.add_theme_font_size_override("bold_font_size", 17)
-		text.add_theme_font_size_override("italics_font_size", 17)
-		text.add_theme_constant_override("line_separation", 4)
-		text.add_theme_constant_override("table_h_separation", 16)
-		text.add_theme_constant_override("table_v_separation", 6)
-		var pad := StyleBoxEmpty.new()
-		pad.set_content_margin_all(14)
-		text.add_theme_stylebox_override("normal", pad)
-		tabs.add_child(text)
-		tabs.set_tab_title(tabs.get_tab_count() - 1, "  %s  " % section[0])
 
 
 func _button(text: String, callback: Callable, parent: Control, primary := false) -> Button:
