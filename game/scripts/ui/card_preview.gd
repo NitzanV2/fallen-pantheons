@@ -2,8 +2,11 @@ extends CanvasLayer
 ## Enlarged card with its keyword glossary, shown beside whichever card or board unit the mouse is over.
 
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
+const Data = preload("res://scripts/core/data.gd")
 
 const BIG_SIZE := Vector2(300, 450)
+## Bosses have long rules text, so their card is shown larger and taller than a card's usual 2:3.
+const BOSS_SIZE := Vector2(400, 720)
 const GLOSSARY_W := 270
 const GAP := 14
 
@@ -30,18 +33,21 @@ func show_card(card_id: String, from: Control, cost := -1) -> void:
 func show_unit(u: Dictionary, rect: Rect2, from: Control, extras: Array) -> void:
 	var face: Control = null
 	var entries: Array = []
+	var size := BIG_SIZE
 	if not u.is_empty():
 		if u["side"] == 0:
 			face = CardWidget.card_face(u["id"], BIG_SIZE, true)
 			entries = _keyword_entries(CardWidget.card_icons(u["id"]))
 		else:
-			face = CardWidget.enemy_face(u["id"], BIG_SIZE)
+			if Data.ENEMIES[u["id"]]["kind"] == "boss":
+				size = BOSS_SIZE
+			face = CardWidget.enemy_face(u["id"], size)
 			entries = _keyword_entries(CardWidget.def_icons(CardWidget.enemy_def(u["id"]), u["id"]))
 	entries = extras + entries
 	if face == null and entries.is_empty():
 		hide_card(from)
 		return
-	_show(face, entries, rect, from)
+	_show(face, entries, rect, from, size)
 
 
 func hide_card(from: Control) -> void:
@@ -57,11 +63,11 @@ func _keyword_entries(icons: Array) -> Array:
 	return out
 
 
-func _show(face: Control, entries: Array, rect: Rect2, from: Control) -> void:
+func _show(face: Control, entries: Array, rect: Rect2, from: Control, size := BIG_SIZE) -> void:
 	owner_control = from
 	for child in holder.get_children():
 		child.queue_free()
-	var card_w: float = BIG_SIZE.x + GAP if face != null else 0.0
+	var card_w: float = size.x + GAP if face != null else 0.0
 	if face != null:
 		holder.add_child(face)
 	var glossary := _glossary(entries)
@@ -73,7 +79,7 @@ func _show(face: Control, entries: Array, rect: Rect2, from: Control) -> void:
 	var right_side := x + width <= view.x
 	if not right_side:
 		x = rect.position.x - GAP - width
-	var height: float = BIG_SIZE.y if face != null else 200.0
+	var height: float = size.y if face != null else 200.0
 	var y: float = clamp(rect.get_center().y - height / 2, 8, view.y - height - 8)
 	holder.position = Vector2(max(8, x), y)
 	if right_side:

@@ -364,17 +364,20 @@ func _map_node(node: Dictionary, reachable: bool, visited: bool, passed: bool, h
 
 	var ring_color: Color = NODE_COLORS[type]
 	var path := "res://art/map/%s.png" % type
+	var focus := -1.0
 	if type == "boss":
 		var boss: Dictionary = run.boss_def()
+		var boss_id: String = boss["enemies"][0][0]
+		focus = CardWidget.ART_FOCUS.get(boss_id, -1.0)
 		for pattern in CardWidget.ART_PATHS:
-			if ResourceLoader.exists(pattern % ["enemies", boss["enemies"][0][0]]):
-				path = pattern % ["enemies", boss["enemies"][0][0]]
+			if ResourceLoader.exists(pattern % ["enemies", boss_id]):
+				path = pattern % ["enemies", boss_id]
 		b.tooltip_text = CardWidget.wrap_text("BOSS: %s\n%s\n%s" % [run.boss_name(), boss["hint"], NODE_HELP["boss"]])
 	if reachable:
 		ring_color = REACHABLE
 	elif visited or here:
 		ring_color = GOLD
-	var face := _medallion_face(path, d, ring_color, reachable or here)
+	var face := _medallion_face(path, d, ring_color, reachable or here, focus)
 	face.size = b.size
 	b.add_child(face)
 
@@ -410,7 +413,8 @@ func _map_node(node: Dictionary, reachable: bool, visited: bool, passed: bool, h
 
 
 ## The glow sits on its own panel: a clipping panel with a shadow would clip the art to a square.
-func _medallion_face(path: String, d: float, ring_color: Color, glow := false) -> Control:
+## `focus` >= 0 zooms the art in on that height (a boss's face, see CardWidget.ART_FOCUS).
+func _medallion_face(path: String, d: float, ring_color: Color, glow := false, focus := -1.0) -> Control:
 	var root := Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var halo := Panel.new()
@@ -441,6 +445,8 @@ func _medallion_face(path: String, d: float, ring_color: Color, glow := false) -
 	tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	CardWidget.place(mask, tex, 0, 0, -0.001, -0.001)
+	if focus >= 0.0 and tex.texture != null:
+		CardWidget.focus_art(tex, focus, 1.8)
 
 	var width: int = max(2, int(d / 16))
 	for layer in [[ring_color, width, 0.0], [Color(ring_color.lightened(0.45), 0.7), 1, float(width)]]:

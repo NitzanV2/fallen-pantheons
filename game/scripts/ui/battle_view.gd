@@ -88,6 +88,9 @@ func _play_music() -> void:
 
 func _exit_tree() -> void:
 	Music.play("theme")
+	var preview = get_tree().get_first_node_in_group("card_preview")
+	if preview != null:
+		preview.hide_card(board)
 
 
 func _new_combat(seed_value: int) -> void:

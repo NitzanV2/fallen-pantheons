@@ -67,6 +67,8 @@ const TRIGGERS := [
 	["start_round", ["Start of round", "Start of each round"]], ["end_round", ["End of round", "End of each round"]],
 ]
 const RELIC_COLOR := Color(0.6, 0.4, 0.2)
+## Where each boss's face sits in its art (fraction of the image height), so wide crops show it.
+const ART_FOCUS := {"void_herald": 0.34, "hel": 0.28, "apep": 0.3}
 const ENEMY_COLORS := {"enemy": Color(0.55, 0.25, 0.6), "elite": Color(0.8, 0.3, 0.35), "boss": Color(0.9, 0.2, 0.2)}
 
 
@@ -88,6 +90,8 @@ static func art(kind: String, id: String, display_name: String, tint: Color, fon
 			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 			tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			if kind == "enemies" and ART_FOCUS.has(id):
+				focus_art(tex, ART_FOCUS[id])
 			return tex
 	var panel := Panel.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -109,6 +113,31 @@ static func art(kind: String, id: String, display_name: String, tint: Color, fon
 	label.add_theme_color_override("font_color", tint.lightened(0.3))
 	panel.add_child(label)
 	return panel
+
+
+## Crops `tex` around a point `focus_y` (fraction of the image height) instead of the center,
+## recomputed whenever it resizes. `zoom` > 1 crops tighter around that point.
+static func focus_art(tex: TextureRect, focus_y: float, zoom := 1.0) -> void:
+	var source: Texture2D = tex.texture
+	var atlas := AtlasTexture.new()
+	atlas.atlas = source
+	atlas.region = Rect2(Vector2.ZERO, source.get_size())
+	tex.texture = atlas
+	tex.stretch_mode = TextureRect.STRETCH_SCALE
+	var update := func():
+		if tex.size.x <= 0 or tex.size.y <= 0:
+			return
+		var full: Vector2 = source.get_size()
+		var aspect: float = tex.size.x / tex.size.y
+		var h: float = minf(full.y, full.x / aspect) / zoom
+		var w: float = h * aspect
+		if w > full.x:
+			w = full.x
+			h = w / aspect
+		var y: float = clampf(full.y * focus_y - h * 0.42, 0.0, full.y - h)
+		atlas.region = Rect2((full.x - w) / 2, y, w, h)
+	tex.resized.connect(update)
+	update.call()
 
 
 ## Adds `child` to `parent` filling the rectangle between the given offsets (negative = from the far edge).
