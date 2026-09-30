@@ -6,6 +6,7 @@ const BattleView = preload("res://scripts/ui/battle_view.gd")
 const RunView = preload("res://scripts/ui/run_view.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const PlaytestOverlay = preload("res://scripts/ui/playtest_overlay.gd")
+const CardPreview = preload("res://scripts/ui/card_preview.gd")
 
 const PATRON_TILE := Vector2(380, 600)
 const PATRON_ART := Vector2(356, 300)
@@ -34,6 +35,7 @@ func _ready() -> void:
 	add_child(bg)
 	_build_menu()
 	_build_sandbox()
+	add_child(CardPreview.new())
 	add_child(PlaytestOverlay.new())
 
 

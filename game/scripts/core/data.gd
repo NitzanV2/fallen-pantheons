@@ -88,6 +88,18 @@ const CARDS := {
 	"ashes": {"name": "Ashes", "faction": "status", "rarity": "Status", "type": "status", "cost": 0, "token": true, "core_damage": 1, "text": "Unplayable. At the start of the next round, it exhausts and the Core takes 1 (never lethal)."},
 }
 
+## One-line effect shown on compact non-unit cards; the full text appears on hover.
+const CARD_SHORT := {
+	"rebuke": "Push 1 lane, 3 on impact", "warding": "Shield 4", "transposition": "Swap two enemies",
+	"faith_surge": "+2 Faith", "channel_ley_line": "Create a Ley Line", "raise_ruins": "Create Ruins",
+	"divine_insight": "Draw 2", "ambrosia": "+2 Faith", "aegis_of_olympus": "All allies Shield 3",
+	"thread_of_fate": "Return a unit to hand", "ragnarok": "Sacrifice: blast its lane", "longship": "+2 moves, Shield 2",
+	"phalanx_formation": "Front row +1 ATK, Shield 2", "divine_favor": "+2 ATK this round", "olympian_ichor": "Heal 4, +1 ATK",
+	"book_of_the_dead": "Return the last fallen ally", "sandswarm": "Scarabs fill the front row",
+	"plague_of_locusts": "Damage = your unit count", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
+	"void_web": "Unplayable", "hex": "Unplayable, Faith -1", "ashes": "Unplayable, Core -1",
+}
+
 const ENEMIES := {
 	"void_spawn": {"name": "Void Spawn", "kind": "enemy", "atk": 2, "hp": 3, "spd": 2, "threat": 1, "keywords": [], "text": "Attacks its own lane."},
 	"void_wisp": {"name": "Void Wisp", "kind": "enemy", "atk": 1, "hp": 2, "spd": 5, "threat": 1, "keywords": ["ranged"], "text": "Ranged. Targets the player unit with the lowest current HP."},
