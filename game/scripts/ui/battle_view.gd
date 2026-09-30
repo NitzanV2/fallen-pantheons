@@ -354,32 +354,8 @@ func _build_help_panel() -> void:
 func _button(text: String, callback: Callable, parent: Control, primary := false) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.focus_mode = Control.FOCUS_NONE
 	b.pressed.connect(callback)
-	for state in ["normal", "hover", "pressed", "disabled"]:
-		var sb := StyleBoxFlat.new()
-		sb.set_corner_radius_all(6)
-		sb.set_content_margin_all(6)
-		if primary:
-			sb.bg_color = {"normal": Color(0.72, 0.52, 0.16), "hover": Color(0.85, 0.63, 0.22), "pressed": Color(0.6, 0.42, 0.12), "disabled": Color(0.25, 0.23, 0.22)}[state]
-			sb.border_color = Color(1.0, 0.88, 0.5) if state != "disabled" else Color(0.4, 0.38, 0.36)
-			sb.set_border_width_all(2)
-			sb.shadow_color = Color(1.0, 0.75, 0.25, 0.35) if state != "disabled" else Color(0, 0, 0, 0)
-			sb.shadow_size = 6
-		else:
-			sb.bg_color = {"normal": Color(0.12, 0.11, 0.17, 0.95), "hover": Color(0.2, 0.18, 0.26, 0.95), "pressed": Color(0.08, 0.08, 0.12), "disabled": Color(0.1, 0.1, 0.13, 0.6)}[state]
-			sb.border_color = Color(0.5, 0.44, 0.34, 0.8)
-			sb.set_border_width_all(1)
-		b.add_theme_stylebox_override(state, sb)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	if primary:
-		b.add_theme_font_override("font", CardWidget.TITLE_FONT)
-		b.add_theme_font_size_override("font_size", 22)
-		for c in ["font_color", "font_hover_color", "font_pressed_color"]:
-			b.add_theme_color_override(c, Color(0.14, 0.08, 0.02))
-		b.add_theme_color_override("font_disabled_color", Color(0.55, 0.52, 0.5))
-	else:
-		b.add_theme_font_size_override("font_size", 14)
+	CardWidget.style_button(b, primary, 22 if primary else 14)
 	parent.add_child(b)
 	return b
 

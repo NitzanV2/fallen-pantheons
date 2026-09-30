@@ -149,6 +149,33 @@ static func style(button: Button, bg: Color, border: Color, border_w: int) -> vo
 	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 
+## The shared UI button look: dark with a bronze edge, or gold for the main action on a screen.
+static func style_button(b: Button, primary := false, font_size := 14) -> void:
+	b.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(6)
+		sb.set_content_margin_all(6)
+		if primary:
+			sb.bg_color = {"normal": Color(0.72, 0.52, 0.16), "hover": Color(0.85, 0.63, 0.22), "pressed": Color(0.6, 0.42, 0.12), "disabled": Color(0.25, 0.23, 0.22)}[state]
+			sb.border_color = Color(1.0, 0.88, 0.5) if state != "disabled" else Color(0.4, 0.38, 0.36)
+			sb.set_border_width_all(2)
+			sb.shadow_color = Color(1.0, 0.75, 0.25, 0.35) if state != "disabled" else Color(0, 0, 0, 0)
+			sb.shadow_size = 6
+		else:
+			sb.bg_color = {"normal": Color(0.12, 0.11, 0.17, 0.95), "hover": Color(0.2, 0.18, 0.26, 0.95), "pressed": Color(0.08, 0.08, 0.12), "disabled": Color(0.1, 0.1, 0.13, 0.6)}[state]
+			sb.border_color = Color(0.5, 0.44, 0.34, 0.8) if state != "hover" else Color(0.85, 0.7, 0.4)
+			sb.set_border_width_all(1)
+		b.add_theme_stylebox_override(state, sb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	if primary:
+		b.add_theme_font_override("font", TITLE_FONT)
+		for c in ["font_color", "font_hover_color", "font_pressed_color"]:
+			b.add_theme_color_override(c, Color(0.14, 0.08, 0.02))
+		b.add_theme_color_override("font_disabled_color", Color(0.55, 0.52, 0.5))
+	b.add_theme_font_size_override("font_size", font_size)
+
+
 static func overlay_label(parent: Control, font_size: int) -> RichTextLabel:
 	var rtl := RichTextLabel.new()
 	rtl.bbcode_enabled = true

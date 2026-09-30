@@ -8,8 +8,11 @@ const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const PlaytestOverlay = preload("res://scripts/ui/playtest_overlay.gd")
 const CardPreview = preload("res://scripts/ui/card_preview.gd")
 
-const PATRON_TILE := Vector2(380, 600)
-const PATRON_ART := Vector2(356, 300)
+const PATRON_TILE := Vector2(360, 524)
+const PATRON_ART_BOTTOM := 226
+## The background is shifted up so the ghostly gods loom between the logo and the patron panels.
+const BG_RECT := Rect2(-60, -125, 1720, 968)
+const GOLD := Color(0.95, 0.78, 0.35)
 const TITLE_CROP := Rect2(0.02, 0.28, 0.96, 0.48)
 const TITLE_HEIGHT := 130
 const LIST_GROUPS := {"neutral": "Neutral", "norse": "Norse", "greek": "Greek", "egypt": "Egyptian", "divine": "Divine (shrines only)", "other": "Tokens, curses and statuses"}
@@ -29,9 +32,18 @@ var deck_keys: Array = []
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	var bg := ColorRect.new()
-	bg.color = Color(0.08, 0.08, 0.11)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var fill := ColorRect.new()
+	fill.color = Color(0.04, 0.03, 0.07)
+	fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(fill)
+	var bg := TextureRect.new()
+	bg.texture = load("res://art/ui/menu_bg.jpg")
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.position = BG_RECT.position
+	bg.size = BG_RECT.size
 	add_child(bg)
 	_build_menu()
 	_build_sandbox()
@@ -78,19 +90,18 @@ func _build_menu() -> void:
 	menu.add_child(root)
 
 	root.add_child(_title())
-	var subtitle := Label.new()
-	subtitle.text = "The gods are dead. Choose the pantheon whose echoes will defend the Reliquary."
+	var subtitle := CardWidget._label("The gods are dead. Choose the pantheon whose echoes will defend the Reliquary.", 20, Color(0.82, 0.8, 0.9), true)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_color_override("font_color", Color(0.7, 0.7, 0.78))
-	subtitle.add_theme_font_size_override("font_size", 18)
 	root.add_child(subtitle)
 
-	var center := CenterContainer.new()
-	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(center)
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(spacer)
 	var patrons := HBoxContainer.new()
-	patrons.add_theme_constant_override("separation", 28)
-	center.add_child(patrons)
+	patrons.alignment = BoxContainer.ALIGNMENT_CENTER
+	patrons.add_theme_constant_override("separation", 44)
+	root.add_child(patrons)
 	for patron in Data.PATRONS:
 		patrons.add_child(_patron_tile(patron))
 
@@ -101,50 +112,156 @@ func _build_menu() -> void:
 	sandbox_button.position = Vector2(-180, 24)
 	sandbox_button.custom_minimum_size = Vector2(156, 36)
 	sandbox_button.pressed.connect(_show_sandbox.bind(true))
+	CardWidget.style_button(sandbox_button)
 	add_child(sandbox_button)
 
 
+## A patron as an ornate card: art, name, Core HP, starting card and relic, and a Begin banner.
 func _patron_tile(patron: Dictionary) -> Button:
 	var card: Dictionary = Data.CARDS[patron["card"]]
 	var relic: Dictionary = Data.RELICS[patron["relic"]]
 	var faction: String = card["faction"]
 	var tint: Color = CardWidget.FACTION_COLORS[faction]
+	var metal: Color = tint.lerp(GOLD, 0.35)
 
 	var b := Button.new()
 	b.custom_minimum_size = PATRON_TILE
 	b.focus_mode = Control.FOCUS_NONE
-	CardWidget.style(b, CardWidget.CARD_BG, tint, 3)
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
 	b.pressed.connect(_start_run.bind(patron["card"]))
+	var face := Control.new()
+	face.size = PATRON_TILE
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(face)
 
-	var box := VBoxContainer.new()
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_theme_constant_override("separation", 8)
-	CardWidget.place(b, box, 12, 12, -12, -12)
+	var frame := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.045, 0.08, 0.94)
+	sb.border_color = metal
+	sb.set_border_width_all(4)
+	sb.set_corner_radius_all(12)
+	sb.shadow_color = Color(0, 0, 0, 0.6)
+	sb.shadow_size = 10
+	sb.shadow_offset = Vector2(0, 5)
+	frame.add_theme_stylebox_override("panel", sb)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(face, frame, 0, 0, -0.001, -0.001)
+	var inner := Panel.new()
+	var isb := StyleBoxFlat.new()
+	isb.draw_center = false
+	isb.set_border_width_all(1)
+	isb.border_color = Color(metal.lightened(0.4), 0.5)
+	isb.set_corner_radius_all(9)
+	inner.add_theme_stylebox_override("panel", isb)
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(face, inner, 5, 5, -5, -5)
 
 	var art := CardWidget.art("patrons", faction, Data.FACTION_NAMES[faction], tint, 64)
-	art.custom_minimum_size = PATRON_ART
-	box.add_child(art)
+	CardWidget.place(face, art, 10, 10, -10, PATRON_ART_BOTTOM)
 
-	var text := RichTextLabel.new()
-	text.bbcode_enabled = true
-	text.fit_content = true
-	text.scroll_active = false
-	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	text.add_theme_font_size_override("normal_font_size", 14)
-	text.add_theme_font_size_override("bold_font_size", 15)
-	text.text = "[center][font_size=26][b][color=#%s]%s[/color][/b][/font_size]\n[color=#aaaabb]%s  -  Core HP %d[/color][/center]\n[b]Starting card - %s[/b]\n[color=#c8c8d6]%s[/color]\n[b]Starting relic - %s[/b]\n[color=#c8c8d6]%s[/color]" % [
-		tint.lightened(0.25).to_html(false), Data.FACTION_NAMES[faction], Data.FACTION_TITLES[faction], patron["hp"],
-		card["name"], card["text"], relic["name"], relic["text"]]
-	box.add_child(text)
+	var ribbon := Panel.new()
+	var rsb := StyleBoxFlat.new()
+	rsb.bg_color = tint.darkened(0.6)
+	rsb.border_color = metal
+	rsb.set_border_width_all(2)
+	rsb.set_corner_radius_all(5)
+	ribbon.add_theme_stylebox_override("panel", rsb)
+	ribbon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(face, ribbon, 24, PATRON_ART_BOTTOM - 18, -24, PATRON_ART_BOTTOM + 22)
+	var name_label := CardWidget._label(Data.FACTION_NAMES[faction], 30, tint.lightened(0.45), true)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	CardWidget.place(ribbon, name_label, 0, -2, -0.001, -0.001)
 
-	var begin := Label.new()
-	begin.text = "Begin run"
+	var y: float = PATRON_ART_BOTTOM + 28
+	var sub := HBoxContainer.new()
+	sub.alignment = BoxContainer.ALIGNMENT_CENTER
+	sub.add_theme_constant_override("separation", 8)
+	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var title := CardWidget._label(Data.FACTION_TITLES[faction], 16, Color(0.75, 0.73, 0.82), false)
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	sub.add_child(title)
+	sub.add_child(CardWidget._label("|", 16, Color(0.4, 0.38, 0.45), false))
+	sub.add_child(CardWidget.icon("hp", 20))
+	var core := CardWidget._label("Core %d" % patron["hp"], 16, Color(1.0, 0.72, 0.65), false)
+	core.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	sub.add_child(core)
+	CardWidget.place(face, sub, 10, y, -10, y + 24)
+
+	var card_row := _patron_row(CardWidget.art("cards", patron["card"], card["name"], tint, 20),
+		"Starting card", card["name"], card["text"], CardWidget.RARITY_STYLES[card["rarity"]]["metal"], 6)
+	CardWidget.place(face, card_row, 12, y + 32, -12, y + 108)
+	card_row.mouse_entered.connect(func():
+		var preview = get_tree().get_first_node_in_group("card_preview")
+		if preview:
+			preview.show_card(patron["card"], card_row))
+	card_row.mouse_exited.connect(func():
+		var preview = get_tree().get_first_node_in_group("card_preview")
+		if preview:
+			preview.hide_card(card_row))
+	var relic_row := _patron_row(CardWidget.art("relics", patron["relic"], relic["name"], CardWidget.RELIC_COLOR, 20),
+		"Starting relic", relic["name"], relic["text"], GOLD.darkened(0.25), 28)
+	CardWidget.place(face, relic_row, 12, y + 114, -12, y + 190)
+
+	var banner := Panel.new()
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.72, 0.52, 0.16)
+	bsb.border_color = Color(1.0, 0.88, 0.5)
+	bsb.set_border_width_all(2)
+	bsb.set_corner_radius_all(6)
+	banner.add_theme_stylebox_override("panel", bsb)
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(face, banner, 60, PATRON_TILE.y - 46, -60, PATRON_TILE.y - 12)
+	var begin := CardWidget._label("BEGIN RUN", 22, Color(0.14, 0.08, 0.02), false)
+	begin.add_theme_font_override("font", CardWidget.TITLE_FONT)
 	begin.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	begin.add_theme_font_size_override("font_size", 20)
-	begin.add_theme_color_override("font_color", tint.lightened(0.3))
-	box.add_child(begin)
+	begin.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	CardWidget.place(banner, begin, 0, -2, -0.001, -0.001)
+
+	b.mouse_entered.connect(func():
+		face.position.y = -8
+		sb.shadow_color = Color(tint.lightened(0.2), 0.55)
+		sb.shadow_size = 22
+		sb.shadow_offset = Vector2.ZERO
+		bsb.bg_color = Color(0.88, 0.66, 0.24))
+	b.mouse_exited.connect(func():
+		face.position.y = 0
+		sb.shadow_color = Color(0, 0, 0, 0.6)
+		sb.shadow_size = 10
+		sb.shadow_offset = Vector2(0, 5)
+		bsb.bg_color = Color(0.72, 0.52, 0.16))
 	return b
+
+
+## "Starting card / relic" line: framed thumbnail, label, name and rules text. Clicks pass to the tile.
+func _patron_row(thumb: Control, heading: String, title: String, text: String, edge: Color, radius: int) -> Control:
+	var row := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1, 1, 1, 0.04)
+	sb.set_corner_radius_all(6)
+	row.add_theme_stylebox_override("panel", sb)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	var holder := Panel.new()
+	var hsb := StyleBoxFlat.new()
+	hsb.bg_color = Color(0.08, 0.08, 0.12)
+	hsb.border_color = edge
+	hsb.set_border_width_all(2)
+	hsb.set_corner_radius_all(radius)
+	holder.add_theme_stylebox_override("panel", hsb)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	CardWidget.place(row, holder, 6, 7, 68, 69)
+	CardWidget.place(holder, thumb, 2, 2, -2, -2)
+	var label := RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.scroll_active = false
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("normal_font_size", 12)
+	label.add_theme_font_size_override("bold_font_size", 15)
+	label.text = "[color=#8f8ca0]%s[/color]  [b]%s[/b]\n[color=#c8c6d4]%s[/color]" % [heading, title, text]
+	CardWidget.place(row, label, 78, 6, -6, -4)
+	return row
 
 
 func _build_sandbox() -> void:
@@ -154,6 +271,13 @@ func _build_sandbox() -> void:
 		sandbox.add_theme_constant_override("margin_" + side, 40)
 	sandbox.visible = false
 	add_child(sandbox)
+	var dim := Panel.new()
+	var dsb := StyleBoxFlat.new()
+	dsb.bg_color = Color(0.03, 0.03, 0.06, 0.82)
+	dsb.set_corner_radius_all(12)
+	dsb.set_expand_margin_all(20)
+	dim.add_theme_stylebox_override("panel", dsb)
+	sandbox.add_child(dim)
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 16)
@@ -161,20 +285,20 @@ func _build_sandbox() -> void:
 
 	var header := HBoxContainer.new()
 	root.add_child(header)
-	var title := Label.new()
-	title.text = "Battle sandbox"
+	var title := CardWidget._label("Battle sandbox", 40, GOLD, true)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", 40)
 	header.add_child(title)
 	var cards := Button.new()
 	cards.text = "Card list"
 	cards.custom_minimum_size = Vector2(180, 40)
 	cards.pressed.connect(_open_card_list)
+	CardWidget.style_button(cards, false, 16)
 	header.add_child(cards)
 	var back := Button.new()
 	back.text = "Back to patrons"
 	back.custom_minimum_size = Vector2(180, 40)
 	back.pressed.connect(_show_sandbox.bind(false))
+	CardWidget.style_button(back, false, 16)
 	header.add_child(back)
 
 	var subtitle := Label.new()
@@ -199,6 +323,8 @@ func _build_sandbox() -> void:
 		button.custom_minimum_size = Vector2(320, 44)
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.pressed.connect(_start_battle.bind(battle))
+		CardWidget.style_button(button, false, 16)
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		row.add_child(button)
 		var blurb := Label.new()
 		blurb.text = "%s  (default deck: %s, Core %d)" % [battle["blurb"], Data.DECKS[battle["deck"]]["name"], battle["core"]]
@@ -274,11 +400,13 @@ func _open_card_list(filter := "all") -> void:
 		b.custom_minimum_size = Vector2(0, 40)
 		b.disabled = key == filter
 		b.pressed.connect(_open_card_list.bind(key))
+		CardWidget.style_button(b, false, 15)
 		header.add_child(b)
 	var close := Button.new()
 	close.text = "Close"
 	close.custom_minimum_size = Vector2(120, 40)
 	close.pressed.connect(_close_card_list)
+	CardWidget.style_button(close, true, 20)
 	header.add_child(close)
 
 	var scroll := ScrollContainer.new()
