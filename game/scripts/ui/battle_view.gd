@@ -262,6 +262,8 @@ func _build_sidebar() -> void:
 	box.add_child(run_info_row)
 	var map_button := _button("Map (M)", func(): map_requested.emit(), run_info_row)
 	var deck_button := _button("Deck (D)", func(): deck_requested.emit(), run_info_row)
+	CardWidget.button_icon(map_button, "ui_map")
+	CardWidget.button_icon(deck_button, "ui_deck")
 	for b in [map_button, deck_button]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 

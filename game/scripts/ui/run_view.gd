@@ -132,7 +132,9 @@ func _build() -> void:
 	deck_button.pressed.connect(_toggle_info.bind("deck"))
 	CardWidget.style_button(deck_button)
 	sidebar.add_child(deck_button)
+	CardWidget.button_icon(deck_button, "ui_deck", 26)
 	map_button = _button("View map (M)", _toggle_info.bind("map"), sidebar)
+	CardWidget.button_icon(map_button, "ui_map", 26)
 
 	sidebar.add_child(_heading("Relics", 18))
 	relic_box = VBoxContainer.new()
@@ -918,6 +920,7 @@ func _open_info(kind: String) -> void:
 	header.add_child(title)
 	var other := _button("View deck (D)" if kind == "map" else "View map (M)", _toggle_info.bind("deck" if kind == "map" else "map"), header)
 	other.custom_minimum_size = Vector2(180, 40)
+	CardWidget.button_icon(other, "ui_deck" if kind == "map" else "ui_map", 26)
 	other.visible = kind == "map" or run.state != "map"
 	var close := _button("Close (%s)" % ("M" if kind == "map" else "D"), _close_info, header)
 	close.custom_minimum_size = Vector2(160, 40)

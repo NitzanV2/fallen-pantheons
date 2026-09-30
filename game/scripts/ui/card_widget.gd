@@ -178,6 +178,14 @@ static func style(button: Button, bg: Color, border: Color, border_w: int) -> vo
 	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 
+## Puts a small icon from art/icons in front of a button's label.
+static func button_icon(b: Button, icon: String, width := 22) -> void:
+	b.icon = load("res://art/icons/%s.png" % icon)
+	b.expand_icon = true
+	b.add_theme_constant_override("icon_max_width", width)
+	b.add_theme_constant_override("h_separation", 8)
+
+
 ## The shared UI button look: dark with a bronze edge, or gold for the main action on a screen.
 static func style_button(b: Button, primary := false, font_size := 14) -> void:
 	b.focus_mode = Control.FOCUS_NONE
