@@ -7,6 +7,7 @@ const RunView = preload("res://scripts/ui/run_view.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const PlaytestOverlay = preload("res://scripts/ui/playtest_overlay.gd")
 const CardPreview = preload("res://scripts/ui/card_preview.gd")
+const Music = preload("res://scripts/ui/music.gd")
 
 const PATRON_TILE := Vector2(360, 524)
 const PATRON_ART_BOTTOM := 226
@@ -21,6 +22,7 @@ const RARITY_ORDER := ["Starter", "Common", "Uncommon", "Rare"]
 var menu: Control
 var sandbox: Control
 var sandbox_button: Button
+var music_button: Button
 var card_list: Control = null
 var battle_view: Control
 var run_view: Control
@@ -50,6 +52,7 @@ func _ready() -> void:
 	_build_sandbox()
 	add_child(CardPreview.new())
 	add_child(PlaytestOverlay.new())
+	Music.play("theme")
 
 
 ## The logo sits on pure black, so additive blending makes its background disappear.
@@ -115,6 +118,21 @@ func _build_menu() -> void:
 	sandbox_button.pressed.connect(_show_sandbox.bind(true))
 	CardWidget.style_button(sandbox_button)
 	add_child(sandbox_button)
+
+	music_button = Button.new()
+	music_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	music_button.position = Vector2(-310, 24)
+	music_button.custom_minimum_size = Vector2(118, 36)
+	music_button.pressed.connect(func():
+		Music.set_enabled(not Music.is_enabled())
+		_update_music_button())
+	CardWidget.style_button(music_button)
+	add_child(music_button)
+	_update_music_button.call_deferred()
+
+
+func _update_music_button() -> void:
+	music_button.text = "Music: On" if Music.is_enabled() else "Music: Off"
 
 
 ## A patron as an ornate card: art, name, Core HP, starting card and relic, and a Begin banner.
@@ -560,6 +578,7 @@ func _show_sandbox(show: bool) -> void:
 	sandbox.visible = show
 	menu.visible = not show
 	sandbox_button.visible = not show
+	music_button.visible = not show
 
 
 func _heading(text: String) -> Label:
@@ -573,6 +592,7 @@ func _hide_menus() -> void:
 	menu.visible = false
 	sandbox.visible = false
 	sandbox_button.visible = false
+	music_button.visible = false
 
 
 func _start_battle(battle: Dictionary) -> void:

@@ -12,6 +12,7 @@ const Data = preload("res://scripts/core/data.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const RulesText = preload("res://scripts/ui/rules_text.gd")
 const BoardView = preload("res://scripts/ui/board_view.gd")
+const Music = preload("res://scripts/ui/music.gd")
 
 const P := 0
 const E := 1
@@ -65,6 +66,7 @@ func start(battle: Dictionary, deck_key: String, relics: Array, seed_value: int)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build()
 	_new_combat(seed_value)
+	_play_music()
 
 
 ## Runs a fight that belongs to a run. Emits `finished` when the player continues.
@@ -77,6 +79,15 @@ func start_run_fight(run_combat, title: String) -> void:
 	run_info_row.visible = true
 	combat = run_combat
 	_begin("[b]%s[/b]" % title)
+	_play_music()
+
+
+func _play_music() -> void:
+	Music.play("boss" if params["battle"].get("boss", false) else "battle")
+
+
+func _exit_tree() -> void:
+	Music.play("theme")
 
 
 func _new_combat(seed_value: int) -> void:
