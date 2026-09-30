@@ -1,5 +1,5 @@
 extends Control
-## Battle screen: renders combat snapshots and turns clicks into combat actions.
+## Battle screen: renders combat snapshots on the board and turns clicks and drags into combat actions.
 
 signal exit_requested
 signal finished
@@ -11,40 +11,37 @@ const Combat = preload("res://scripts/core/combat.gd")
 const Data = preload("res://scripts/core/data.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const RulesText = preload("res://scripts/ui/rules_text.gd")
+const BoardView = preload("res://scripts/ui/board_view.gd")
 
 const P := 0
 const E := 1
 const FRONT := 0
 const BACK := 1
-const SLOT_SIZE := Vector2(250, 112)
-const PORTRAIT_W := 64
 const STEP_DELAY := 0.45
-
-const COLOR_EMPTY := Color(0.16, 0.16, 0.2)
-const COLOR_PLAYER := Color(0.16, 0.26, 0.4)
-const COLOR_ENEMY := Color(0.36, 0.16, 0.3)
-const COLOR_PETRIFIED := Color(0.3, 0.33, 0.28)
-const COLOR_TARGET := Color(1.0, 0.85, 0.2)
-const COLOR_SELECTED := Color(0.3, 1.0, 0.45)
-const TERRAIN_COLORS := {"ley_line": Color(0.95, 0.75, 0.2), "ruins": Color(0.6, 0.45, 0.3), "quicksand": Color(0.85, 0.7, 0.45)}
+const BOARD_RECT := Rect2(0, 0, 1250, 640)
+const SIDEBAR_RECT := Rect2(1262, 10, 328, 880)
+const GOLD := Color(0.95, 0.78, 0.35)
+const TERRAIN_COLORS := {"ley_line": Color(0.95, 0.75, 0.2), "ruins": Color(0.75, 0.6, 0.45), "quicksand": Color(0.9, 0.72, 0.4)}
 
 var combat
 var params := {}
-var slot_buttons := {}
-var slot_labels := {}
-var slot_portraits := {}
+var board: Control
+var last_snap: Dictionary = {}
 var hand_box: HBoxContainer
-var status_label: RichTextLabel
+var round_label: Label
+var round_sub: Label
+var faith_label: Label
+var core_label: Label
+var core_bar: ProgressBar
+var info_label: RichTextLabel
 var relic_row: HFlowContainer
 var relic_icons := {}
 var hint_label: Label
 var log_label: RichTextLabel
-var core_label: Label
 var end_button: Button
 var cancel_button: Button
 var restart_button: Button
-var push_left_button: Button
-var push_right_button: Button
+var push_row: HBoxContainer
 var skip_button: Button
 var menu_button: Button
 var run_info_row: HBoxContainer
@@ -103,96 +100,171 @@ func _begin(header: String) -> void:
 # ---------------------------------------------------------------- layout
 
 func _build() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.08, 0.08, 0.11)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var fill := ColorRect.new()
+	fill.color = Color(0.07, 0.05, 0.12)
+	fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(fill)
+	var bg := TextureRect.new()
+	bg.texture = load("res://art/battle/background.jpg")
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.position = Vector2(-275, -150)
+	bg.size = Vector2(1800, 1013)
 	add_child(bg)
 
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 12)
-	add_child(margin)
+	board = BoardView.new()
+	board.position = BOARD_RECT.position
+	board.size = BOARD_RECT.size
+	add_child(board)
+	board.slot_pressed.connect(_on_slot_pressed)
+	board.slot_hovered.connect(_on_slot_hovered)
+	board.cancel_requested.connect(_on_cancel_pressed)
+	board.set_drag_forwarding(_board_drag, _board_can_drop, _board_drop)
 
-	var root := HBoxContainer.new()
-	root.add_theme_constant_override("separation", 16)
-	margin.add_child(root)
-
-	var left := VBoxContainer.new()
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.add_theme_constant_override("separation", 6)
-	root.add_child(left)
-
-	left.add_child(_section_label("THE VOID"))
-	left.add_child(_build_grid(E, [BACK, FRONT]))
-	left.add_child(_section_label("YOUR FORCES"))
-	left.add_child(_build_grid(P, [FRONT, BACK]))
-
-	core_label = Label.new()
-	core_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	core_label.add_theme_font_size_override("font_size", 20)
-	core_label.custom_minimum_size = Vector2(0, 34)
-	left.add_child(core_label)
-
-	left.add_child(_section_label("HAND"))
 	hand_box = HBoxContainer.new()
+	hand_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	hand_box.add_theme_constant_override("separation", 8)
-	left.add_child(hand_box)
+	hand_box.position = Vector2(10, 650)
+	hand_box.size = Vector2(BOARD_RECT.size.x - 20, CardWidget.CARD_SIZE.y)
+	add_child(hand_box)
 
-	var right := VBoxContainer.new()
-	right.custom_minimum_size = Vector2(400, 0)
-	right.add_theme_constant_override("separation", 8)
-	root.add_child(right)
+	_build_sidebar()
+	_build_result_panel()
 
-	status_label = RichTextLabel.new()
-	status_label.bbcode_enabled = true
-	status_label.fit_content = true
-	status_label.scroll_active = false
-	right.add_child(status_label)
+
+func _build_sidebar() -> void:
+	var panel := PanelContainer.new()
+	panel.position = SIDEBAR_RECT.position
+	panel.size = SIDEBAR_RECT.size
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.045, 0.08, 0.86)
+	sb.border_color = Color(GOLD, 0.45)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(10)
+	sb.set_content_margin_all(14)
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 8
+	panel.add_theme_stylebox_override("panel", sb)
+	add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	panel.add_child(box)
+
+	round_label = CardWidget._label("", 26, GOLD, true)
+	round_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(round_label)
+	round_sub = CardWidget._label("", 13, Color(0.7, 0.68, 0.78), false)
+	round_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(round_sub)
+
+	var faith_row := HBoxContainer.new()
+	faith_row.add_theme_constant_override("separation", 8)
+	faith_row.tooltip_text = "Faith pays for cards. It refills at the start of every round."
+	box.add_child(faith_row)
+	faith_row.add_child(CardWidget.icon("faith", 40))
+	var faith_title := CardWidget._label("FAITH", 18, Color(0.75, 0.85, 1.0), true)
+	faith_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	faith_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	faith_row.add_child(faith_title)
+	faith_label = CardWidget.number_label("0", 22, Color.WHITE)
+	faith_row.add_child(faith_label)
+
+	var core_row := HBoxContainer.new()
+	core_row.add_theme_constant_override("separation", 8)
+	core_row.tooltip_text = "The Reliquary Core. Enemies that reach it damage it; the fight is lost at 0."
+	box.add_child(core_row)
+	core_row.add_child(CardWidget.icon("hp", 40))
+	var core_box := VBoxContainer.new()
+	core_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	core_box.add_theme_constant_override("separation", 3)
+	core_row.add_child(core_box)
+	var core_head := HBoxContainer.new()
+	core_box.add_child(core_head)
+	var core_title := CardWidget._label("CORE", 18, Color(1.0, 0.7, 0.62), true)
+	core_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	core_head.add_child(core_title)
+	core_label = CardWidget.number_label("0", 14, Color.WHITE)
+	core_head.add_child(core_label)
+	core_bar = ProgressBar.new()
+	core_bar.show_percentage = false
+	core_bar.custom_minimum_size = Vector2(0, 10)
+	var bar_bg := StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.15, 0.04, 0.05)
+	bar_bg.set_corner_radius_all(4)
+	var bar_fill := StyleBoxFlat.new()
+	bar_fill.bg_color = Color(0.85, 0.25, 0.22)
+	bar_fill.set_corner_radius_all(4)
+	core_bar.add_theme_stylebox_override("background", bar_bg)
+	core_bar.add_theme_stylebox_override("fill", bar_fill)
+	core_box.add_child(core_bar)
+
+	info_label = RichTextLabel.new()
+	info_label.bbcode_enabled = true
+	info_label.fit_content = true
+	info_label.scroll_active = false
+	info_label.add_theme_font_size_override("normal_font_size", 13)
+	box.add_child(info_label)
+
 	relic_row = HFlowContainer.new()
 	relic_row.add_theme_constant_override("h_separation", 6)
 	relic_row.add_theme_constant_override("v_separation", 6)
-	right.add_child(relic_row)
+	box.add_child(relic_row)
 
 	hint_label = Label.new()
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint_label.custom_minimum_size = Vector2(0, 66)
-	hint_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.55))
-	right.add_child(hint_label)
+	hint_label.custom_minimum_size = Vector2(0, 74)
+	hint_label.add_theme_font_size_override("font_size", 14)
+	hint_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+	box.add_child(hint_label)
 
-	end_button = _button("End planning - resolve round", _on_end_pressed, right)
-	end_button.custom_minimum_size = Vector2(0, 48)
-	var push_row := HBoxContainer.new()
-	right.add_child(push_row)
-	push_left_button = _button("< Push left", _on_push.bind(-1), push_row)
-	push_right_button = _button("Push right >", _on_push.bind(1), push_row)
-	push_left_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	push_right_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cancel_button = _button("Cancel selection", _on_cancel_pressed, right)
-	restart_button = _button("Restart planning (undo this round's plays)", _on_restart_pressed, right)
+	end_button = _button("END PLANNING", _on_end_pressed, box, true)
+	end_button.custom_minimum_size = Vector2(0, 52)
+	end_button.tooltip_text = "Resolve the round: every unit acts in Speed order."
+	push_row = HBoxContainer.new()
+	box.add_child(push_row)
+	for pair in [["< Push left", -1], ["Push right >", 1]]:
+		var b := _button(pair[0], _on_push.bind(pair[1]), push_row)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var edit_row := HBoxContainer.new()
+	box.add_child(edit_row)
+	cancel_button = _button("Cancel", _on_cancel_pressed, edit_row)
+	cancel_button.tooltip_text = "Drop the current selection (right-click or Esc also works)."
+	restart_button = _button("Undo round", _on_restart_pressed, edit_row)
 	restart_button.tooltip_text = CardWidget.wrap_text("Take back every card played and unit moved since this planning phase began.")
-	skip_button = _button("Skip animation", func(): skip_animation = true, right)
-	var help_button := _button("?  Rules and keywords (H)", _toggle_help, right)
+	var misc_row := HBoxContainer.new()
+	box.add_child(misc_row)
+	skip_button = _button("Skip animation", func(): skip_animation = true, misc_row)
+	var help_button := _button("? Rules (H)", _toggle_help, misc_row)
 	help_button.tooltip_text = "How battles work: round order, targeting, tiebreakers and keywords."
-	menu_button = _button("Back to menu", func(): exit_requested.emit(), right)
+	for b in [cancel_button, restart_button, skip_button, help_button]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	menu_button = _button("Back to menu", func(): exit_requested.emit(), box)
 	run_info_row = HBoxContainer.new()
 	run_info_row.visible = false
-	right.add_child(run_info_row)
-	var map_button := _button("View map (M)", func(): map_requested.emit(), run_info_row)
-	var deck_button := _button("View deck (D)", func(): deck_requested.emit(), run_info_row)
-	var abandon_button := _button("Abandon run", func(): abandon_requested.emit(), run_info_row)
+	box.add_child(run_info_row)
+	var map_button := _button("Map (M)", func(): map_requested.emit(), run_info_row)
+	var deck_button := _button("Deck (D)", func(): deck_requested.emit(), run_info_row)
+	var abandon_button := _button("Abandon", func(): abandon_requested.emit(), run_info_row)
 	for b in [map_button, deck_button, abandon_button]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
+	var log_panel := PanelContainer.new()
+	log_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var lsb := StyleBoxFlat.new()
+	lsb.bg_color = Color(0, 0, 0, 0.35)
+	lsb.set_corner_radius_all(6)
+	lsb.set_content_margin_all(8)
+	log_panel.add_theme_stylebox_override("panel", lsb)
+	box.add_child(log_panel)
 	log_label = RichTextLabel.new()
 	log_label.bbcode_enabled = true
 	log_label.scroll_following = true
-	log_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	log_label.add_theme_font_size_override("normal_font_size", 13)
-	log_label.add_theme_font_size_override("bold_font_size", 13)
-	right.add_child(log_label)
-
-	_build_result_panel()
+	log_label.add_theme_font_size_override("normal_font_size", 12)
+	log_label.add_theme_font_size_override("bold_font_size", 12)
+	log_label.add_theme_color_override("default_color", Color(0.82, 0.82, 0.88))
+	log_panel.add_child(log_label)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -203,6 +275,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_ESCAPE and help_panel != null and help_panel.visible:
 		help_panel.visible = false
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_ESCAPE and _has_selection():
+		_on_cancel_pressed()
 		get_viewport().set_input_as_handled()
 
 
@@ -276,47 +351,37 @@ func _build_help_panel() -> void:
 		tabs.set_tab_title(tabs.get_tab_count() - 1, "  %s  " % section[0])
 
 
-func _section_label(text: String) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_color_override("font_color", Color(0.6, 0.6, 0.68))
-	return l
-
-
-func _button(text: String, callback: Callable, parent: Control) -> Button:
+func _button(text: String, callback: Callable, parent: Control, primary := false) -> Button:
 	var b := Button.new()
 	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
 	b.pressed.connect(callback)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(6)
+		sb.set_content_margin_all(6)
+		if primary:
+			sb.bg_color = {"normal": Color(0.72, 0.52, 0.16), "hover": Color(0.85, 0.63, 0.22), "pressed": Color(0.6, 0.42, 0.12), "disabled": Color(0.25, 0.23, 0.22)}[state]
+			sb.border_color = Color(1.0, 0.88, 0.5) if state != "disabled" else Color(0.4, 0.38, 0.36)
+			sb.set_border_width_all(2)
+			sb.shadow_color = Color(1.0, 0.75, 0.25, 0.35) if state != "disabled" else Color(0, 0, 0, 0)
+			sb.shadow_size = 6
+		else:
+			sb.bg_color = {"normal": Color(0.12, 0.11, 0.17, 0.95), "hover": Color(0.2, 0.18, 0.26, 0.95), "pressed": Color(0.08, 0.08, 0.12), "disabled": Color(0.1, 0.1, 0.13, 0.6)}[state]
+			sb.border_color = Color(0.5, 0.44, 0.34, 0.8)
+			sb.set_border_width_all(1)
+		b.add_theme_stylebox_override(state, sb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	if primary:
+		b.add_theme_font_override("font", CardWidget.TITLE_FONT)
+		b.add_theme_font_size_override("font_size", 22)
+		for c in ["font_color", "font_hover_color", "font_pressed_color"]:
+			b.add_theme_color_override(c, Color(0.14, 0.08, 0.02))
+		b.add_theme_color_override("font_disabled_color", Color(0.55, 0.52, 0.5))
+	else:
+		b.add_theme_font_size_override("font_size", 14)
 	parent.add_child(b)
 	return b
-
-
-func _build_grid(side: int, rows: Array) -> GridContainer:
-	var grid := GridContainer.new()
-	grid.columns = 5
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	for row in rows:
-		var label := Label.new()
-		label.text = "FRONT" if row == FRONT else "BACK"
-		label.custom_minimum_size = Vector2(60, 0)
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.68))
-		grid.add_child(label)
-		for lane in 4:
-			var button := Button.new()
-			button.custom_minimum_size = SLOT_SIZE
-			button.focus_mode = Control.FOCUS_NONE
-			button.pressed.connect(_on_slot_pressed.bind(side, row, lane))
-			var portrait := Control.new()
-			portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			CardWidget.place(button, portrait, 4, 4, 4 + PORTRAIT_W, -4)
-			var rtl := CardWidget.overlay_label(button, 13)
-			grid.add_child(button)
-			slot_buttons[_key(side, row, lane)] = button
-			slot_labels[_key(side, row, lane)] = rtl
-			slot_portraits[_key(side, row, lane)] = portrait
-	return grid
 
 
 func _build_result_panel() -> void:
@@ -328,6 +393,7 @@ func _build_result_panel() -> void:
 	sb.bg_color = Color(0.1, 0.1, 0.14, 0.97)
 	sb.set_border_width_all(3)
 	sb.border_color = Color(0.9, 0.8, 0.4)
+	sb.set_corner_radius_all(8)
 	sb.set_content_margin_all(20)
 	result_panel.add_theme_stylebox_override("panel", sb)
 	add_child(result_panel)
@@ -346,26 +412,26 @@ func _build_result_panel() -> void:
 	_button("Back to menu", func(): exit_requested.emit(), single_buttons)
 	run_buttons = HBoxContainer.new()
 	box.add_child(run_buttons)
-	_button("Continue", func(): finished.emit(), run_buttons)
+	_button("Continue", func(): finished.emit(), run_buttons, true)
 	result_panel.visible = false
 
 
 # ---------------------------------------------------------------- rendering
-
-func _key(side: int, row: int, lane: int) -> String:
-	return "%d:%d:%d" % [side, row, lane]
-
 
 func _refresh() -> void:
 	_render(combat.snapshot())
 
 
 func _render(snap: Dictionary) -> void:
-	var targets := _current_targets()
+	last_snap = snap
+	var terrain := {}
 	for side in 2:
 		for row in 2:
 			for lane in 4:
-				_render_slot(snap, side, row, lane, targets)
+				var t: String = combat.terrain_at(side, row, lane)
+				if t != "":
+					terrain[BoardView.key(side, row, lane)] = t
+	board.render(snap, terrain, _current_targets(), _selected_slots())
 	_render_status(snap)
 	_render_hand(snap)
 	var over: bool = snap["phase"] == "over"
@@ -373,129 +439,100 @@ func _render(snap: Dictionary) -> void:
 	cancel_button.disabled = animating or not _has_selection()
 	restart_button.disabled = animating or not combat.can_restart_plan()
 	skip_button.disabled = not animating
-	push_left_button.visible = push_target != null
-	push_right_button.visible = push_target != null
+	push_row.visible = push_target != null
+	if board.hover != null:
+		_on_slot_hovered(board.hover)
 
 
-func _render_slot(snap: Dictionary, side: int, row: int, lane: int, targets: Array) -> void:
-	var key := _key(side, row, lane)
-	var u = snap["grid"][side][row][lane]
-	var terrain: String = combat.terrain_at(side, row, lane)
-	var petrified: bool = side == P and snap["petrified_lane"] == lane
-	var lines: Array = []
-	var text_line := -1
-	var bg := COLOR_EMPTY
-	var tooltip := ""
+func _selected_slots() -> Array:
+	var out: Array = []
+	if sel_move != null:
+		out.append([P, sel_move[0], sel_move[1]])
+	for s in [pair_first, push_target]:
+		if s != null:
+			out.append(s)
+	return out
 
-	if u == null:
-		lines.append("[color=#777790]Lane %d %s[/color]" % [lane + 1, "front" if row == FRONT else "back"])
-	elif u.get("wide_part", false):
-		bg = COLOR_ENEMY
-		lines.append("[b]%s[/b]" % u["name"])
-		lines.append("[color=#bbbbcc](same unit, spans lanes %s)[/color]" % u["lanes"])
-	else:
-		bg = COLOR_PLAYER if side == P else COLOR_ENEMY
-		var shield := "  [color=#7fd4ff]Shield %d[/color]" % u["shield"] if u["shield"] > 0 else ""
-		var revive := "  [color=#e6c75a]Revive[/color]" if u["revive"] else ""
-		var empowered := "  [color=#ff7a50]EMPOWERED[/color]" if u["empowered"] else ""
-		var tags := ""
+
+func _on_slot_hovered(slot) -> void:
+	var preview = get_tree().get_first_node_in_group("card_preview")
+	if preview == null or last_snap.is_empty():
+		return
+	if slot == null:
+		preview.hide_card(board)
+		return
+	var u = last_snap["grid"][slot[0]][slot[1]][slot[2]]
+	var anchor: Array = slot
+	if u != null and u.get("wide_part", false):
+		for lane in 4:
+			var other = last_snap["grid"][slot[0]][slot[1]][lane]
+			if other != null and not other.get("wide_part", false) and other["id"] == u["id"]:
+				u = other
+				anchor = [slot[0], slot[1], lane]
+				break
+	if u != null and u.get("wide_part", false):
+		u = null
+	preview.show_unit(u if u != null else {}, board.slot_rect(anchor), board, _slot_extras(last_snap, slot, u))
+
+
+## Glossary lines for a hovered slot: live stats, intent, statuses, terrain and lane effects.
+func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
+	var side: int = slot[0]
+	var row: int = slot[1]
+	var lane: int = slot[2]
+	var out: Array = []
+	if u != null:
+		if side == E and u["intent"] != "":
+			var threat := "\nThreat %d: the Core takes %d if it survives the last round." % [u["threat"], u["threat"]] if u["threat"] > 0 else ""
+			out.append(["atk" if u["intent_type"] == "attack" else "ability", "Intent", u["intent"] + threat, Color(1.0, 0.6, 0.55)])
+		out.append(["", "Now", "ATK %d   HP %d/%d   SPD %d" % [u["atk"], u["hp"], u["max_hp"], u["spd"]], GOLD])
+		if u["shield"] > 0:
+			out.append(["shield", "Shield %d" % u["shield"], "Absorbs that much damage before HP."])
+		if u["revive"]:
+			out.append(["revive", "Revive ready", "The first time it dies this fight, it returns with 1 HP."])
+		if u["empowered"]:
+			out.append(["frenzy", "Empowered", "Boosted with extra ATK and HP for this fight."])
 		if u.get("poisoned", false):
-			tags += "  [color=#9ae66e]Poisoned[/color]"
+			out.append(["poison", "Poisoned", "Takes 1 damage at the end of every round until healed."])
 		if u.get("veil", false):
-			tags += "  [color=#c8b4ff]Veil[/color]"
+			out.append(["veil", "Veil up", "Ignores the next damage it takes this round."])
 		if u.get("spellward", false):
-			tags += "  [color=#8fd0ff]Spellward[/color]"
-		lines.append("[b]%s[/b]%s%s%s" % [u["name"], revive, empowered, tags])
+			out.append(["spellward", "Spellwarded", "Your spells can't target it."])
 		if u.get("swine", false):
-			lines.append("[color=#ff9ad0]SWINE: can't act[/color]")
-		lines.append("ATK [b]%d[/b]   HP [b]%d[/b]/%d   SPD %d%s" % [u["atk"], u["hp"], u["max_hp"], u["spd"], shield])
-		if side == E:
-			lines.append("[color=#ff9a9a]Intent: %s[/color]   Threat %d" % [u["intent"], u["threat"]])
-		else:
-			text_line = lines.size()
-			lines.append("[color=#c0c0d0][font_size=11]%s[/font_size][/color]" % u["text"])
-			if u.get("move_block", "") != "":
-				lines.append("[color=#8a8aa0][font_size=11]%s[/font_size][/color]" % u["move_block"])
-		tooltip = "%s\n%s" % [u["name"], u["text"]]
-
+			out.append(["", "Swine", "Transformed: can't attack or use start-of-round effects this round.", Color(1.0, 0.6, 0.8)])
+		if u.get("move_block", "") != "":
+			out.append(["", "Can't move", u["move_block"], Color(0.7, 0.7, 0.8)])
+	var terrain: String = combat.terrain_at(side, row, lane)
 	if terrain != "":
-		lines.append("[color=#%s]%s[/color]" % [TERRAIN_COLORS[terrain].to_html(false), Data.TERRAIN[terrain]["name"]])
-		tooltip += ("\n" if tooltip != "" else "") + "%s: %s" % [Data.TERRAIN[terrain]["name"], Data.TERRAIN[terrain]["text"]]
-	if petrified:
-		bg = COLOR_PETRIFIED
-		lines.append("[color=#c8e6a0]PETRIFIED this round[/color]")
-	if side == P and snap["sandstorm_row"] == row:
-		lines.append("[color=#e6c080]Sandstorm: -1 ATK this round[/color]")
-	if side == P and snap.get("lane_warnings", {}).has(lane):
-		lines.append("[color=#ff8a6a]%s[/color]" % snap["lane_warnings"][lane])
-	if side == P and "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
-		lines.append("[color=#d9b36e]Sinks into Quicksand![/color]")
-	# The slot fits about four lines; status lines matter more than the card text, which stays in the tooltip.
-	if text_line != -1 and lines.size() > 4:
-		lines.remove_at(text_line)
-
-	var border := Color(0, 0, 0, 0)
-	var border_w := 0
-	if terrain != "":
-		border = TERRAIN_COLORS[terrain]
-		border_w = 2
-	if _slot_in(targets, [side, row, lane]):
-		border = COLOR_TARGET
-		border_w = 4
-	if _is_selected_slot(side, row, lane):
-		border = COLOR_SELECTED
-		border_w = 4
-
-	var button: Button = slot_buttons[key]
-	CardWidget.style(button, bg, border, border_w)
-	button.tooltip_text = CardWidget.wrap_text(tooltip)
-	slot_labels[key].text = "\n".join(lines)
-	slot_labels[key].offset_left = 8 if u == null else PORTRAIT_W + 12
-	_set_portrait(slot_portraits[key], u)
-
-
-## Shows the unit's art (player units reuse their card art). Rebuilt only when the unit changes.
-func _set_portrait(holder: Control, u) -> void:
-	var art_key := "" if u == null else "%d:%s" % [u["side"], u["id"]]
-	if holder.get_meta("art_key", "") == art_key:
-		return
-	holder.set_meta("art_key", art_key)
-	for child in holder.get_children():
-		child.queue_free()
-	if u == null:
-		return
-	var art: Control
-	if u["side"] == P:
-		var def: Dictionary = Data.CARDS[u["id"]]
-		art = CardWidget.art("cards", u["id"], def["name"], CardWidget.FACTION_COLORS[def["faction"]], 24)
-	else:
-		var def: Dictionary = Data.ENEMIES[u["id"]]
-		art = CardWidget.art("enemies", u["id"], def["name"], CardWidget.ENEMY_COLORS[def["kind"]], 24)
-	art.set_anchors_preset(Control.PRESET_FULL_RECT)
-	holder.add_child(art)
+		out.append(["", Data.TERRAIN[terrain]["name"], Data.TERRAIN[terrain]["text"], TERRAIN_COLORS[terrain]])
+	if side == P:
+		if snap["petrified_lane"] == lane:
+			out.append(["", "Petrified", "Units in this lane skip their action this round.", Color(0.75, 0.9, 0.65)])
+		if snap["sandstorm_row"] == row:
+			out.append(["", "Sandstorm", "Units in this row get -1 ATK this round.", Color(0.98, 0.78, 0.42)])
+		if snap.get("lane_warnings", {}).has(lane):
+			out.append(["", "Danger", snap["lane_warnings"][lane], Color(1.0, 0.5, 0.4)])
+		if "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
+			out.append(["", "Quicksand incoming", "At the end of the round this slot sinks into Quicksand.", TERRAIN_COLORS["quicksand"]])
+	return out
 
 
 func _build_relic_row() -> void:
 	for child in relic_row.get_children():
 		child.queue_free()
 	relic_icons.clear()
-	var label := Label.new()
-	label.text = "Relics:" if not params["relics"].is_empty() else "Relics: none"
-	label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.82))
-	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	relic_row.add_child(label)
 	for id in params["relics"]:
 		var relic: Dictionary = Data.RELICS[id]
 		var holder := PanelContainer.new()
-		holder.custom_minimum_size = Vector2(38, 38)
+		holder.custom_minimum_size = Vector2(40, 40)
 		holder.mouse_filter = Control.MOUSE_FILTER_STOP
 		holder.tooltip_text = CardWidget.wrap_text("%s (%s)\n%s" % [relic["name"], relic["rarity"], relic["text"]])
 		var frame := StyleBoxFlat.new()
-		frame.bg_color = Color(0.12, 0.12, 0.17)
-		frame.border_color = CardWidget.RELIC_COLOR
+		frame.bg_color = Color(0.1, 0.08, 0.12)
+		frame.border_color = GOLD.darkened(0.3)
 		frame.set_border_width_all(1)
-		frame.set_corner_radius_all(4)
-		frame.set_content_margin_all(2)
+		frame.set_corner_radius_all(20)
+		frame.set_content_margin_all(3)
 		holder.add_theme_stylebox_override("panel", frame)
 		holder.add_child(CardWidget.art("relics", id, relic["name"], CardWidget.RELIC_COLOR, 12))
 		relic_row.add_child(holder)
@@ -510,15 +547,22 @@ func _update_relic_icons() -> void:
 
 
 func _render_status(snap: Dictionary) -> void:
-	var round_text := "Round %d / %d" % [snap["round"], snap["max_rounds"]]
 	if snap["is_boss"]:
-		round_text = "Round %d (boss: no round limit)" % snap["round"]
-	status_label.text = "[font_size=20][b]%s[/b][/font_size]\n[font_size=18]Faith: [b]%d[/b]   Core HP: [b]%d[/b][/font_size]\nDeck %d   Discard %d   Moves left: %d%s" % [
-		round_text, snap["faith"], max(snap["core_hp"], 0), snap["deck"], snap["discard"],
-		snap["moves_left"], "   [color=#80ff90]Next spell free (Hermes)[/color]" if snap["free_spell"] else "",
+		round_label.text = "Round %d" % snap["round"]
+		round_sub.text = "Boss fight: no round limit"
+	else:
+		round_label.text = "Round %d / %d" % [snap["round"], snap["max_rounds"]]
+		round_sub.text = "Survivors deal their Threat when time runs out"
+	faith_label.text = str(snap["faith"])
+	var core: int = max(snap["core_hp"], 0)
+	core_bar.max_value = max(combat.core_max, core, 1)
+	core_bar.value = core
+	core_label.text = "%d/%d" % [core, int(core_bar.max_value)]
+	info_label.text = "[color=#a8a8b8]Deck[/color] %d   [color=#a8a8b8]Discard[/color] %d   [color=#a8a8b8]Moves left[/color] %d%s" % [
+		snap["deck"], snap["discard"], snap["moves_left"],
+		"\n[color=#80ff90]Next spell is free (Hermes)[/color]" if snap["free_spell"] else "",
 	]
 	_update_relic_icons()
-	core_label.text = "RELIQUARY CORE  -  %d HP" % max(snap["core_hp"], 0)
 
 
 func _render_hand(snap: Dictionary) -> void:
@@ -530,6 +574,7 @@ func _render_hand(snap: Dictionary) -> void:
 		var cost: int = 0 if def["type"] == "spell" and snap["free_spell"] else def["cost"]
 		var button := CardWidget.card_button(cards[i]["id"], i == sel_hand, cost)
 		button.pressed.connect(_on_hand_pressed.bind(i))
+		button.set_drag_forwarding(_hand_drag.bind(i), Callable(), Callable())
 		var affordable: bool = not animating and snap["phase"] == "plan" and not def["type"] in Combat.UNPLAYABLE and cost <= snap["faith"]
 		button.modulate = Color(1, 1, 1, 1.0 if affordable else 0.45)
 		hand_box.add_child(button)
@@ -562,13 +607,55 @@ func _slot_in(list: Array, slot: Array) -> bool:
 	return false
 
 
-func _is_selected_slot(side: int, row: int, lane: int) -> bool:
-	if sel_move != null and side == P and sel_move[0] == row and sel_move[1] == lane:
-		return true
-	for s in [pair_first, push_target]:
-		if s != null and s[0] == side and s[1] == row and s[2] == lane:
-			return true
-	return false
+# ---------------------------------------------------------------- drag and drop
+
+func _hand_drag(_pos: Vector2, i: int) -> Variant:
+	if animating or combat.phase != "plan" or i >= combat.hand.size():
+		return null
+	if sel_hand != i:
+		_on_hand_pressed(i)
+	if sel_hand != i:
+		return null
+	var preview := Control.new()
+	var face := CardWidget.card_face(combat.hand[i]["id"], CardWidget.CARD_SIZE * 0.7, false, true)
+	face.position = -face.size / 2
+	face.modulate = Color(1, 1, 1, 0.9)
+	preview.add_child(face)
+	set_drag_preview(preview)
+	var card_preview = get_tree().get_first_node_in_group("card_preview")
+	if card_preview:
+		card_preview.holder.visible = false
+	return {"hand": i}
+
+
+func _board_drag(pos: Vector2) -> Variant:
+	if animating or combat.phase != "plan" or sel_move == null:
+		return null
+	var slot = board.slot_at(pos)
+	if slot == null or slot[0] != P or slot[1] != sel_move[0] or slot[2] != sel_move[1]:
+		return null
+	var u = last_snap["grid"][P][slot[1]][slot[2]]
+	var preview := Control.new()
+	var def: Dictionary = Data.CARDS[u["id"]]
+	var art := CardWidget.art("cards", u["id"], def["name"], CardWidget.FACTION_COLORS[def["faction"]], 20)
+	art.size = Vector2(90, 90)
+	art.position = Vector2(-45, -45)
+	art.modulate = Color(1, 1, 1, 0.85)
+	preview.add_child(art)
+	set_drag_preview(preview)
+	return {"move": true}
+
+
+func _board_can_drop(pos: Vector2, data) -> bool:
+	var slot = board.slot_at(pos)
+	board.set_hover(slot)
+	return data is Dictionary and slot != null and _slot_in(_current_targets(), slot)
+
+
+func _board_drop(pos: Vector2, _data) -> void:
+	var slot = board.slot_at(pos)
+	if slot != null:
+		_on_slot_pressed(slot[0], slot[1], slot[2])
 
 
 # ---------------------------------------------------------------- input
@@ -586,7 +673,7 @@ func _clear_selection() -> void:
 
 func _set_hint(text: String) -> void:
 	if text == "":
-		text = "Click a card, then a highlighted slot. Click one of your units, then an empty slot, to move it (one move per round; units deployed this round can't move). Hover over anything for details."
+		text = "Drag a card onto a highlighted tile (or click the card, then the tile). Drag one of your units to an empty tile to move it. Hover over anything for details."
 	hint_label.text = text
 
 
@@ -626,16 +713,16 @@ func _on_hand_pressed(i: int) -> void:
 	if combat.valid_targets(i).is_empty():
 		_set_hint("%s has no legal target right now." % def["name"])
 	elif def["type"] == "unit":
-		_set_hint("Deploy %s: click an empty slot on your grid." % def["name"])
+		_set_hint("Deploy %s: choose an empty tile on your side." % def["name"])
 	else:
 		_set_hint({
 			"ally": "Choose one of your units.",
 			"ally_card": "Choose one of your units to return to your hand.",
-			"ally_slot": "Choose a %s slot on your grid without terrain (a unit may stand there)." % ("front" if def.get("row", 0) == 0 else "back"),
+			"ally_slot": "Choose a %s tile on your side without terrain (a unit may stand there)." % ("front" if def.get("row", 0) == 0 else "back"),
 			"enemy": "Choose an enemy unit.",
 			"enemy_front": "Choose an enemy front unit to push.",
 			"enemy_pair": "Choose the first enemy to swap.",
-			"empty_ally_slot": "Choose an empty slot for the returning ally.",
+			"empty_ally_slot": "Choose an empty tile for the returning ally.",
 		}[def["target"]])
 	_refresh()
 
@@ -659,7 +746,7 @@ func _on_slot_pressed(side: int, row: int, lane: int) -> void:
 			_set_hint("%s can't move: %s." % [u.display_name(), combat.move_block(u).to_lower()])
 		else:
 			sel_move = [row, lane]
-			_set_hint("Move %s: click an empty slot on your grid." % u.display_name())
+			_set_hint("Move %s: drag or click it to an empty tile on your side." % u.display_name())
 		_refresh()
 		return
 	if u == null:
@@ -747,6 +834,7 @@ func _check_over() -> void:
 	single_buttons.visible = not run_mode
 	run_buttons.visible = run_mode
 	result_panel.visible = true
+	move_child(result_panel, get_child_count() - 1)
 
 
 func _log_line(text: String) -> void:

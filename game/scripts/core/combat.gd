@@ -281,7 +281,7 @@ func _unit_snapshot(u) -> Dictionary:
 		"atk": effective_atk(u), "hp": u.hp, "max_hp": u.max_hp, "spd": effective_spd(u),
 		"shield": u.shield, "threat": u.threat, "token": u.is_token, "empowered": u.empowered,
 		"revive": (u.has_kw("revive") or (u.side == PLAYER and has_relic("ankh_of_eternity"))) and not u.revive_used,
-		"text": u.def["text"], "intent": intent.get("text", ""),
+		"text": u.def["text"], "intent": intent.get("text", ""), "intent_type": intent.get("type", ""), "width": u.width,
 		"move_block": move_block(u) if phase == "plan" and u.side == PLAYER else "",
 		"poisoned": u.poisoned, "swine": u.uid == transformed_uid,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,

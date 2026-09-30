@@ -28,7 +28,11 @@ const RARITY_STYLES := {
 	"Divine": {"metal": Color(0.93, 0.88, 0.68), "light": Color(1, 1, 1), "gem": Color(0.55, 0.95, 1.0), "glow": Color(1.0, 0.97, 0.8, 0.45)},
 	"Curse": {"metal": Color(0.32, 0.12, 0.4), "light": Color(0.62, 0.3, 0.78), "gem": Color(0.85, 0.15, 0.3)},
 	"Status": {"metal": Color(0.3, 0.31, 0.36), "light": Color(0.5, 0.52, 0.58)},
+	"enemy": {"metal": Color(0.42, 0.24, 0.52), "light": Color(0.72, 0.5, 0.88)},
+	"elite": {"metal": Color(0.68, 0.2, 0.24), "light": Color(1.0, 0.52, 0.5), "gem": Color(1.0, 0.3, 0.3)},
+	"boss": {"metal": Color(0.62, 0.08, 0.1), "light": Color(1.0, 0.38, 0.3), "gem": Color(1.0, 0.15, 0.1), "glow": Color(1.0, 0.2, 0.1, 0.4)},
 }
+const ENEMY_TYPE_LINES := {"enemy": "Void enemy", "elite": "Elite enemy", "boss": "Boss"}
 ## Icon id -> [display name, rule]. Names are bolded in full card text.
 const KEYWORD_INFO := {
 	"ranged": ["Ranged", "Can attack from the back row. Can't target units on Ruins."],
@@ -59,7 +63,7 @@ const KEYWORD_INFO := {
 ## [icon id, phrases that mark it in card text]. Checked in order after the card's keywords.
 const TRIGGERS := [
 	["shield", ["Shield"]], ["on_death", ["On-Death"]], ["growth", ["Growth"]], ["support", ["Support"]],
-	["rally", ["Rally"]], ["summon", ["Summon"]], ["exhaust", ["Exhaust"]],
+	["rally", ["Rally"]], ["summon", ["Summon"]], ["exhaust", ["Exhaust"]], ["split", ["Split:"]], ["thorns", ["Thorns"]],
 	["start_round", ["Start of round", "Start of each round"]], ["end_round", ["End of round", "End of each round"]],
 ]
 const RELIC_COLOR := Color(0.6, 0.4, 0.2)
@@ -196,10 +200,26 @@ static func _preview():
 
 ## Draws a card of the given size. `full` adds the type line and the whole rules text (hover preview).
 static func card_face(card_id: String, size: Vector2, full: bool, selected := false, cost := -1) -> Control:
-	var def: Dictionary = Data.CARDS[card_id]
+	return _face(Data.CARDS[card_id], card_id, "cards", size, full, selected, cost)
+
+
+## An enemy drawn as a full card, framed by its kind (enemy, elite, boss).
+static func enemy_face(enemy_id: String, size: Vector2) -> Control:
+	var def: Dictionary = enemy_def(enemy_id)
+	return _face(def, enemy_id, "enemies", size, true)
+
+
+static func enemy_def(enemy_id: String) -> Dictionary:
+	var def: Dictionary = Data.ENEMIES[enemy_id].duplicate()
+	def["type"] = "enemy"
+	def["rarity"] = def["kind"]
+	return def
+
+
+static func _face(def: Dictionary, card_id: String, art_kind: String, size: Vector2, full: bool, selected := false, cost := -1) -> Control:
 	var s: float = size.x / CARD_SIZE.x
 	var rs: Dictionary = RARITY_STYLES.get(def["rarity"], RARITY_STYLES["Starter"])
-	var tint: Color = FACTION_COLORS[def["faction"]]
+	var tint: Color = FACTION_COLORS[def["faction"]] if def.has("faction") else ENEMY_COLORS[def["kind"]]
 	var root := Control.new()
 	root.size = size
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -234,8 +254,9 @@ static func card_face(card_id: String, size: Vector2, full: bool, selected := fa
 	var m: float = 4 * s
 	place(root, inner, m, m, -m, -m)
 
-	var art_bottom: float = (118 if full else 146) * s
-	place(root, art("cards", card_id, def["name"], tint, int(32 * s)), 8 * s, 8 * s, -8 * s, art_bottom)
+	var text_len: int = def["text"].length()
+	var art_bottom: float = (146 if not full else (74 if text_len > 400 else (84 if text_len > 300 else (100 if text_len > 180 else 118)))) * s
+	place(root, art(art_kind, card_id, def["name"], tint, int(32 * s)), 8 * s, 8 * s, -8 * s, art_bottom)
 
 	var ribbon := Panel.new()
 	var rsb := StyleBoxFlat.new()
@@ -254,11 +275,11 @@ static func card_face(card_id: String, size: Vector2, full: bool, selected := fa
 
 	var y: float = art_bottom + 22 * s
 	if full:
-		var sub := _label(type_line(card_id), int(10 * s), Color(0.7, 0.7, 0.78), false)
+		var sub := _label(_type_line(def), int(10 * s), Color(0.7, 0.7, 0.78), false)
 		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		place(root, sub, 8 * s, y, -8 * s, y + 14 * s)
 		y += 15 * s
-	if def["type"] == "unit":
+	if def["type"] in ["unit", "enemy"]:
 		var stats := HBoxContainer.new()
 		stats.alignment = BoxContainer.ALIGNMENT_CENTER
 		stats.add_theme_constant_override("separation", int(8 * s))
@@ -275,15 +296,16 @@ static func card_face(card_id: String, size: Vector2, full: bool, selected := fa
 		place(root, short, 8 * s, y, -8 * s, y + 30 * s)
 		y += 31 * s
 
-	var icons: Array = card_icons(card_id)
+	var icons: Array = def_icons(def, card_id)
 	if full:
 		var text := RichTextLabel.new()
 		text.bbcode_enabled = true
 		text.fit_content = true
 		text.scroll_active = false
 		text.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		text.add_theme_font_size_override("normal_font_size", int(9.5 * s))
-		text.add_theme_font_size_override("bold_font_size", int(9.5 * s))
+		var text_px: float = 6.6 if text_len > 400 else (7.0 if text_len > 300 else (8.0 if text_len > 180 else 9.5))
+		text.add_theme_font_size_override("normal_font_size", int(text_px * s))
+		text.add_theme_font_size_override("bold_font_size", int(text_px * s))
 		text.add_theme_color_override("default_color", Color(0.9, 0.9, 0.95))
 		text.text = "[center]%s[/center]" % bold_keywords(def["text"])
 		place(root, text, 10 * s, y + 2 * s, -10 * s, -8 * s)
@@ -334,7 +356,12 @@ static func card_face(card_id: String, size: Vector2, full: bool, selected := fa
 
 ## "Norse unit - Rare", "Curse - Unplayable", ...
 static func type_line(card_id: String) -> String:
-	var def: Dictionary = Data.CARDS[card_id]
+	return _type_line(Data.CARDS[card_id])
+
+
+static func _type_line(def: Dictionary) -> String:
+	if def["type"] == "enemy":
+		return ENEMY_TYPE_LINES[def["kind"]]
 	if def["type"] in ["curse", "status"]:
 		return "%s - Unplayable" % def["type"].capitalize()
 	if def["rarity"] == "Divine":
@@ -344,7 +371,11 @@ static func type_line(card_id: String) -> String:
 
 ## Keyword and trigger icons for a card, in display order.
 static func card_icons(card_id: String) -> Array:
-	var def: Dictionary = Data.CARDS[card_id]
+	return def_icons(Data.CARDS[card_id], card_id)
+
+
+## Enemies never get the generic "ability" icon: their preview always shows the full text.
+static func def_icons(def: Dictionary, card_id: String) -> Array:
 	var out: Array = []
 	for kw in def.get("keywords", []):
 		if KEYWORD_INFO.has(kw):
