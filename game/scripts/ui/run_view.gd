@@ -16,6 +16,7 @@ const NODE_COLORS := {
 	"shop": Color(0.95, 0.78, 0.35), "shrine": Color(0.4, 0.62, 1.0), "rest": Color(0.4, 0.85, 0.5),
 }
 const GOLD := Color(0.95, 0.78, 0.35)
+const ART_SIZE := Vector2(540, 720)
 const REACHABLE := Color(1.0, 0.88, 0.45)
 const NODE_LABELS := {"fight": "Fight", "elite": "Elite", "boss": "BOSS", "shop": "Shop", "shrine": "Shrine", "rest": "Rest"}
 const NODE_HELP := {
@@ -473,29 +474,29 @@ func _on_combat_finished(c) -> void:
 
 func _show_reward() -> void:
 	var r: Dictionary = run.reward
-	content.add_child(_heading({"win": "Victory!", "timeout": "Time ran out"}[r["result"]]))
+	var box := _centered_panel({"win": "Victory!", "timeout": "Time ran out"}[r["result"]])
 	if r["gold"] > 0:
-		content.add_child(_text("+%d gold" % r["gold"], Color(1.0, 0.85, 0.3)))
+		box.add_child(_icon_line("opt_gold", "+%d gold" % r["gold"], GOLD))
 	else:
-		content.add_child(_text("No reward. The Core took the surviving enemies' Threat."))
+		box.add_child(_rich("No reward. The Core took the surviving enemies' Threat."))
 	for note in r["notes"]:
-		content.add_child(_text(note))
+		box.add_child(_rich(note))
 	if r["relic"] != "":
-		content.add_child(_text("The Echo leaves behind a relic:", Color(1.0, 0.85, 0.3)))
-		var relic_row := _row()
+		box.add_child(_icon_line("opt_relic", "The Echo leaves behind a relic:", GOLD))
 		var rb := CardWidget.relic_button(r["relic"])
 		rb.disabled = true
-		relic_row.add_child(rb)
+		box.add_child(_centered(rb))
 	if r["cards"].is_empty():
-		_button("Continue", _take_reward.bind(-1), content)
+		_option("Continue.", "opt_leave", _take_reward.bind(-1), box)
 		return
-	content.add_child(_text("Choose a card to add to your deck, or skip:"))
-	var row := _row()
+	box.add_child(_icon_line("opt_card", "Choose a card to add to your deck, or skip:", Color(0.92, 0.88, 0.8)))
+	var row := _card_row(box)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	for i in r["cards"].size():
 		var b := CardWidget.card_button(r["cards"][i])
 		b.pressed.connect(_take_reward.bind(i))
 		row.add_child(b)
-	_button("Skip card", _take_reward.bind(-1), content)
+	_option("Skip the card.", "opt_leave", _take_reward.bind(-1), box)
 
 
 func _take_reward(i: int) -> void:
@@ -504,47 +505,58 @@ func _take_reward(i: int) -> void:
 
 
 func _show_shop() -> void:
-	content.add_child(_heading("Shop"))
-	content.add_child(_text("A merchant-echo drifts between the stars, trading relics of dead gods. You have %d gold." % run.gold))
+	var box := _scene("res://art/events/shop.jpg", "The Wandering Market",
+		"A merchant-echo drifts between the stars, trading relics of dead gods. You have [color=#f2c75a][b]%d gold[/b][/color]." % run.gold)
 	if flash != "":
-		content.add_child(_text(flash, Color(1.0, 0.6, 0.5)))
+		box.add_child(_rich(flash, 16, Color(1.0, 0.6, 0.5)))
 		flash = ""
 
-	content.add_child(_heading("Cards", 20))
-	var row := _row()
+	var row := _card_row(box)
 	for i in run.shop["cards"].size():
 		var item: Dictionary = run.shop["cards"][i]
-		var col := VBoxContainer.new()
 		var b := CardWidget.card_button(item["id"])
-		b.disabled = item["sold"] or run.gold < item["price"]
-		b.modulate = Color(1, 1, 1, 0.4 if b.disabled else 1.0)
 		b.pressed.connect(func(): _shop_result(run.buy_card(i)))
-		col.add_child(b)
-		col.add_child(_text("SOLD" if item["sold"] else "%d gold" % item["price"]))
-		row.add_child(col)
+		row.add_child(_shop_item(b, item))
 
 	if not run.shop["relics"].is_empty():
-		content.add_child(_heading("Relics", 20))
-		var relic_row := _row()
+		var relic_row := _card_row(box)
 		for i in run.shop["relics"].size():
 			var item: Dictionary = run.shop["relics"][i]
-			var col := VBoxContainer.new()
 			var b := CardWidget.relic_button(item["id"])
-			b.disabled = item["sold"] or run.gold < item["price"]
-			b.modulate = Color(1, 1, 1, 0.4 if b.disabled else 1.0)
 			b.pressed.connect(func(): _shop_result(run.buy_relic(i)))
-			col.add_child(b)
-			col.add_child(_text("SOLD" if item["sold"] else "%d gold" % item["price"]))
-			relic_row.add_child(col)
+			relic_row.add_child(_shop_item(b, item))
 
-	content.add_child(_heading("Services", 20))
-	var services := _row()
-	_button("Remove a card (%d gold)" % Run.REMOVE_PRICE, func():
-		_open_deck("Choose a card to remove", func(i): _shop_result(run.buy_remove(i))), services, run.can_buy_remove())
-	_button("Heal %d Core HP (%d gold)" % [Run.HEAL_AMOUNT, Run.HEAL_PRICE], func(): _shop_result(run.buy_heal()), services, run.can_buy_heal())
-	_button("Leave the shop", func():
-		run.leave_node()
-		_show(), content)
+	var services := HBoxContainer.new()
+	services.add_theme_constant_override("separation", 10)
+	box.add_child(services)
+	for b in [
+		_option("Remove a card: %d gold" % Run.REMOVE_PRICE, "opt_remove", func():
+			_open_deck("Choose a card to remove", func(i): _shop_result(run.buy_remove(i))), services, run.can_buy_remove()),
+		_option("Heal %d Core HP: %d gold" % [Run.HEAL_AMOUNT, Run.HEAL_PRICE], "opt_heal", func(): _shop_result(run.buy_heal()), services, run.can_buy_heal()),
+		_option("Leave the market.", "opt_leave", func():
+			run.leave_node()
+			_show(), services),
+	]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+
+## A shop card or relic with its price tag underneath; sold or unaffordable items fade out.
+func _shop_item(b: Button, item: Dictionary) -> VBoxContainer:
+	b.disabled = item["sold"] or run.gold < item["price"]
+	b.modulate = Color(1, 1, 1, 0.4 if b.disabled else 1.0)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	col.add_child(b)
+	if item["sold"]:
+		var sold := CardWidget._label("SOLD", 18, Color(0.6, 0.58, 0.55), true)
+		sold.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(sold)
+	else:
+		var tag := _icon_line("opt_gold", "", GOLD)
+		tag.alignment = BoxContainer.ALIGNMENT_CENTER
+		tag.add_child(CardWidget.number_label(str(item["price"]), 18, GOLD if run.gold >= item["price"] else Color(1.0, 0.5, 0.45)))
+		col.add_child(tag)
+	return col
 
 
 func _shop_result(err: String) -> void:
@@ -553,35 +565,66 @@ func _shop_result(err: String) -> void:
 
 
 func _show_shrine() -> void:
-	var ev: Dictionary = Data.EVENTS[run.shrine["event"]]
-	content.add_child(_heading(run.shrine_text(ev["name"])))
-	content.add_child(_text(run.shrine_description()))
+	var id: String = run.shrine["event"]
+	var ev: Dictionary = Data.EVENTS[id]
+	if id == "pantheon_shrine":
+		id += "_" + run.shrine["pantheon"]
+	var box := _scene("res://art/events/%s.jpg" % id, run.shrine_text(ev["name"]), run.shrine_description())
 	if run.shrine["result"] != "":
-		content.add_child(_text(run.shrine["result"], Color(1.0, 0.85, 0.3)))
+		box.add_child(_rich("[i]%s[/i]" % run.shrine["result"], 18, Color(1.0, 0.85, 0.45)))
 
 	if run.shrine["pending"] == "choose":
-		content.add_child(_text("Choose a card, or leave it:"))
-		var row := _row()
+		box.add_child(_icon_line("opt_card", "Choose a card, or leave it:", Color(0.92, 0.88, 0.8)))
+		var row := _card_row(box)
 		for i in run.shrine["cards"].size():
 			var b := CardWidget.card_button(run.shrine["cards"][i])
 			b.pressed.connect(func():
 				run.shrine_take_card(i)
 				_show())
 			row.add_child(b)
-		_button("Take nothing", func():
+		_option("Take nothing.", "opt_leave", func():
 			run.shrine_take_card(-1)
-			_show(), content)
+			_show(), box)
 		return
 
 	if run.shrine["done"]:
-		_button("Continue", func():
+		_option("Continue.", "opt_leave", func():
 			run.leave_node()
-			_show(), content)
+			_show(), box)
 		return
 
 	var options: Array = run.shrine_options()
 	for i in options.size():
-		_button(run.shrine_text(options[i]["label"]), _on_shrine_option.bind(i), content, run.can_choose(i))
+		_option(run.shrine_text(options[i]["label"]), _option_icon(options[i]), _on_shrine_option.bind(i), box, run.can_choose(i))
+
+
+## Picks the icon for an event option from what it costs or does.
+func _option_icon(opt: Dictionary) -> String:
+	var cost: Dictionary = opt.get("cost", {})
+	var fx: Dictionary = opt.get("fx", {})
+	if cost.is_empty() and fx.is_empty() and not opt.has("outcomes"):
+		return "opt_leave"
+	if cost.has("max_hp"):
+		return "opt_max_hp"
+	if cost.has("hp"):
+		return "hp"
+	if opt.has("outcomes"):
+		return "opt_dice"
+	if cost.has("gold"):
+		return "opt_gold"
+	if fx.has("remove") or fx.has("remove_random"):
+		return "opt_remove"
+	if fx.has("choose") or fx.has("card"):
+		return "opt_card"
+	if fx.has("relic"):
+		return "opt_relic"
+	if fx.get("hp", 0) > 0:
+		return "opt_heal"
+	if fx.get("hp", 0) < 0:
+		return "hp"
+	if fx.has("gold"):
+		return "opt_gold"
+	return "opt_curse"
 
 
 func _on_shrine_option(i: int) -> void:
@@ -597,33 +640,188 @@ func _on_shrine_option(i: int) -> void:
 
 
 func _show_rest() -> void:
-	content.add_child(_heading("Sanctuary World"))
-	content.add_child(_text("A quiet world the Void has not yet reached. The gods can recover here, or you can let one of them rest for good."))
-	_button("Rest: heal %d Core HP" % Run.REST_HEAL, func():
+	var box := _scene("res://art/events/rest.jpg", "Sanctuary World",
+		"A quiet world the Void has not yet reached. The gods can recover here, or you can let one of them rest for good.")
+	box.add_child(_rich("Core HP: [b]%d[/b] / %d" % [run.core_hp, run.max_hp], 17, Color(0.75, 0.75, 0.82)))
+	_option("Rest: heal %d Core HP." % Run.REST_HEAL, "opt_heal", func():
 		flash = "You rest and heal %d Core HP." % run.rest_heal()
-		_show(), content, run.core_hp < run.max_hp)
-	_button("Meditate: remove a card from your deck", func():
+		_show(), box, run.core_hp < run.max_hp)
+	_option("Meditate: remove a card from your deck.", "opt_remove", func():
 		_open_deck("Choose a card to remove", func(i):
 			run.rest_remove(i)
 			flash = "A card is laid to rest."
-			_show()), content, run.deck.size() > Run.MIN_DECK)
+			_show()), box, run.deck.size() > Run.MIN_DECK)
 
 
 func _show_end() -> void:
 	var won: bool = run.state == "victory"
+	var box := _centered_panel("The Herald falls. Act 1 complete!" if won else "The Reliquary Core is lost.")
 	if won:
 		var faction: String = Data.CARDS[run.patron]["faction"]
 		var scene := CardWidget.art("victory", faction, Data.CARDS[run.patron]["name"], CardWidget.FACTION_COLORS[faction], 64)
 		if scene is TextureRect:
 			scene.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		scene.custom_minimum_size = Vector2(0, 360)
-		scene.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		content.add_child(scene)
-	content.add_child(_heading("The Herald falls. Act 1 complete!" if won else "The Reliquary Core is lost.", 36))
-	content.add_child(_text("Floor reached: %d / %d\nFights won: %d\nCore HP: %d\nGold: %d\nDeck: %d cards\nRelics: %d" % [
+		scene.custom_minimum_size = Vector2(0, 340)
+		box.add_child(scene)
+	box.add_child(_rich("Floor reached: [b]%d[/b] / %d\nFights won: [b]%d[/b]\nCore HP: [b]%d[/b]\nGold: [b]%d[/b]\nDeck: [b]%d[/b] cards\nRelics: [b]%d[/b]" % [
 		run.floor_number(), Run.FLOORS, run.fights_won, max(run.core_hp, 0), run.gold, run.deck.size(), run.relics.size()]))
-	_button("View final deck", func(): _open_deck("Final deck"), content)
-	_button("Back to menu", func(): exit_requested.emit(), content)
+	_option("View final deck.", "opt_card", func(): _open_deck("Final deck"), box)
+	var menu := _button("Back to menu", func(): exit_requested.emit(), box)
+	CardWidget.style_button(menu, true, 18)
+	menu.custom_minimum_size = Vector2(0, 48)
+
+
+# ---------------------------------------------------------------- scene panels
+
+func _panel_style() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.045, 0.08, 0.9)
+	sb.border_color = Color(GOLD, 0.5)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(10)
+	sb.set_content_margin_all(26)
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 12
+	return sb
+
+
+## Event-style screen: a framed illustration on the left and a titled panel on the right.
+## Returns the panel's box for the text and options.
+func _scene(art: String, title: String, text: String) -> VBoxContainer:
+	var row := HBoxContainer.new()
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 22)
+	content.add_child(row)
+
+	var frame := PanelContainer.new()
+	var fsb := StyleBoxFlat.new()
+	fsb.bg_color = Color(0.1, 0.08, 0.06)
+	fsb.border_color = Color(0.78, 0.6, 0.3)
+	fsb.set_border_width_all(3)
+	fsb.set_corner_radius_all(6)
+	fsb.set_content_margin_all(5)
+	fsb.shadow_color = Color(0, 0, 0, 0.6)
+	fsb.shadow_size = 14
+	frame.add_theme_stylebox_override("panel", fsb)
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(frame)
+	var pic := TextureRect.new()
+	if ResourceLoader.exists(art):
+		pic.texture = load(art)
+	pic.custom_minimum_size = ART_SIZE
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	frame.add_child(pic)
+
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _panel_style())
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	panel.custom_minimum_size = Vector2(0, ART_SIZE.y + 16)
+	row.add_child(panel)
+	return _panel_box(panel, title, text)
+
+
+## A panel centered in the content area, for screens without an illustration.
+func _centered_panel(title: String) -> VBoxContainer:
+	var center := CenterContainer.new()
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(center)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _panel_style())
+	panel.custom_minimum_size = Vector2(760, 0)
+	center.add_child(panel)
+	return _panel_box(panel, title, "")
+
+
+func _panel_box(panel: PanelContainer, title: String, text: String) -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	panel.add_child(box)
+	var heading := _heading(title, 36)
+	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(heading)
+	box.add_child(_divider())
+	if text != "":
+		box.add_child(_rich(text))
+	return box
+
+
+func _divider() -> TextureRect:
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	gradient.colors = PackedColorArray([Color(GOLD, 0.0), Color(GOLD, 0.9), Color(GOLD, 0.0)])
+	var tex := GradientTexture2D.new()
+	tex.gradient = gradient
+	tex.width = 256
+	tex.height = 1
+	var line := TextureRect.new()
+	line.texture = tex
+	line.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	line.stretch_mode = TextureRect.STRETCH_SCALE
+	line.custom_minimum_size = Vector2(0, 2)
+	return line
+
+
+func _rich(text: String, size := 18, color := Color(0.88, 0.86, 0.82)) -> RichTextLabel:
+	var rtl := RichTextLabel.new()
+	rtl.bbcode_enabled = true
+	rtl.fit_content = true
+	rtl.scroll_active = false
+	rtl.text = text
+	rtl.add_theme_font_size_override("normal_font_size", size)
+	rtl.add_theme_font_size_override("bold_font_size", size)
+	rtl.add_theme_font_size_override("italics_font_size", size)
+	rtl.add_theme_color_override("default_color", color)
+	return rtl
+
+
+func _icon_line(icon: String, text: String, color: Color) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.add_child(CardWidget.icon(icon, 26))
+	if text != "":
+		var l := CardWidget._label(text, 18, color, false)
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(l)
+	return row
+
+
+func _card_row(parent: Control) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	parent.add_child(row)
+	return row
+
+
+func _centered(child: Control) -> CenterContainer:
+	var center := CenterContainer.new()
+	center.add_child(child)
+	return center
+
+
+## A wide choice button with an icon on the left, used for event options and services.
+func _option(text: String, icon: String, callback: Callable, parent: Control, enabled := true) -> Button:
+	var b := Button.new()
+	b.text = text
+	var path := "res://art/icons/%s.png" % icon
+	if ResourceLoader.exists(path):
+		b.icon = load(path)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.custom_minimum_size = Vector2(0, 58)
+	b.disabled = not enabled
+	b.pressed.connect(callback)
+	CardWidget.style_button(b, false, 16)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var sb: StyleBoxFlat = b.get_theme_stylebox(state)
+		sb.content_margin_left = 14
+		sb.content_margin_right = 14
+	b.add_theme_constant_override("icon_max_width", 34)
+	b.add_theme_constant_override("h_separation", 14)
+	b.add_theme_color_override("font_color", Color(0.92, 0.9, 0.86))
+	parent.add_child(b)
+	return b
 
 
 # ---------------------------------------------------------------- overlays

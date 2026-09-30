@@ -17,7 +17,7 @@ const FACTION_COLORS := {
 	"egypt": Color(0.2, 0.65, 0.45), "token": Color(0.7, 0.7, 0.7), "curse": Color(0.55, 0.2, 0.65), "status": Color(0.45, 0.47, 0.55),
 	"divine": Color(0.95, 0.92, 0.75),
 }
-const TITLE_FONT = preload("res://fonts/PixelifySans.ttf")
+const TITLE_FONT = preload("res://fonts/title_font.tres")
 const NUMBER_FONT = preload("res://fonts/PressStart2P.ttf")
 const RARITY_STYLES := {
 	"Starter": {"metal": Color(0.42, 0.43, 0.48), "light": Color(0.68, 0.7, 0.75)},
