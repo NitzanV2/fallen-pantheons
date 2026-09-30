@@ -45,6 +45,26 @@ static func toggle_mute() -> void:
 	set_muted(not is_muted())
 
 
+## Master volume from 0.0 to 1.0, remembered between sessions.
+static func set_volume(value: float, save := true) -> void:
+	_apply_volume(value)
+	if not save:
+		return
+	var config := ConfigFile.new()
+	config.load(SETTINGS)
+	config.set_value("audio", "volume", value)
+	config.save(SETTINGS)
+
+
+static func get_volume() -> float:
+	_instance()
+	return db_to_linear(AudioServer.get_bus_volume_db(0))
+
+
+static func _apply_volume(value: float) -> void:
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(value, 0.0001)))
+
+
 static func _instance() -> Node:
 	if is_instance_valid(instance):
 		return instance
@@ -62,6 +82,7 @@ func _init() -> void:
 	var config := ConfigFile.new()
 	if config.load(SETTINGS) == OK:
 		AudioServer.set_bus_mute(0, config.get_value("audio", "muted", false))
+		_apply_volume(config.get_value("audio", "volume", 1.0))
 	for i in 2:
 		var p := AudioStreamPlayer.new()
 		p.volume_db = SILENT_DB

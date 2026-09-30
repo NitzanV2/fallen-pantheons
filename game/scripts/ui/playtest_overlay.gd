@@ -10,6 +10,7 @@ var info := {"version": "dev", "update_url": "", "feedback_url": ""}
 var banner: PanelContainer
 var banner_label: Label
 var mute_button: Button
+var volume_slider: HSlider
 var http: HTTPRequest
 var offered_version := ""
 var dismissed_version := ""
@@ -34,6 +35,18 @@ func _ready() -> void:
 	mute_button.add_theme_font_size_override("font_size", 12)
 	mute_button.pressed.connect(_toggle_mute)
 	corner.add_child(mute_button)
+	volume_slider = HSlider.new()
+	volume_slider.tooltip_text = "Volume"
+	volume_slider.focus_mode = Control.FOCUS_NONE
+	volume_slider.custom_minimum_size = Vector2(110, 0)
+	volume_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	volume_slider.min_value = 0.0
+	volume_slider.max_value = 1.0
+	volume_slider.step = 0.01
+	volume_slider.value = Music.get_volume()
+	volume_slider.value_changed.connect(_on_volume_changed)
+	volume_slider.drag_ended.connect(func(_changed): Music.set_volume(volume_slider.value))
+	corner.add_child(volume_slider)
 	_update_mute_button()
 
 	var build := Label.new()
@@ -73,6 +86,13 @@ func _input(event: InputEvent) -> void:
 
 func _toggle_mute() -> void:
 	Music.toggle_mute()
+	_update_mute_button()
+
+
+func _on_volume_changed(value: float) -> void:
+	Music.set_volume(value, false)
+	if Music.is_muted() and value > 0.0:
+		Music.set_muted(false)
 	_update_mute_button()
 
 
