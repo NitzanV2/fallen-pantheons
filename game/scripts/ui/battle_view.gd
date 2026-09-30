@@ -42,7 +42,9 @@ var log_label: RichTextLabel
 var end_button: Button
 var cancel_button: Button
 var restart_button: Button
-var push_row: HBoxContainer
+var push_panel: PanelContainer
+var push_title: Label
+var push_outcomes := {}
 var skip_button: Button
 var menu_button: Button
 var run_info_row: HBoxContainer
@@ -147,6 +149,7 @@ func _build() -> void:
 	add_child(hand_box)
 
 	_build_sidebar()
+	_build_push_panel()
 	_build_result_panel()
 
 
@@ -238,11 +241,6 @@ func _build_sidebar() -> void:
 	end_button = _button("END PLANNING", _on_end_pressed, box, true)
 	end_button.custom_minimum_size = Vector2(0, 52)
 	end_button.tooltip_text = "Resolve the round: every unit acts in Speed order."
-	push_row = HBoxContainer.new()
-	box.add_child(push_row)
-	for pair in [["< Push left", -1], ["Push right >", 1]]:
-		var b := _button(pair[0], _on_push.bind(pair[1]), push_row)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var edit_row := HBoxContainer.new()
 	box.add_child(edit_row)
 	cancel_button = _button("Cancel", _on_cancel_pressed, edit_row)
@@ -291,6 +289,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.keycode in [KEY_H, KEY_F1]:
 		_toggle_help()
+		get_viewport().set_input_as_handled()
+	elif push_target != null and event.keycode in [KEY_LEFT, KEY_RIGHT]:
+		_on_push(-1 if event.keycode == KEY_LEFT else 1)
 		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_ESCAPE and help_panel != null and help_panel.visible:
 		help_panel.visible = false
@@ -379,6 +380,71 @@ func _button(text: String, callback: Callable, parent: Control, primary := false
 	return b
 
 
+## The direction prompt for push spells, centred over the player's grid so the enemy row stays visible.
+func _build_push_panel() -> void:
+	push_panel = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.045, 0.09, 0.94)
+	sb.border_color = Color(0.55, 0.8, 1.0, 0.85)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(12)
+	sb.set_content_margin_all(18)
+	sb.shadow_color = Color(0.3, 0.6, 1.0, 0.35)
+	sb.shadow_size = 18
+	push_panel.add_theme_stylebox_override("panel", sb)
+	push_panel.visible = false
+	add_child(push_panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	push_panel.add_child(box)
+	push_title = CardWidget._label("", 24, GOLD, true)
+	push_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(push_title)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	box.add_child(row)
+	for direction in [-1, 1]:
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 6)
+		row.add_child(col)
+		var b := _button("PUSH LEFT" if direction < 0 else "PUSH RIGHT", _on_push.bind(direction), col, true)
+		b.custom_minimum_size = Vector2(250, 76)
+		b.add_theme_font_size_override("font_size", 20)
+		CardWidget.button_icon(b, "push_left" if direction < 0 else "push_right", 56)
+		b.add_theme_constant_override("h_separation", 12)
+		if direction > 0:
+			b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		b.tooltip_text = "Keyboard: %s arrow" % ("Left" if direction < 0 else "Right")
+		var outcome := CardWidget._label("", 14, Color(0.85, 0.85, 0.92), false)
+		outcome.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(outcome)
+		push_outcomes[direction] = outcome
+	var cancel := _button("Cancel (Esc)", _on_cancel_pressed, box)
+	cancel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	cancel.custom_minimum_size = Vector2(160, 34)
+
+
+func _update_push_panel() -> void:
+	var u = combat._at(push_target) if push_target != null else null
+	push_panel.visible = u != null
+	if u == null:
+		return
+	push_title.text = "Push %s which way?" % u.display_name()
+	for direction in push_outcomes:
+		var dest: int = push_target[2] + direction
+		var other = combat.unit_at(push_target[0], push_target[1], dest)
+		var text := "Moves to lane %d" % (dest + 1)
+		if dest < 0 or dest >= Combat.LANES:
+			text = "Slams into the edge: 3 damage"
+		elif other != null and other.has_kw("immovable"):
+			text = "Hits the Immovable %s: 3 damage" % other.display_name()
+		elif other != null:
+			text = "Collides with %s: 3 damage each" % other.display_name()
+		push_outcomes[direction].text = text
+	push_panel.reset_size()
+	push_panel.position = Vector2((BOARD_RECT.size.x - push_panel.size.x) / 2, 385)
+
+
 func _build_result_panel() -> void:
 	result_panel = PanelContainer.new()
 	result_panel.set_anchors_preset(Control.PRESET_CENTER)
@@ -434,7 +500,7 @@ func _render(snap: Dictionary) -> void:
 	cancel_button.disabled = animating or not _has_selection()
 	restart_button.disabled = animating or not combat.can_restart_plan()
 	skip_button.disabled = not animating
-	push_row.visible = push_target != null
+	_update_push_panel()
 	if board.hover != null:
 		_on_slot_hovered(board.hover)
 
