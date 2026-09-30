@@ -423,16 +423,16 @@ func _medallion_face(path: String, d: float, ring_color: Color, glow := false) -
 	halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	CardWidget.place(root, halo, 0, 0, -0.001, -0.001)
 
-	var ring := Panel.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.05, 0.1)
-	sb.border_color = ring_color
-	sb.set_border_width_all(max(2, int(d / 16)))
-	sb.set_corner_radius_all(int(d))
-	ring.add_theme_stylebox_override("panel", sb)
-	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ring.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
-	CardWidget.place(root, ring, 0, 0, -0.001, -0.001)
+	# The art is clipped by a filled circle; the ring is drawn on top so the square art can't cover it.
+	var mask := Panel.new()
+	var msb := StyleBoxFlat.new()
+	msb.bg_color = Color(0.05, 0.05, 0.1)
+	msb.set_corner_radius_all(int(d))
+	msb.corner_detail = 24
+	mask.add_theme_stylebox_override("panel", msb)
+	mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mask.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	CardWidget.place(root, mask, 0, 0, -0.001, -0.001)
 	var tex := TextureRect.new()
 	if ResourceLoader.exists(path):
 		tex.texture = load(path)
@@ -440,17 +440,21 @@ func _medallion_face(path: String, d: float, ring_color: Color, glow := false) -
 	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var inset: float = max(2, d / 16)
-	CardWidget.place(ring, tex, inset, inset, -inset, -inset)
-	var rim := Panel.new()
-	var rsb := StyleBoxFlat.new()
-	rsb.draw_center = false
-	rsb.border_color = Color(ring_color.lightened(0.4), 0.6)
-	rsb.set_border_width_all(1)
-	rsb.set_corner_radius_all(int(d))
-	rim.add_theme_stylebox_override("panel", rsb)
-	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	CardWidget.place(ring, rim, inset, inset, -inset, -inset)
+	CardWidget.place(mask, tex, 0, 0, -0.001, -0.001)
+
+	var width: int = max(2, int(d / 16))
+	for layer in [[ring_color, width, 0.0], [Color(ring_color.lightened(0.45), 0.7), 1, float(width)]]:
+		var ring := Panel.new()
+		var sb := StyleBoxFlat.new()
+		sb.draw_center = false
+		sb.border_color = layer[0]
+		sb.set_border_width_all(layer[1])
+		sb.set_corner_radius_all(int(d))
+		sb.corner_detail = 24
+		ring.add_theme_stylebox_override("panel", sb)
+		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var inset: float = layer[2]
+		CardWidget.place(root, ring, inset, inset, -inset - 0.001, -inset - 0.001)
 	return root
 
 
