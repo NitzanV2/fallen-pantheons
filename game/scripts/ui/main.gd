@@ -15,7 +15,7 @@ const PATRON_ART_BOTTOM := 226
 const BG_RECT := Rect2(-60, -125, 1720, 968)
 const GOLD := Color(0.95, 0.78, 0.35)
 const TITLE_CROP := Rect2(0.02, 0.28, 0.96, 0.48)
-const TITLE_HEIGHT := 130
+const TITLE_HEIGHT := 235
 const LIST_GROUPS := {"neutral": "Neutral", "norse": "Norse", "greek": "Greek", "egypt": "Egyptian", "divine": "Divine (shrines only)", "other": "Tokens, curses and statuses"}
 const RARITY_ORDER := ["Starter", "Common", "Uncommon", "Rare"]
 
