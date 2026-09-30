@@ -4,10 +4,12 @@ extends CanvasLayer
 
 const INFO_PATH := "res://build_info.json"
 const CHECK_EVERY_SEC := 180.0
+const Music = preload("res://scripts/ui/music.gd")
 
 var info := {"version": "dev", "update_url": "", "feedback_url": ""}
 var banner: PanelContainer
 var banner_label: Label
+var mute_button: Button
 var http: HTTPRequest
 var offered_version := ""
 var dismissed_version := ""
@@ -24,6 +26,15 @@ func _ready() -> void:
 	corner.position = Vector2(-12, -8)
 	corner.add_theme_constant_override("separation", 10)
 	add_child(corner)
+
+	mute_button = Button.new()
+	mute_button.tooltip_text = "Mute or unmute all sound (Ctrl+M)."
+	mute_button.focus_mode = Control.FOCUS_NONE
+	mute_button.custom_minimum_size = Vector2(84, 0)
+	mute_button.add_theme_font_size_override("font_size", 12)
+	mute_button.pressed.connect(_toggle_mute)
+	corner.add_child(mute_button)
+	_update_mute_button()
 
 	var build := Label.new()
 	build.text = "Build %s" % info["version"]
@@ -52,6 +63,21 @@ func _ready() -> void:
 		timer.timeout.connect(_check)
 		add_child(timer)
 		_check()
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_M and event.ctrl_pressed:
+		_toggle_mute()
+		get_viewport().set_input_as_handled()
+
+
+func _toggle_mute() -> void:
+	Music.toggle_mute()
+	_update_mute_button()
+
+
+func _update_mute_button() -> void:
+	mute_button.text = "Sound: Off" if Music.is_muted() else "Sound: On"
 
 
 func _load_info() -> void:

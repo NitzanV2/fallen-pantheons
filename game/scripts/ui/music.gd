@@ -18,7 +18,6 @@ static var instance: Node = null
 var players: Array[AudioStreamPlayer] = []
 var active := 0
 var current := ""
-var enabled := true
 var tween: Tween
 
 
@@ -28,23 +27,22 @@ static func play(track: String) -> void:
 		music._switch(track)
 
 
-static func set_enabled(on: bool) -> void:
-	var music := _instance()
-	if music == null:
-		return
-	music.enabled = on
+## Mutes all game audio (the Master bus), remembered between sessions.
+static func set_muted(on: bool) -> void:
+	AudioServer.set_bus_mute(0, on)
 	var config := ConfigFile.new()
 	config.load(SETTINGS)
-	config.set_value("audio", "music", on)
+	config.set_value("audio", "muted", on)
 	config.save(SETTINGS)
-	var track: String = music.current
-	music.current = ""
-	music._switch(track)
 
 
-static func is_enabled() -> bool:
-	var music := _instance()
-	return music != null and music.enabled
+static func is_muted() -> bool:
+	_instance()
+	return AudioServer.is_bus_mute(0)
+
+
+static func toggle_mute() -> void:
+	set_muted(not is_muted())
 
 
 static func _instance() -> Node:
@@ -63,7 +61,7 @@ func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var config := ConfigFile.new()
 	if config.load(SETTINGS) == OK:
-		enabled = config.get_value("audio", "music", true)
+		AudioServer.set_bus_mute(0, config.get_value("audio", "muted", false))
 	for i in 2:
 		var p := AudioStreamPlayer.new()
 		p.volume_db = SILENT_DB
@@ -90,7 +88,7 @@ func _switch(track: String) -> void:
 	if old.playing:
 		tween.tween_property(old, "volume_db", SILENT_DB, FADE)
 		tween.tween_callback(old.stop).set_delay(FADE)
-	if not enabled or not TRACKS.has(track):
+	if not TRACKS.has(track):
 		return
 	var stream: AudioStreamOggVorbis = load(TRACKS[track])
 	stream.loop = true
