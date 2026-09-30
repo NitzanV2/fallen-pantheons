@@ -17,6 +17,7 @@ const NODE_COLORS := {
 }
 const GOLD := Color(0.95, 0.78, 0.35)
 const ART_SIZE := Vector2(540, 720)
+const SANDBOX_GOLD := 150
 const REACHABLE := Color(1.0, 0.88, 0.45)
 const NODE_LABELS := {"fight": "Fight", "elite": "Elite", "boss": "BOSS", "shop": "Shop", "shrine": "Shrine", "rest": "Rest"}
 const NODE_HELP := {
@@ -41,11 +42,35 @@ var map_button: Button
 var abandon_confirm: ConfirmationDialog
 var battle_view: Control = null
 var flash := ""
+## Set for sandbox event tests: leaving the event returns to the sandbox instead of the map.
+var sandbox_mode := false
 
 
 func start(seed_value: int, patron: String) -> void:
 	run = Run.new()
 	run.setup(seed_value, patron)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_build()
+	_show()
+
+
+## Sandbox: opens one event (or "shop" / "rest") in a fresh run with some spare gold.
+func start_test(seed_value: int, patron: String, event: String, pantheon := "") -> void:
+	sandbox_mode = true
+	run = Run.new()
+	run.setup(seed_value, patron)
+	run.gold = SANDBOX_GOLD
+	match event:
+		"shop":
+			run._generate_shop()
+			run.state = "shop"
+		"rest":
+			run.state = "rest"
+		_:
+			run.start_event(event)
+			if pantheon != "":
+				run.shrine["pantheon"] = pantheon
+			run.state = "shrine"
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build()
 	_show()
@@ -123,10 +148,13 @@ func _build() -> void:
 	abandon_confirm.cancel_button_text = "Keep playing"
 	abandon_confirm.confirmed.connect(func(): exit_requested.emit())
 	add_child(abandon_confirm)
-	_button("Abandon run", _confirm_abandon, sidebar)
+	_button("Back to sandbox" if sandbox_mode else "Abandon run", _confirm_abandon, sidebar)
 
 
 func _confirm_abandon() -> void:
+	if sandbox_mode:
+		exit_requested.emit()
+		return
 	abandon_confirm.popup_centered()
 	abandon_confirm.get_cancel_button().grab_focus()
 
@@ -202,6 +230,9 @@ func _update_sidebar() -> void:
 # ---------------------------------------------------------------- screens
 
 func _show() -> void:
+	if sandbox_mode and run.state == "map":
+		exit_requested.emit()
+		return
 	for child in content.get_children():
 		child.queue_free()
 	_update_sidebar()

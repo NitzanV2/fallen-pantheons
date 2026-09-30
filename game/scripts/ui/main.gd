@@ -26,6 +26,7 @@ var battle_view: Control
 var run_view: Control
 var deck_option: OptionButton
 var seed_box: SpinBox
+var event_patron: OptionButton
 var relic_checks := {}
 var deck_keys: Array = []
 
@@ -302,7 +303,7 @@ func _build_sandbox() -> void:
 	header.add_child(back)
 
 	var subtitle := Label.new()
-	subtitle.text = "Single test battles. The deck and relic choices on the right apply only to these."
+	subtitle.text = "Single test battles and events. The deck and relic choices on the right apply only to battles."
 	subtitle.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
 	root.add_child(subtitle)
 
@@ -311,11 +312,47 @@ func _build_sandbox() -> void:
 	columns.add_theme_constant_override("separation", 40)
 	root.add_child(columns)
 
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.custom_minimum_size = Vector2(600, 0)
+	left.add_theme_constant_override("separation", 10)
+	columns.add_child(left)
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 8)
+	left.add_child(tabs)
+	var battles_scroll := ScrollContainer.new()
+	battles_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	battles_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	left.add_child(battles_scroll)
+	var events_scroll := battles_scroll.duplicate()
+	left.add_child(events_scroll)
 	var battles := VBoxContainer.new()
 	battles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	battles.custom_minimum_size = Vector2(600, 0)
 	battles.add_theme_constant_override("separation", 8)
-	columns.add_child(battles)
+	battles_scroll.add_child(battles)
+	var events := VBoxContainer.new()
+	events.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	events.add_theme_constant_override("separation", 8)
+	events_scroll.add_child(events)
+	var tab_buttons: Array = []
+	for tab in [["Battles", battles_scroll], ["Events", events_scroll]]:
+		var b := Button.new()
+		b.text = tab[0]
+		b.custom_minimum_size = Vector2(150, 38)
+		CardWidget.style_button(b, false, 16)
+		tabs.add_child(b)
+		tab_buttons.append(b)
+	for i in tab_buttons.size():
+		tab_buttons[i].pressed.connect(func():
+			battles_scroll.visible = i == 0
+			events_scroll.visible = i == 1
+			for j in tab_buttons.size():
+				var tb: Button = tab_buttons[j]
+				tb.remove_theme_font_override("font")
+				for c in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
+					tb.remove_theme_color_override(c)
+				CardWidget.style_button(tb, j == i, 16))
+	tab_buttons[0].pressed.emit()
 	for battle in Data.BATTLES:
 		var row := HBoxContainer.new()
 		var button := Button.new()
@@ -335,6 +372,7 @@ func _build_sandbox() -> void:
 		row.add_theme_constant_override("separation", 12)
 		row.add_child(blurb)
 		battles.add_child(row)
+	_build_event_tests(events)
 
 	var options_scroll := ScrollContainer.new()
 	options_scroll.custom_minimum_size = Vector2(360, 0)
@@ -370,6 +408,67 @@ func _build_sandbox() -> void:
 		cb.tooltip_text = CardWidget.wrap_text(relic["text"])
 		relic_checks[id] = cb
 		options.add_child(cb)
+
+
+## One button per event (the pantheon shrine once per pantheon), plus the shop and rest site.
+## Each opens that screen in a fresh run as the chosen patron, and leaving it returns here.
+func _build_event_tests(parent: VBoxContainer) -> void:
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	parent.add_child(header)
+	var heading := _heading("Test an event")
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(heading)
+	var patron_label := Label.new()
+	patron_label.text = "Test as:"
+	patron_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	header.add_child(patron_label)
+	event_patron = OptionButton.new()
+	for p in Data.PATRONS:
+		event_patron.add_item(Data.CARDS[p["card"]]["name"])
+	header.add_child(event_patron)
+
+	var hint := Label.new()
+	hint.text = "Opens the event with %d gold. Leaving it returns to the sandbox." % RunView.SANDBOX_GOLD
+	hint.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	parent.add_child(hint)
+
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	parent.add_child(grid)
+	var tests: Array = []
+	for id in Data.EVENTS:
+		var ev: Dictionary = Data.EVENTS[id]
+		if id == "pantheon_shrine":
+			for pantheon in ["norse", "greek", "egypt"]:
+				tests.append([ev["name"].replace("{pantheon}", Data.FACTION_NAMES[pantheon]), id, pantheon, ev["text"].replace("{pantheon}", Data.FACTION_NAMES[pantheon])])
+		else:
+			tests.append([ev["name"], id, "", ev["text"]])
+	tests.append(["Shop", "shop", "", "The Wandering Market."])
+	tests.append(["Rest site", "rest", "", "Sanctuary World."])
+	for t in tests:
+		var b := Button.new()
+		b.text = t[0]
+		b.tooltip_text = CardWidget.wrap_text(t[3])
+		b.custom_minimum_size = Vector2(0, 40)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.clip_text = true
+		b.pressed.connect(_start_event_test.bind(t[1], t[2]))
+		CardWidget.style_button(b, false, 15)
+		grid.add_child(b)
+
+
+func _start_event_test(event: String, pantheon: String) -> void:
+	var seed_value := int(seed_box.value)
+	if seed_value == 0:
+		seed_value = randi_range(1, 999999)
+	_hide_menus()
+	run_view = RunView.new()
+	add_child(run_view)
+	run_view.exit_requested.connect(_back_to_menu)
+	run_view.start_test(seed_value, Data.PATRONS[event_patron.selected]["card"], event, pantheon)
 
 
 ## Every card in the game, grouped by faction. `filter` is a LIST_GROUPS key or "all".
@@ -508,7 +607,7 @@ func _start_run(patron: String) -> void:
 
 ## Sandbox battles return to the sandbox; runs return to the patron screen.
 func _back_to_menu() -> void:
-	var to_sandbox := battle_view != null
+	var to_sandbox: bool = battle_view != null or (run_view != null and run_view.sandbox_mode)
 	for view in [battle_view, run_view]:
 		if view != null:
 			view.queue_free()
