@@ -9,12 +9,14 @@ const BattleView = preload("res://scripts/ui/battle_view.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const MapCanvas = preload("res://scripts/ui/map_canvas.gd")
 
-const MAP_SIZE := Vector2(980, 70 * Run.FLOORS)
-const NODE_SIZE := Vector2(118, 40)
+const MAP_SIZE := Vector2(1200, 96 * Run.FLOORS)
+const NODE_SIZES := {"fight": 66.0, "elite": 76.0, "boss": 150.0, "shop": 66.0, "shrine": 66.0, "rest": 66.0}
 const NODE_COLORS := {
-	"fight": Color(0.42, 0.24, 0.3), "elite": Color(0.72, 0.18, 0.24), "boss": Color(0.5, 0.1, 0.5),
-	"shop": Color(0.66, 0.52, 0.14), "shrine": Color(0.28, 0.38, 0.7), "rest": Color(0.2, 0.52, 0.34),
+	"fight": Color(0.62, 0.52, 0.78), "elite": Color(0.92, 0.32, 0.3), "boss": Color(0.85, 0.12, 0.15),
+	"shop": Color(0.95, 0.78, 0.35), "shrine": Color(0.4, 0.62, 1.0), "rest": Color(0.4, 0.85, 0.5),
 }
+const GOLD := Color(0.95, 0.78, 0.35)
+const REACHABLE := Color(1.0, 0.88, 0.45)
 const NODE_LABELS := {"fight": "Fight", "elite": "Elite", "boss": "BOSS", "shop": "Shop", "shrine": "Shrine", "rest": "Rest"}
 const NODE_HELP := {
 	"fight": "A Void encounter. Win for gold and a card.",
@@ -51,9 +53,17 @@ func start(seed_value: int, patron: String) -> void:
 # ---------------------------------------------------------------- layout
 
 func _build() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.08, 0.08, 0.11)
+	var fill := ColorRect.new()
+	fill.color = Color(0.04, 0.03, 0.07)
+	fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(fill)
+	var bg := TextureRect.new()
+	bg.texture = load("res://art/ui/menu_bg.jpg")
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.modulate = Color(0.55, 0.55, 0.6)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
 	var margin := MarginContainer.new()
@@ -71,10 +81,19 @@ func _build() -> void:
 	content.add_theme_constant_override("separation", 12)
 	root.add_child(content)
 
+	var side_panel := PanelContainer.new()
+	side_panel.custom_minimum_size = Vector2(320, 0)
+	var ssb := StyleBoxFlat.new()
+	ssb.bg_color = Color(0.05, 0.045, 0.08, 0.86)
+	ssb.border_color = Color(GOLD, 0.45)
+	ssb.set_border_width_all(2)
+	ssb.set_corner_radius_all(10)
+	ssb.set_content_margin_all(14)
+	side_panel.add_theme_stylebox_override("panel", ssb)
+	root.add_child(side_panel)
 	var sidebar := VBoxContainer.new()
-	sidebar.custom_minimum_size = Vector2(320, 0)
 	sidebar.add_theme_constant_override("separation", 8)
-	root.add_child(sidebar)
+	side_panel.add_child(sidebar)
 
 	sidebar_label = RichTextLabel.new()
 	sidebar_label.bbcode_enabled = true
@@ -83,7 +102,9 @@ func _build() -> void:
 	sidebar.add_child(sidebar_label)
 
 	deck_button = Button.new()
+	deck_button.custom_minimum_size = Vector2(0, 40)
 	deck_button.pressed.connect(_toggle_info.bind("deck"))
+	CardWidget.style_button(deck_button)
 	sidebar.add_child(deck_button)
 	map_button = _button("View map (M)", _toggle_info.bind("map"), sidebar)
 
@@ -124,10 +145,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _heading(text: String, size := 30) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	return l
+	return CardWidget._label(text, size + 4, GOLD if size >= 30 else Color(0.92, 0.88, 0.8), true)
 
 
 func _text(text: String, color := Color(0.8, 0.8, 0.85)) -> Label:
@@ -144,6 +162,7 @@ func _button(text: String, callback: Callable, parent: Control, enabled := true)
 	b.custom_minimum_size = Vector2(0, 40)
 	b.disabled = not enabled
 	b.pressed.connect(callback)
+	CardWidget.style_button(b, false, 15)
 	parent.add_child(b)
 	return b
 
@@ -156,7 +175,7 @@ func _row() -> HBoxContainer:
 
 
 func _update_sidebar() -> void:
-	sidebar_label.text = "[font_size=22][b]Act 1[/b][/font_size]\n[font_size=18]Core HP: [b]%d[/b] / %d\nGold: [b]%d[/b][/font_size]\nFloor %d / %d   Fights won: %d\nBoss: [color=#e07ae0]%s[/color]\nSeed %d" % [
+	sidebar_label.text = "[font_size=26][color=#f2c75a]Act 1[/color][/font_size]\n[font_size=18][img=22]res://art/icons/hp.png[/img] Core [b]%d[/b] / %d\n[img=22]res://art/map/shop.png[/img] Gold [b]%d[/b][/font_size]\n[color=#a8a8b8]Floor[/color] %d / %d   [color=#a8a8b8]Fights won[/color] %d\n[color=#a8a8b8]Boss:[/color] [color=#ff7a70]%s[/color]\n[color=#77778a]Seed %d[/color]" % [
 		run.core_hp, run.max_hp, run.gold, run.floor_number(), Run.FLOORS, run.fights_won,
 		run.boss_name(), run.seed_value]
 	deck_button.text = "View deck (D) - %d cards" % run.deck.size()
@@ -203,12 +222,35 @@ func _show() -> void:
 
 
 func _show_map() -> void:
-	content.add_child(_heading("The Dying Stars"))
+	content.add_child(_map_header())
 	if flash != "":
 		content.add_child(_text(flash, Color(1.0, 0.9, 0.55)))
 		flash = ""
-	content.add_child(_text("Choose your next destination (outlined in yellow). The path runs from the bottom to the boss at the top. Hover over a node for details."))
+	content.add_child(_text("Choose your next destination (the glowing medallions). The path climbs from the Reliquary to the boss at the top. Hover over a node for details."))
 	content.add_child(_map_scroll(true))
+
+
+## Title plus a legend of the node icons.
+func _map_header() -> HBoxContainer:
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 14)
+	var title := _heading("The Dying Stars")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	for type in ["fight", "elite", "shop", "shrine", "rest"]:
+		var item := HBoxContainer.new()
+		item.add_theme_constant_override("separation", 5)
+		item.tooltip_text = CardWidget.wrap_text(NODE_HELP[type])
+		item.mouse_filter = Control.MOUSE_FILTER_STOP
+		var icon := _medallion_face("res://art/map/%s.png" % type, 30, NODE_COLORS[type])
+		icon.custom_minimum_size = Vector2(30, 30)
+		item.add_child(icon)
+		var l := _text(NODE_LABELS[type], Color(0.85, 0.83, 0.9))
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		item.add_child(l)
+		header.add_child(item)
+	return header
 
 
 ## The map in a scroll area, scrolled so the current position is visible.
@@ -231,62 +273,172 @@ func _map_canvas(interactive: bool) -> Control:
 	var canvas = MapCanvas.new()
 	canvas.custom_minimum_size = MAP_SIZE
 	canvas.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	canvas.background = load("res://art/map/background.jpg")
 
 	var available: Array = run.available_nodes()
-	var lines: Array = []
+	var paths: Array = []
 	for node in run.nodes:
 		for e in node["edges"]:
-			var color := Color(0.3, 0.3, 0.36)
-			var width := 2.0
+			var style := "normal"
 			var step: int = run.path.find(node["id"])
 			if step != -1 and step + 1 < run.path.size() and run.path[step + 1] == e:
-				color = Color(0.3, 1.0, 0.45)
-				width = 4.0
+				style = "taken"
 			elif node["id"] == run.current and available.has(e):
-				color = Color(1.0, 0.85, 0.2)
-				width = 3.0
-			lines.append([_node_pos(node), _node_pos(run.nodes[e]), color, width])
-	canvas.lines = lines
-	canvas.queue_redraw()
+				style = "next"
+			paths.append([_node_pos(node), _node_pos(run.nodes[e]), style,
+				NODE_SIZES[node["type"]] / 2, NODE_SIZES[run.nodes[e]["type"]] / 2])
+	if run.current == -1:
+		for id in available:
+			var target: Dictionary = run.nodes[id]
+			paths.append([_start_pos(), _node_pos(target), "next", 40.0, NODE_SIZES[target["type"]] / 2])
+	else:
+		for id in run.nodes.filter(func(n): return n["floor"] == 0).map(func(n): return n["id"]):
+			var style := "taken" if run.path.size() > 0 and run.path[0] == id else "normal"
+			var first: Dictionary = run.nodes[id]
+			paths.append([_start_pos(), _node_pos(first), style, 40.0, NODE_SIZES[first["type"]] / 2])
+	canvas.paths = paths
 
+	var start := _medallion_face("res://art/map/start.png", 80, GOLD, run.current == -1)
+	start.size = Vector2(80, 80)
+	start.position = _start_pos() - start.size / 2
+	start.tooltip_text = "The Reliquary: where every run begins. Defend its Core on the way to the boss."
+	start.mouse_filter = Control.MOUSE_FILTER_PASS
+	canvas.add_child(start)
+
+	var current_floor: int = -1 if run.current == -1 else run.nodes[run.current]["floor"]
 	for node in run.nodes:
-		var b := Button.new()
-		b.text = NODE_LABELS[node["type"]]
-		b.custom_minimum_size = NODE_SIZE
-		b.size = NODE_SIZE
-		b.position = _node_pos(node) - NODE_SIZE / 2
-		b.focus_mode = Control.FOCUS_NONE
-		b.tooltip_text = CardWidget.wrap_text(NODE_HELP[node["type"]])
-		if node["type"] == "boss":
-			var boss: Dictionary = run.boss_def()
-			b.text = "BOSS: %s" % boss["short"]
-			b.tooltip_text = CardWidget.wrap_text("%s\n%s\n%s" % [run.boss_name(), boss["hint"], NODE_HELP["boss"]])
 		var reachable: bool = available.has(node["id"])
 		var visited: bool = run.path.has(node["id"])
-		var border := Color(0, 0, 0, 0)
-		var border_w := 0
-		if reachable:
-			border = Color(1.0, 0.85, 0.2)
-			border_w = 3
-		elif visited:
-			border = Color(0.3, 1.0, 0.45)
-			border_w = 3
-		CardWidget.style(b, NODE_COLORS[node["type"]], border, border_w)
-		b.disabled = interactive and not reachable
-		if not reachable and not visited:
-			b.modulate = Color(1, 1, 1, 0.55)
-		if node["id"] == run.current:
-			b.text += " (here)"
-		if interactive:
+		var passed: bool = node["floor"] <= current_floor and not visited
+		var b := _map_node(node, reachable and interactive, visited, passed, node["id"] == run.current)
+		if interactive and reachable:
 			b.pressed.connect(_on_node_pressed.bind(node["id"]))
 		canvas.add_child(b)
 	return canvas
 
 
+## A medallion: circular art in a metal ring. Reachable nodes glow and pulse; visited ones dim.
+func _map_node(node: Dictionary, reachable: bool, visited: bool, passed: bool, here: bool) -> Button:
+	var type: String = node["type"]
+	var d: float = NODE_SIZES[type]
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.size = Vector2(d, d)
+	b.position = _node_pos(node) - b.size / 2
+	b.pivot_offset = b.size / 2
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	b.tooltip_text = CardWidget.wrap_text("%s\n%s" % [NODE_LABELS[type], NODE_HELP[type]])
+
+	var ring_color: Color = NODE_COLORS[type]
+	var path := "res://art/map/%s.png" % type
+	if type == "boss":
+		var boss: Dictionary = run.boss_def()
+		for pattern in CardWidget.ART_PATHS:
+			if ResourceLoader.exists(pattern % ["enemies", boss["enemies"][0][0]]):
+				path = pattern % ["enemies", boss["enemies"][0][0]]
+		b.tooltip_text = CardWidget.wrap_text("BOSS: %s\n%s\n%s" % [run.boss_name(), boss["hint"], NODE_HELP["boss"]])
+	if reachable:
+		ring_color = REACHABLE
+	elif visited or here:
+		ring_color = GOLD
+	var face := _medallion_face(path, d, ring_color, reachable or here)
+	face.size = b.size
+	b.add_child(face)
+
+	if type == "boss":
+		var name_label := CardWidget._label(run.boss_def()["short"].to_upper(), 22, Color(1.0, 0.55, 0.5), true)
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.size = Vector2(240, 30)
+		name_label.position = Vector2(d / 2 - 120, d + 4)
+		b.add_child(name_label)
+	if visited and not here:
+		face.modulate = Color(0.62, 0.6, 0.58)
+	elif passed:
+		b.modulate = Color(1, 1, 1, 0.35)
+	elif not reachable and not here:
+		face.modulate = Color(0.82, 0.8, 0.88)
+	if here:
+		var marker := CardWidget._label("YOU", 13, REACHABLE, true)
+		marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		marker.size = Vector2(60, 18)
+		marker.position = Vector2(d / 2 - 30, -20)
+		b.add_child(marker)
+
+	if reachable:
+		var tween := b.create_tween().set_loops()
+		tween.tween_property(face, "scale", Vector2(1.08, 1.08), 0.6).set_trans(Tween.TRANS_SINE)
+		tween.tween_property(face, "scale", Vector2.ONE, 0.6).set_trans(Tween.TRANS_SINE)
+		face.pivot_offset = b.size / 2
+		b.mouse_entered.connect(func(): b.scale = Vector2(1.12, 1.12))
+		b.mouse_exited.connect(func(): b.scale = Vector2.ONE)
+	else:
+		b.mouse_filter = Control.MOUSE_FILTER_PASS
+	return b
+
+
+## The glow sits on its own panel: a clipping panel with a shadow would clip the art to a square.
+func _medallion_face(path: String, d: float, ring_color: Color, glow := false) -> Control:
+	var root := Control.new()
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var halo := Panel.new()
+	var hsb := StyleBoxFlat.new()
+	hsb.bg_color = Color(0, 0, 0, 0.5)
+	hsb.set_corner_radius_all(int(d))
+	hsb.shadow_color = Color(ring_color, 0.55) if glow else Color(0, 0, 0, 0.6)
+	hsb.shadow_size = int(d / 5) if glow else 4
+	halo.add_theme_stylebox_override("panel", hsb)
+	halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(root, halo, 0, 0, -0.001, -0.001)
+
+	var ring := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.05, 0.1)
+	sb.border_color = ring_color
+	sb.set_border_width_all(max(2, int(d / 16)))
+	sb.set_corner_radius_all(int(d))
+	ring.add_theme_stylebox_override("panel", sb)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	CardWidget.place(root, ring, 0, 0, -0.001, -0.001)
+	var tex := TextureRect.new()
+	if ResourceLoader.exists(path):
+		tex.texture = load(path)
+	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var inset: float = max(2, d / 16)
+	CardWidget.place(ring, tex, inset, inset, -inset, -inset)
+	var rim := Panel.new()
+	var rsb := StyleBoxFlat.new()
+	rsb.draw_center = false
+	rsb.border_color = Color(ring_color.lightened(0.4), 0.6)
+	rsb.set_border_width_all(1)
+	rsb.set_corner_radius_all(int(d))
+	rim.add_theme_stylebox_override("panel", rsb)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(ring, rim, inset, inset, -inset, -inset)
+	return root
+
+
+## Nodes spread across the width with a small, stable wobble so the map doesn't look like a grid.
 func _node_pos(node: Dictionary) -> Vector2:
-	var x: float = (node["index"] + 0.5) / node["count"] * MAP_SIZE.x
-	var y: float = MAP_SIZE.y - 30 - node["floor"] * (MAP_SIZE.y - 60) / (Run.FLOORS - 1)
+	var margin: float = MAP_SIZE.x * 0.12
+	var x: float = margin + (node["index"] + 0.5) / node["count"] * (MAP_SIZE.x - 2 * margin)
+	var top := 110.0
+	var bottom := 170.0
+	var y: float = MAP_SIZE.y - bottom - node["floor"] * (MAP_SIZE.y - top - bottom) / (Run.FLOORS - 1)
+	var id: int = node.get("id", 0)
+	if node.get("count", 1) > 1:
+		x += sin(id * 12.9898) * 26.0
+		y += cos(id * 7.233) * 10.0
 	return Vector2(x, y)
+
+
+## The Reliquary at the bottom of the map, where every run begins.
+func _start_pos() -> Vector2:
+	return Vector2(MAP_SIZE.x / 2, MAP_SIZE.y - 60)
 
 
 func _on_node_pressed(id: int) -> void:
@@ -531,7 +683,7 @@ func _open_info(kind: String) -> void:
 	var close := _button("Close (%s)" % ("M" if kind == "map" else "D"), _close_info, header)
 	close.custom_minimum_size = Vector2(160, 40)
 	if kind == "map":
-		box.add_child(_text("Your path so far is outlined in green, and your next choices in yellow. Hover over a node for details."))
+		box.add_child(_text("Your path so far is marked in gold, and your next choices glow. Hover over a node for details."))
 		box.add_child(_map_scroll(false))
 	else:
 		_fill_deck(box)
