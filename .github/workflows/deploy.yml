@@ -1,0 +1,99 @@
+name: Test and deploy
+
+# Every push and pull request runs the rules tests and exports the Web build.
+# Pushes to main also upload it to itch.io and publish latest.json (the in-game update check).
+# One-time setup: repository secret BUTLER_API_KEY and repository variable ITCH_TARGET
+# (e.g. "nitzanv2/fallen-pantheons:html5"). Without them the deploy step is skipped.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot and Web templates
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-web
+
+      - name: Install Godot and Web templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          templates=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p ~/godot "$templates"
+          curl -sSL -o /tmp/godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+          curl -sSL -o /tmp/templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q -j /tmp/templates.tpz templates/web_nothreads_release.zip templates/version.txt -d "$templates"
+          rm /tmp/godot.zip /tmp/templates.tpz
+
+      - name: Import assets
+        run: ~/godot/godot --headless --path game --import
+
+      - name: Rules tests
+        run: |
+          ~/godot/godot --headless --path game --script res://tests/run_tests.gd 2>&1 | tee test.log | grep -E "FAIL|SCRIPT ERROR|checks" || true
+          grep -q "checks, 0 failures" test.log
+          ! grep -q "SCRIPT ERROR" test.log
+
+      - name: Export Web build
+        run: |
+          version="$(date -u +%Y.%m.%d-%H%M)-${GITHUB_SHA::7}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          jq --arg v "$version" '.version = $v' game/build_info.json > /tmp/info.json
+          mv /tmp/info.json game/build_info.json
+          mkdir -p build/web
+          ~/godot/godot --headless --path game --export-release "Web" ../build/web/index.html
+          test -f build/web/index.html
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+
+      - name: Deploy to itch.io
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_TARGET: ${{ vars.ITCH_TARGET }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$BUTLER_API_KEY" ] || [ -z "$ITCH_TARGET" ]; then
+            echo "::notice::BUTLER_API_KEY or ITCH_TARGET not set - skipping deploy."
+            exit 0
+          fi
+          curl -sSL -o /tmp/butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q /tmp/butler.zip -d /tmp/butler
+          chmod +x /tmp/butler/butler
+          /tmp/butler/butler push build/web "$ITCH_TARGET" --userversion "$VERSION"
+
+          mkdir /tmp/latest && cd /tmp/latest
+          printf '{"version": "%s", "date": "%s"}\n' "$VERSION" "$(date -u +%FT%TZ)" > latest.json
+          git init -q -b builds
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add latest.json
+          git commit -qm "Build $VERSION"
+          git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" builds

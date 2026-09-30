@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fallen Pantheons - Paper Prototype</title>
+<style>
+  @page { size: A4 portrait; margin: 8mm; }
+  @page mat { size: A4 landscape; margin: 8mm; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: #111; background: #ddd; }
+
+  .page { background: #fff; width: 194mm; min-height: 281mm; margin: 10mm auto; padding: 0; break-after: page; }
+  .page.landscape { page: mat; width: 281mm; min-height: 194mm; }
+  .page-title { font-size: 11pt; font-weight: 700; height: 7mm; line-height: 7mm; margin: 0; }
+
+  @media print {
+    body { background: none; }
+    .page { margin: 0; box-shadow: none; }
+    .screen-only { display: none; }
+  }
+
+  .screen-only { max-width: 194mm; margin: 10mm auto; background: #fff8d8; border: 1px solid #c9b25a; padding: 4mm 6mm; font-size: 10pt; }
+
+  /* Cards: 63 x 88 mm, 3 x 3 per page */
+  .card-grid { display: grid; grid-template-columns: repeat(3, 63mm); grid-auto-rows: 88mm; gap: 1mm; }
+  .card { border: 0.3mm dashed #777; border-top: 3mm solid #999; padding: 2mm 2.5mm; display: flex; flex-direction: column; overflow: hidden; font-size: 8.5pt; line-height: 1.25; }
+  .card .head { display: flex; align-items: center; gap: 2mm; }
+  .card .cost { flex: 0 0 8mm; height: 8mm; border: 0.5mm solid #111; border-radius: 50%; text-align: center; line-height: 7mm; font-weight: 700; font-size: 11pt; }
+  .card .name { font-weight: 700; font-size: 10.5pt; line-height: 1.1; }
+  .card .type { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.2mm; color: #444; margin: 1.2mm 0; border-bottom: 0.2mm solid #bbb; padding-bottom: 1mm; }
+  .card .stats { display: flex; gap: 1.5mm; margin-bottom: 1.5mm; }
+  .card .stats div { flex: 1; border: 0.3mm solid #111; text-align: center; font-weight: 700; font-size: 13pt; padding: 0.5mm 0; }
+  .card .stats small { display: block; font-size: 6pt; font-weight: 400; letter-spacing: 0.2mm; }
+  .card .spell-band { border: 0.3mm solid #111; text-align: center; font-weight: 700; letter-spacing: 1mm; padding: 1.5mm 0; margin-bottom: 1.5mm; }
+  .card .text { flex: 1; }
+  .card .foot { font-size: 6.5pt; color: #555; font-style: italic; text-align: right; }
+
+  .f-neutral { border-top-color: #9a9a9a; }
+  .f-norse   { border-top-color: #2f6fb3; }
+  .f-greek   { border-top-color: #d6a21e; }
+  .f-egypt   { border-top-color: #2e9c6a; }
+  .f-token   { border-top-color: #cfcfcf; }
+  .f-enemy   { border-top-color: #6b2c91; }
+  .f-elite   { border-top-color: #b2263a; }
+  .f-boss    { border-top-color: #111; border-top-width: 5mm; }
+  .f-relic   { border-top-color: #8a5a2b; }
+
+  /* Grid mats */
+  .mat { display: grid; grid-template-columns: 12mm repeat(4, 64mm); column-gap: 2mm; row-gap: 2mm; }
+  .slot { height: 89mm; border: 0.4mm dashed #888; position: relative; }
+  .slot span { position: absolute; top: 1mm; left: 1.5mm; font-size: 7pt; color: #999; }
+  .rowlabel { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; font-weight: 700; font-size: 10pt; letter-spacing: 1mm; border: 0.3mm solid #bbb; }
+  .strip { grid-column: 1 / -1; height: 10mm; border: 0.5mm solid #111; display: flex; align-items: center; justify-content: center; font-weight: 700; letter-spacing: 1mm; font-size: 10pt; }
+
+  /* Tokens */
+  .token-grid { display: grid; grid-template-columns: repeat(4, 46mm); grid-auto-rows: 24mm; gap: 2mm; margin-bottom: 4mm; }
+  .token { border: 0.4mm solid #111; padding: 1.5mm 2mm; font-size: 7.5pt; line-height: 1.2; overflow: hidden; }
+  .token b { display: block; font-size: 10pt; margin-bottom: 0.5mm; }
+  .terrain-grid { display: grid; grid-template-columns: repeat(3, 63mm); grid-auto-rows: 30mm; gap: 2mm; margin-bottom: 4mm; }
+
+  /* Tracker */
+  .hp-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 1mm; margin-bottom: 5mm; }
+  .hp-grid div { height: 13mm; border: 0.4mm solid #111; text-align: center; line-height: 13mm; font-weight: 700; font-size: 11pt; }
+  .track { display: flex; gap: 1mm; margin-bottom: 5mm; }
+  .track div { flex: 1; height: 14mm; border: 0.4mm solid #111; text-align: center; line-height: 14mm; font-weight: 700; font-size: 12pt; }
+  h3 { font-size: 10pt; margin: 3mm 0 1.5mm; }
+
+  /* Text pages */
+  .doc { font-size: 8.7pt; line-height: 1.32; }
+  .doc h2 { font-size: 11pt; margin: 2.5mm 0 1mm; border-bottom: 0.3mm solid #111; }
+  .doc ol, .doc ul { margin: 0.5mm 0 1mm; padding-left: 5mm; }
+  .doc p { margin: 0.8mm 0; }
+  .doc table { border-collapse: collapse; width: 100%; margin: 1mm 0; }
+  .doc td, .doc th { border: 0.2mm solid #999; padding: 0.6mm 1.2mm; vertical-align: top; text-align: left; }
+  .cols { column-count: 2; column-gap: 6mm; }
+  .cols > * { break-inside: avoid; }
+  .battle { border: 0.4mm solid #111; padding: 2mm 3mm; margin-bottom: 2.5mm; break-inside: avoid; }
+  .battle h2 { border: none; margin-top: 0; }
+  .notes { border-top: 0.2mm dotted #777; height: 6mm; }
+</style>
+</head>
+<body>
+
+<div class="screen-only">
+  <b>Printing:</b> Print from Chrome or Edge at <b>100% scale (Actual size)</b> with <b>Background graphics</b> turned on.
+  Card pages are A4 portrait; the two grid mats are A4 landscape. Cut cards along the dashed lines.
+  You also need some dice or coins to track damage, shields, and ATK buffs.
+  To change a card, edit the DATA section in the script of this file and reload the page.
+</div>
+
+<div id="root"></div>
+
+<script>
+// ---------- DATA ----------
+const KEYWORDS = ["Immovable","Taunt","Ranged","Cleave","Pierce","Shield","Rally","Support","Reinforce","On-Death","Growth","Revive","Summon","Exhaust","Thorns","Airborne","Veil","Split","Frenzy","Poison","Spellward"];
+
+const FACTIONS = {
+  neutral: { label: "Neutral", foot: "The Ark" },
+  norse:   { label: "Norse",   foot: "Norse - The Doomed" },
+  greek:   { label: "Greek",   foot: "Greek - The Olympians" },
+  egypt:   { label: "Egyptian",foot: "Egyptian - The Eternal" },
+  token:   { label: "Token",   foot: "Summoned token" },
+};
+
+// cost, atk, hp, spd; spells have atk = null
+const CARDS = [
+  // Neutral
+  { f:"neutral", name:"Ark Sentinel",  r:"Starter", cost:1, atk:2, hp:4, spd:2, text:"Plain melee unit.", n:4 },
+  { f:"neutral", name:"Echo Archer",   r:"Starter", cost:1, atk:2, hp:2, spd:3, text:"Ranged.", n:3 },
+  { f:"neutral", name:"Rebuke",        r:"Starter", cost:1, atk:null, text:"Push an enemy front unit one lane. If it hits a unit or the edge, both take 3. Immovable units are immune.", n:2 },
+  { f:"neutral", name:"Warding",       r:"Starter", cost:1, atk:null, text:"Give an ally Shield 4.", n:2 },
+  { f:"neutral", name:"Transposition", r:"Uncommon", cost:0, atk:null, text:"Swap two enemy units in the same row (not Immovable). Their locked intents move with them. Exhaust.", n:1 },
+  { f:"neutral", name:"Faith Surge",   r:"Uncommon",cost:0, atk:null, text:"Gain 2 Faith. Exhaust.", n:1 },
+  { f:"neutral", name:"Channel Ley Line", r:"Uncommon",cost:2, atk:null, text:"Turn a front slot on your grid with no terrain into a Ley Line for this fight (+2 ATK there). Exhaust.", n:1 },
+  { f:"neutral", name:"Raise Ruins",   r:"Common",  cost:1, atk:null, text:"Turn a back slot on your grid with no terrain into Ruins for this fight (Ranged attacks can't target the unit there). Exhaust.", n:1 },
+  // Divine - shrines only, never rewards or shops
+  { f:"neutral", name:"Divine Insight",   r:"Divine", cost:0, atk:null, text:"Draw 2 cards.", n:1 },
+  { f:"neutral", name:"Ambrosia",         r:"Divine", cost:0, atk:null, text:"Gain 2 Faith.", n:1 },
+  { f:"neutral", name:"Aegis of Olympus", r:"Divine", cost:1, atk:null, text:"All allies gain Shield 3.", n:1 },
+  { f:"neutral", name:"Thread of Fate",   r:"Divine", cost:0, atk:null, text:"Return one of your units to your hand. Redeploy it later at full HP.", n:1 },
+
+  // Norse
+  { f:"norse", name:"Einherjar",    r:"Common",   cost:1, atk:3, hp:2, spd:3, text:"On-Death: allies in its lane gain +2 ATK.", n:2 },
+  { f:"norse", name:"Shieldmaiden", r:"Common",   cost:2, atk:2, hp:5, spd:2, text:"Taunt. On-Death: row-adjacent allies gain Shield 3.", n:2 },
+  { f:"norse", name:"Raven of Odin",r:"Common",   cost:1, atk:1, hp:1, spd:5, text:"Ranged. On-Death: draw 1 card.", n:2 },
+  { f:"norse", name:"Berserker",    r:"Uncommon", cost:2, atk:3, hp:4, spd:4, text:"Gains +1 ATK whenever an ally dies.", n:1 },
+  { f:"norse", name:"Valkyrie",     r:"Uncommon", cost:2, atk:1, hp:4, spd:3, text:"Reinforce. When she steps forward, she gains the fallen ally's ATK.", n:1 },
+  { f:"norse", name:"Ragnarok",     r:"Uncommon", cost:2, atk:null, text:"Destroy one of your units. Deal damage equal to its current HP to every enemy in its lane.", n:1 },
+  { f:"norse", name:"Thor",         r:"Rare",     cost:3, atk:4, hp:6, spd:3, text:"Cleave.", n:1 },
+  { f:"norse", name:"Odin",         r:"Rare",     cost:3, atk:2, hp:5, spd:2, text:"Ranged. Whenever an ally dies, deal 2 damage to the enemy front unit in that ally's lane.", n:1 },
+  { f:"norse", name:"Raider",       r:"Common",   cost:1, atk:2, hp:3, spd:4, text:"Whenever you move it, it gains +1 ATK.", n:2 },
+  { f:"norse", name:"Longship",     r:"Common",   cost:1, atk:null, text:"Gain 2 extra moves this round. Units you move this round gain Shield 2.", n:1 },
+  { f:"norse", name:"Ulfhednar",    r:"Uncommon", cost:2, atk:3, hp:4, spd:4, text:"When you move it to a new lane, it deals its ATK to the enemy front unit there.", n:1 },
+  { f:"norse", name:"Loki",         r:"Rare",     cost:3, atk:2, hp:5, spd:3, text:"Ranged. +1 move each round. When you move a unit, deal 1 damage to each enemy in its new lane.", n:1 },
+
+  // Greek
+  { f:"greek", name:"Hoplite",   r:"Common",   cost:1, atk:2, hp:4, spd:2, text:"Rally 1.", n:2 },
+  { f:"greek", name:"Peltast",   r:"Common",   cost:1, atk:2, hp:2, spd:4, text:"Ranged. +1 ATK while both row-neighbors are allies.", n:2 },
+  { f:"greek", name:"Myrmidon",  r:"Common",   cost:2, atk:3, hp:5, spd:3, text:"Start of round: gains Shield 1 for each row-adjacent ally.", n:2 },
+  { f:"greek", name:"Athena",    r:"Uncommon", cost:2, atk:1, hp:5, spd:2, text:"Support: the ally in front gains Shield 3.", n:1 },
+  { f:"greek", name:"Apollo",    r:"Uncommon", cost:3, atk:3, hp:4, spd:3, text:"Ranged. End of round: heal all allies in his row by 2.", n:1 },
+  { f:"greek", name:"Phalanx Formation", r:"Uncommon", cost:1, atk:null, text:"Front-row allies gain Shield 2 and +1 ATK.", n:1 },
+  { f:"greek", name:"Achilles",  r:"Rare",     cost:3, atk:5, hp:5, spd:4, text:"Takes no damage from melee attacks. Takes double damage from Ranged, Cleave, and Pierce.", n:1 },
+  { f:"greek", name:"Zeus",      r:"Rare",     cost:3, atk:3, hp:6, spd:2, text:"Ranged. Start of round: deal 2 damage to each enemy in every lane where you have a front unit.", n:1 },
+  { f:"greek", name:"Divine Favor",   r:"Common",   cost:0, atk:null, text:"An ally gains +2 ATK this round.", n:2 },
+  { f:"greek", name:"Pythia",         r:"Common",   cost:1, atk:1, hp:3, spd:3, text:"Ranged. Whenever you cast a spell, deal 1 damage to the first enemy in her lane.", n:2 },
+  { f:"greek", name:"Olympian Ichor", r:"Uncommon", cost:1, atk:null, text:"Heal an ally by 4. It gains +1 ATK.", n:1 },
+  { f:"greek", name:"Hermes",         r:"Rare",     cost:3, atk:3, hp:4, spd:5, text:"Ranged. Your first spell each round costs 0. Whenever you cast a spell, Hermes gains Shield 1.", n:1 },
+
+  // Egyptian
+  { f:"egypt", name:"Mummy Guardian", r:"Common",   cost:2, atk:2, hp:5, spd:1, text:"Taunt. Revive.", n:2 },
+  { f:"egypt", name:"Scarab Swarm",   r:"Common",   cost:1, atk:1, hp:2, spd:4, text:"On-Death: Summon a 1/1 Scarab in its slot (if it Revives, in the other row of its lane).", n:2 },
+  { f:"egypt", name:"Priest of Ra",   r:"Common",   cost:1, atk:0, hp:3, spd:2, text:"Support: heal the ally in front by 2.", n:2 },
+  { f:"egypt", name:"Sphinx",         r:"Uncommon", cost:2, atk:2, hp:6, spd:1, text:"Growth: +1 ATK / +1 HP.", n:1 },
+  { f:"egypt", name:"Anubis",         r:"Uncommon", cost:3, atk:3, hp:5, spd:3, text:"Whenever any unit dies (either side), gain +1 ATK / +1 HP.", n:1 },
+  { f:"egypt", name:"Book of the Dead", r:"Uncommon", cost:2, atk:null, text:"Return the last ally that died this fight to an empty slot at full HP.", n:1 },
+  { f:"egypt", name:"Ra",             r:"Rare",     cost:3, atk:2, hp:6, spd:2, text:"Ranged. Growth: +2 ATK.", n:1 },
+  { f:"egypt", name:"Osiris",         r:"Rare",     cost:3, atk:3, hp:6, spd:2, text:"Allies that Revive return at full HP and gain +2 ATK.", n:1 },
+  { f:"egypt", name:"Sandswarm",         r:"Common",   cost:1, atk:null, text:"Summon a 1/1 Scarab in every empty front-row slot.", n:2 },
+  { f:"egypt", name:"Scarab Queen",      r:"Uncommon", cost:2, atk:1, hp:5, spd:2, text:"Start of round: summon a 1/1 Scarab in the nearest empty slot in her row.", n:1 },
+  { f:"egypt", name:"Plague of Locusts", r:"Uncommon", cost:2, atk:null, text:"Deal damage to an enemy equal to the number of units you have.", n:1 },
+  { f:"egypt", name:"Khepri",            r:"Rare",     cost:3, atk:3, hp:5, spd:2, text:"Your Scarabs have +1 ATK. Whenever one of your Scarabs dies, heal the Core by 1.", n:1 },
+
+  // Tokens
+  { f:"token", name:"Scarab", r:"Token", cost:"-", atk:1, hp:1, spd:4, text:"Summoned by Scarab Swarm, Sandswarm, Scarab Queen and Sacred Hive. Not part of your deck.", n:6 },
+];
+
+const ENEMIES = [
+  { k:"enemy", name:"Void Spawn",       atk:2, hp:3, spd:2, threat:1, text:"Attacks its own lane.", n:6 },
+  { k:"enemy", name:"Void Wisp",        atk:1, hp:2, spd:5, threat:1, text:"Ranged. Targets the player unit with the lowest current HP (ties: lower lane, then front).", n:2 },
+  { k:"enemy", name:"Hollowed Zealot",  atk:3, hp:5, spd:3, threat:2, text:"Attacks its own lane.", n:2 },
+  { k:"enemy", name:"Hollowed Bulwark", atk:1, hp:8, spd:1, threat:1, text:"Taunt.", n:2 },
+  { k:"enemy", name:"Hollow Archer",    atk:2, hp:3, spd:3, threat:1, text:"Ranged. Targets the back unit in its lane, then the front unit, then the Core.", n:2 },
+  { k:"enemy", name:"Void Charger",     atk:4, hp:5, spd:4, threat:3, text:"Pierce. Odd rounds: attacks its own lane. Even rounds, intent CHARGE: moves to the lane with the fewest player units (ties: lower lane), then attacks.", n:2 },
+  { k:"elite", name:"Echo of Fenrir",   atk:5, hp:12, spd:4, threat:5, text:"Cleave. Gains +2 ATK whenever a player unit dies.", n:1 },
+  { k:"elite", name:"Echo of Medusa",   atk:2, hp:10, spd:2, threat:4, text:"Ranged. Intent PETRIFY: the lane with the highest total player ATK (round 1: lane 2). Player units in that lane skip their action.", n:1 },
+  { k:"elite", name:"Echo of Set",      atk:4, hp:10, spd:3, threat:5, text:"Revive. Intent SANDSTORM: odd rounds front row, even rounds back row. Player units in that row get -1 ATK for the fight.", n:1 },
+  { k:"boss",  name:"Void Herald",      atk:6, hp:30, spd:3, threat:0, text:"Immovable. Occupies front lanes 2 and 3. End of every round: Void Tide hits the Core for 3.<br><b>Phase 1 (&gt;half HP):</b> intent TARGET on the lane with your highest-ATK unit. Summons a Void Spawn into the first empty enemy slot each round.<br><b>Phase 2 (&le;half HP):</b> Cleave. Intent STRIKE a lane: both slots take 5.", n:1 },
+  { k:"boss",  name:"Hel, the Hollow Queen", atk:5, hp:52, spd:2, threat:0, text:"Ranged. Immovable. Occupies back lanes 2 and 3. HARVEST: attacks your lowest-HP unit.<br><b>Toll of the Dead:</b> whenever one of your units dies and stays dead, Hel heals 2 and the Core takes 2.<br><b>End of round:</b> +1 ATK; raise a Draugr in each empty front slot of lanes 2-3. Her Draugr crumble when she falls.", n:1 },
+  { k:"enemy", name:"Draugr",           atk:3, hp:6, spd:2, threat:0, text:"Attacks its own lane. Raised by Hel.", n:4 },
+  { k:"boss",  name:"Apep, the Coiled Chaos", atk:4, hp:40, spd:3, threat:0, text:"Immovable. Occupies the whole back row. CONSTRICT: deals its ATK to both of your slots in the lane with the most of your units (two lanes at half HP or less). Units it kills can't Revive.<br><b>Devour Light:</b> while Apep lives, Shield blocks nothing and is stripped each round.<br><b>End of round:</b> a Serpent Brood hatches; Void Tide 3. Its Brood die when it falls.", n:1 },
+  { k:"enemy", name:"Serpent Brood",    atk:1, hp:2, spd:5, threat:0, text:"Attacks its own lane. Hatched by Apep.", n:4 },
+  { k:"enemy", name:"Thorned Husk",     atk:1, hp:6, spd:1, threat:1, text:"Taunt. Thorns 1: melee units that attack it take 1 damage.", n:1 },
+  { k:"enemy", name:"Carrion Harpy",    atk:2, hp:2, spd:5, threat:1, text:"Airborne: melee attacks can't target it. Attacks the back unit in its lane first.", n:2 },
+  { k:"enemy", name:"Veiled Acolyte",   atk:2, hp:4, spd:3, threat:1, text:"Veil: ignores the first damage it takes each round.", n:2 },
+  { k:"enemy", name:"Void Ooze",        atk:2, hp:5, spd:2, threat:1, text:"Split: when it dies, two Oozelings appear in its slot and the nearest empty slot in its row.", n:2 },
+  { k:"enemy", name:"Oozeling",         atk:1, hp:2, spd:2, threat:1, text:"Attacks its own lane. Split from a Void Ooze.", n:4 },
+  { k:"enemy", name:"Frenzied Ghoul",   atk:2, hp:5, spd:3, threat:2, text:"Frenzy: gains +1 ATK each time it takes damage and survives.", n:1 },
+  { k:"enemy", name:"Plague Bearer",    atk:1, hp:4, spd:2, threat:1, text:"Ranged. Poison: units it hits take 1 damage at the end of every round until healed.", n:2 },
+  { k:"enemy", name:"Null Idol",        atk:0, hp:6, spd:1, threat:1, text:"Spellward: your spells can't target it or the enemies next to it. Gains Shield 2 whenever you cast a spell. Doesn't attack.", n:1 },
+  { k:"enemy", name:"Siege Engine",     atk:6, hp:7, spd:1, threat:2, text:"Immovable. Odd rounds: AIM at the lane with the most of your units. Even rounds: SIEGE that lane, dealing its ATK to both of your slots there.", n:1 },
+  { k:"enemy", name:"Hollow Geomancer", atk:1, hp:4, spd:2, threat:1, text:"Ranged. End of round: the slot of your highest-ATK unit (not on terrain) becomes Quicksand.", n:1 },
+  { k:"elite", name:"Echo of the Hydra", atk:3, hp:10, spd:3, threat:3, text:"Split: when it dies, two Hydra Heads grow in its slot and the nearest empty slot in its row.", n:1 },
+  { k:"enemy", name:"Hydra Head",       atk:2, hp:4, spd:3, threat:2, text:"Attacks its own lane. Grown from the Hydra.", n:2 },
+  { k:"elite", name:"Echo of Circe",    atk:2, hp:7, spd:3, threat:3, text:"Ranged. TRANSFORM: each round, your highest-cost unit becomes a Swine and can't act (no attack or start-of-round effect).", n:1 },
+];
+
+const RELICS = [
+  { name:"Ember of Faith",    r:"Common", lean:"", text:"+1 Faith in round 1 of each fight." },
+  { name:"Warden's Plate",    r:"Common", lean:"", text:"Each enemy hit on the Core deals 2 less damage (minimum 1)." },
+  { name:"Seer's Lens",       r:"Common", lean:"", text:"At the start of each fight, see enemy intents for rounds 1 and 2." },
+  { name:"Flanking Banner",   r:"Common", lean:"", text:"Units in lanes 1 and 4 gain +1 ATK." },
+  { name:"Pilgrim's Pouch",   r:"Common", lean:"", text:"+8 gold after each won fight." },
+  { name:"Healing Ampoule",   r:"Common", lean:"", text:"After each won fight, heal the Core by 3." },
+  { name:"Mjolnir Shard",     r:"Uncommon", lean:"Norse", text:"Cleave also hits the unit behind each target." },
+  { name:"Gjallarhorn",       r:"Uncommon", lean:"Norse", text:"When a unit Reinforces, it gains Shield 4." },
+  { name:"Laurel Wreath",     r:"Uncommon", lean:"Greek", text:"Rally effects are doubled." },
+  { name:"Aegis Fragment",    r:"Uncommon", lean:"Greek", text:"The first time each fight a front unit would die, it survives at 1 HP." },
+  { name:"Eye of Horus",      r:"Uncommon", lean:"Egyptian", text:"Your Ranged units target the enemy back row first and deal +1 damage to back-row enemies." },
+  { name:"Dragon Prow",       r:"Uncommon", lean:"Norse", text:"Units you move gain +2 ATK for the rest of the round." },
+  { name:"Oracle's Tripod",   r:"Uncommon", lean:"Greek", text:"When you cast your second spell in a round, gain 1 Faith." },
+  { name:"Sacred Hive",       r:"Uncommon", lean:"Egyptian", text:"Start of each fight: summon two 1/1 Scarabs in your back row." },
+  { name:"Valhalla's Gate",   r:"Rare", lean:"", text:"When an ally dies, return its card to your hand (once per card per fight)." },
+  { name:"Ankh of Eternity",  r:"Rare", lean:"", text:"All allies have Revive. Each time an ally Revives, the Core takes 2 damage." },
+  { name:"Golden Fleece",     r:"Rare", lean:"", text:"Fights last 4 rounds instead of 3." },
+  { name:"Void-Touched Heart",r:"Rare", lean:"", text:"+1 Faith every round. The Core takes 3 damage at the start of each fight." },
+];
+
+const TERRAIN = [
+  { name:"Ley Line", text:"The unit in this slot has +2 ATK.", n:3 },
+  { name:"Ruins",    text:"Cover: Ranged attacks cannot target the unit in this slot.", n:3 },
+  { name:"Quicksand", text:"The unit in this slot can't be moved and has -1 SPD.", n:3 },
+];
+
+const TOKENS = [
+  { name:"CHARGE", text:"Void Charger moves to this lane, then attacks. Place at the lane edge.", n:2 },
+  { name:"PETRIFY", text:"Player units in this lane skip their action this round.", n:1 },
+  { name:"SANDSTORM", text:"Player units in this row get -1 ATK for the fight.", n:1 },
+  { name:"HERALD TARGET", text:"Phase 1: the Void Herald attacks this lane.", n:1 },
+  { name:"HERALD STRIKE", text:"Phase 2: both slots in this lane take 5 damage.", n:1 },
+  { name:"VOID HERALD", text:"Place in enemy front lane 3. The Herald card sits in lane 2; together they are one unit.", n:1 },
+  { name:"REVIVED", text:"This unit has used its Revive this fight.", n:6 },
+  { name:"MOVED", text:"You used your free move this Plan phase.", n:1 },
+];
+
+// ---------- RENDERING ----------
+function kw(text) {
+  const re = new RegExp("\\b(" + KEYWORDS.map(k => k.replace("-", "\\-")).join("|") + ")", "g");
+  return text.replace(re, "<b>$1</b>");
+}
+function expand(list) { return list.flatMap(x => Array(x.n || 1).fill(x)); }
+function chunk(arr, size) { const out = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out; }
+
+function playerCard(c) {
+  const f = FACTIONS[c.f];
+  const isSpell = c.atk === null;
+  const body = isSpell
+    ? `<div class="spell-band">SPELL</div>`
+    : `<div class="stats"><div><small>ATK</small>${c.atk}</div><div><small>HP</small>${c.hp}</div><div><small>SPD</small>${c.spd}</div></div>`;
+  return `<div class="card f-${c.f}">
+    <div class="head"><span class="cost">${c.cost}</span><span class="name">${c.name}</span></div>
+    <div class="type">${f.label} &middot; ${c.r} &middot; ${isSpell ? "Spell" : "Unit"}</div>
+    ${body}
+    <div class="text">${kw(c.text)}</div>
+    <div class="foot">${f.foot}</div>
+  </div>`;
+}
+
+function enemyCard(e) {
+  const kind = { enemy:"Void Enemy", elite:"Elite - Fallen Echo", boss:"Boss" }[e.k];
+  const threat = e.k === "boss" ? "-" : e.threat;
+  return `<div class="card f-${e.k}">
+    <div class="head"><span class="name">${e.name}</span></div>
+    <div class="type">${kind}</div>
+    <div class="stats"><div><small>ATK</small>${e.atk}</div><div><small>HP</small>${e.hp}</div><div><small>SPD</small>${e.spd}</div><div><small>THREAT</small>${threat}</div></div>
+    <div class="text">${kw(e.text)}</div>
+    <div class="foot">The Void</div>
+  </div>`;
+}
+
+function relicCard(r) {
+  return `<div class="card f-relic">
+    <div class="head"><span class="name">${r.name}</span></div>
+    <div class="type">Relic &middot; ${r.r}${r.lean ? " &middot; Leans " + r.lean : ""}</div>
+    <div class="text" style="font-size:10pt; margin-top:2mm">${kw(r.text)}</div>
+    <div class="foot">Holy artifact</div>
+  </div>`;
+}
+
+function cardPages(title, items, renderFn) {
+  return chunk(items, 9).map((group, i, all) => `
+    <div class="page">
+      <p class="page-title">${title}${all.length > 1 ? ` (${i + 1}/${all.length})` : ""}</p>
+      <div class="card-grid">${group.map(renderFn).join("")}</div>
+    </div>`).join("");
+}
+
+function matPage(side) {
+  const slot = (row, lane) => `<div class="slot"><span>Lane ${lane} &middot; ${row}</span></div>`;
+  const row = (label) => `<div class="rowlabel">${label.toUpperCase()}</div>` + [1,2,3,4].map(l => slot(label, l)).join("");
+  const inner = side === "enemy"
+    ? `<div class="strip">THE VOID - ENEMY SIDE (place this mat above the player mat)</div>${row("Back")}${row("Front")}`
+    : `${row("Front")}${row("Back")}<div class="strip">THE RELIQUARY CORE - enemy attacks through an empty lane hit here</div>`;
+  return `<div class="page landscape"><div class="mat">${inner}</div></div>`;
+}
+
+function tokenPage() {
+  const terrain = expand(TERRAIN).map(t => `<div class="token"><b>TERRAIN: ${t.name}</b>${t.text}</div>`).join("");
+  const tokens = expand(TOKENS).map(t => `<div class="token"><b>${t.name}</b>${t.text}</div>`).join("");
+  return `<div class="page">
+    <p class="page-title">Terrain tiles (place at the edge of a slot)</p>
+    <div class="terrain-grid">${terrain}</div>
+    <p class="page-title">Intent and status tokens</p>
+    <div class="token-grid">${tokens}</div>
+  </div>`;
+}
+
+function trackerPage() {
+  const hp = Array.from({ length: 50 }, (_, i) => `<div>${50 - i}</div>`).join("");
+  const track = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => `<div>${from + i}</div>`).join("");
+  return `<div class="page">
+    <p class="page-title">Tracker</p>
+    <h3>Core HP (mark a coin on the current value)</h3>
+    <div class="hp-grid">${hp}</div>
+    <h3>Faith this round</h3>
+    <div class="track">${track(0, 6)}</div>
+    <h3>Round</h3>
+    <div class="track">${track(1, 6)}</div>
+    <h3>Gold</h3>
+    <div class="track"><div style="flex:1"></div></div>
+    <h3>Resolve checklist</h3>
+    <div class="doc"><ol>
+      <li>Start of round effects (Support, Rally, Myrmidon, Zeus) in initiative order.</li>
+      <li>Actions: highest SPD first. Ties: player, then lower lane. Each living unit acts once.</li>
+      <li>End of round effects (Growth, Apollo, terrain, Void Tide).</li>
+      <li>Check the fight end conditions.</li>
+    </ol></div>
+  </div>`;
+}
+
+function rulesPage() {
+  const rows = [
+    ["Taunt","Enemy attacks from this lane and adjacent lanes must target this unit if able. Works for both sides."],
+    ["Ranged","Can attack from the back row. Uses normal targeting unless the card says otherwise."],
+    ["Cleave","Also hits the units in adjacent lanes in the same row as the target."],
+    ["Pierce","Excess damage passes to the unit behind the target, then to the Core."],
+    ["Shield X","Absorbs the next X damage. Stacks. Lasts until used or the fight ends."],
+    ["Rally X","Start of round: row-adjacent allies gain +X ATK for the rest of the fight."],
+    ["Support","Start of round: applies its effect to the ally in front of it."],
+    ["Reinforce","When the ally in front dies, this unit immediately steps into the front slot."],
+    ["On-Death","Triggers immediately when this unit dies."],
+    ["Growth","End of round: gains the listed stats."],
+    ["Revive","Once per fight, when it dies its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP."],
+    ["Summon","Creates a token in the listed slot, only if it is empty."],
+    ["Exhaust","The spell is removed for the rest of the fight."],
+    ["Immovable","Cannot be pushed, pulled, or swapped, and takes no collision damage."],
+    ["Thorns X","Melee units that attack it take X damage."],
+    ["Airborne","Melee attacks can't target it."],
+    ["Veil","Ignores the first damage it takes each round."],
+    ["Split","On death, two smaller copies appear in its slot and the nearest empty slot in its row."],
+    ["Frenzy","+1 ATK each time it takes damage and survives."],
+    ["Poison","Units it hits take 1 damage at the end of every round until any heal cures them."],
+    ["Spellward","Your spells can't target it or enemies next to it. Gains Shield 2 per spell you cast."],
+  ].map(([k, v]) => `<tr><td><b>${k}</b></td><td>${v}</td></tr>`).join("");
+
+  return `<div class="page doc">
+    <p class="page-title">Rules reference</p>
+    <div class="cols">
+      <div>
+        <h2>Setup</h2>
+        <ol>
+          <li>Place the enemy formation and terrain from the battle sheet.</li>
+          <li>Shuffle your deck. Set the Core HP from the battle sheet.</li>
+        </ol>
+      </div>
+      <div>
+        <h2>Plan phase</h2>
+        <ol>
+          <li><b>Enemy intents:</b> declare and place intent tokens, based on the current board. Lane and row targets lock in.</li>
+          <li><b>Draw:</b> 5 cards in round 1, 2 cards in later rounds. Your hand carries over between rounds (max 7).</li>
+          <li><b>Faith:</b> set to 3. Unspent Faith is lost.</li>
+          <li><b>Play:</b> deploy units into empty slots on your grid and cast spells. Once per Plan phase, move one of your units to any empty slot for free (not a unit that entered the board this Plan phase).</li>
+        </ol>
+      </div>
+      <div>
+        <h2>Resolve phase</h2>
+        <ol>
+          <li>Start of round effects, in initiative order.</li>
+          <li>Actions in initiative order (highest SPD first; ties: player, then lower lane). Each unit attacks once and deals its ATK. <b>There is no counter-damage.</b></li>
+          <li><b>Melee units in the back row do not attack.</b></li>
+          <li>Units at 0 HP die immediately. On-Death and Reinforce trigger at once. Dead units cannot act.</li>
+          <li>End of round effects.</li>
+        </ol>
+      </div>
+      <div>
+        <h2>Targeting</h2>
+        <p><b>Player units:</b> enemy front unit in own lane, then enemy back unit in own lane, then the nearest lane with an enemy (ties: lower lane), front first.</p>
+        <p><b>Enemy units:</b> player front unit in own lane, then player back unit in own lane, then <b>the Core</b>.</p>
+        <p>Taunt and card text override these rules.</p>
+      </div>
+      <div>
+        <h2>Ending a fight</h2>
+        <table>
+          <tr><td><b>Win</b></td><td>All enemies dead. Full reward.</td></tr>
+          <tr><td><b>Loss</b></td><td>All your units dead. Each surviving enemy hits the Core for its Threat. No reward.</td></tr>
+          <tr><td><b>Timeout</b></td><td>Both sides alive after round 3. Each surviving enemy hits the Core for its Threat. Reduced reward.</td></tr>
+        </table>
+        <p>A loss only counts if you had deployed at least one unit and all of them are dead.</p>
+      </div>
+      <div>
+        <h2>Cards</h2>
+        <p>Cast spells go to the discard pile. Dead units go to the discard pile. If the deck is empty, shuffle the discard pile into a new deck. After the fight, all cards return to the deck.</p>
+      </div>
+      <div>
+        <h2>Keywords</h2>
+        <table>${rows}</table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function battlesPage() {
+  const battles = [
+    { t:"Battle 1 - First Contact", deck:"Starter deck (10) + one patron: Shieldmaiden, Myrmidon, or Mummy Guardian.", core:50,
+      setup:"Stragglers. Enemy front: Spawn L1, Spawn L2. No terrain.",
+      watch:"Learn the flow. Did the round structure feel clear? Was there ever more than one reasonable play?" },
+    { t:"Battle 2 - Hollow Procession", deck:"Greek test deck.", core:50,
+      setup:"Enemy front: Zealot L2, Bulwark L3. Enemy back: Archer L2. Ley Line on your front L3.",
+      watch:"Does the formation play feel good? Is the Ley Line worth building around? Does Taunt on the Bulwark feel annoying or interesting?" },
+    { t:"Battle 3 - Breach", deck:"Norse test deck.", core:50,
+      setup:"Enemy front: Charger L1, Spawn L3. Enemy back: Archer L4. Ruins on your back L2.",
+      watch:"Does the round 2 CHARGE create a real decision? Does Reinforce plus Pierce work clearly? Is sacrificing units rewarding?" },
+    { t:"Battle 4 - Echo of Medusa (elite)", deck:"Egyptian test deck + Eye of Horus relic.", core:40,
+      setup:"Enemy front: Bulwark L2, Bulwark L3. Enemy back: Medusa L2 (Ranged).",
+      watch:"Does PETRIFY force you to spread out? Can the Egyptian deck win before the round limit, or does it time out?" },
+    { t:"Battle 5 - Void Herald (boss)", deck:"Any test deck, minus 2 Ark Sentinels, plus any 2 cards and any 2 relics.", core:30,
+      setup:"Void Herald in enemy front L2 + L3. No terrain.",
+      watch:"Does the Void Tide create urgency without feeling unfair? Is phase 2 readable? Which pantheon feels strongest here?" },
+  ];
+  const html = battles.map(b => `<div class="battle">
+      <h2>${b.t}</h2>
+      <p><b>Deck:</b> ${b.deck} &nbsp; <b>Core HP:</b> ${b.core}</p>
+      <p><b>Setup:</b> ${b.setup}</p>
+      <p><b>Watch for:</b> ${b.watch}</p>
+      <p><b>Result:</b> Win / Loss / Timeout &nbsp;&nbsp; Core HP left: ____ &nbsp;&nbsp; Rounds: ____</p>
+      <div class="notes"></div><div class="notes"></div>
+    </div>`).join("");
+
+  return `<div class="page doc">
+    <p class="page-title">Test battles</p>
+    <table>
+      <tr><th>Test deck</th><th>Cards (15)</th></tr>
+      <tr><td><b>Norse</b></td><td>Starter 10 + Shieldmaiden, Einherjar x2, Valkyrie, Thor</td></tr>
+      <tr><td><b>Greek</b></td><td>Starter 10 + Myrmidon, Hoplite x2, Athena, Zeus</td></tr>
+      <tr><td><b>Egyptian</b></td><td>Starter 10 + Mummy Guardian, Priest of Ra, Scarab Swarm, Sphinx, Ra</td></tr>
+    </table>
+    <p>Starter 10 = 4 Ark Sentinel, 3 Echo Archer, Rebuke, Warding (+ 1 patron card in Battle 1 only).</p>
+    ${html}
+    <p><b>Mini-run (optional):</b> play Battles 1, 3, and 4 in a row with one deck, carrying Core HP between them. After each win, shuffle all non-starter cards, reveal 3, and add 1 to your deck.</p>
+  </div>`;
+}
+
+document.getElementById("root").innerHTML =
+  rulesPage() +
+  battlesPage() +
+  cardPages("Player cards", expand(CARDS), playerCard) +
+  cardPages("Enemy cards", expand(ENEMIES), enemyCard) +
+  cardPages("Relics", RELICS, relicCard) +
+  tokenPage() +
+  trackerPage() +
+  matPage("enemy") +
+  matPage("player");
+</script>
+</body>
+</html>

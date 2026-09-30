@@ -1,0 +1,11 @@
+# Godot editor cache and import output
+game/.godot/
+*.tmp
+
+# Build output and downloaded tools
+build/
+tools/
+
+# Throwaway screenshot scripts
+game/tests/tmp_*.gd
+game/tests/tmp_*.gd.uid
