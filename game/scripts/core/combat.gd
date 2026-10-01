@@ -256,7 +256,16 @@ func snapshot() -> Dictionary:
 		"free_spell": free_spell_active(),
 		"lane_warnings": _lane_warnings(),
 		"quicksand_targets": _quicksand_targets(),
+		"void_tide": _void_tide(),
 	}
+
+
+## Core damage the living bosses' Void Tide deals at the end of each round (0 when none).
+func _void_tide() -> int:
+	var total := 0
+	for e in units(ENEMY):
+		total += int(e.def.get("void_tide", 0))
+	return total
 
 
 ## Player lanes an enemy intent will hit as a whole, e.g. {2: "SIEGE: 6 damage!"}.
@@ -1170,7 +1179,7 @@ func _herald_end_of_round(boss) -> void:
 		if slot.size() == 2:
 			var spawn = _spawn("void_spawn", ENEMY, slot[0], slot[1])
 			_log("The Herald summons %s." % _unit_label(spawn))
-	_damage_core(boss.def["void_tide"], "The Void Tide")
+	_damage_core(boss.def["void_tide"], "The Void Tide", false, {"void_tide": boss.def["void_tide"]})
 
 
 func _hel_end_of_round(hel) -> void:
@@ -1195,7 +1204,7 @@ func _apep_end_of_round(boss) -> void:
 			var b = _spawn("serpent_brood", ENEMY, lane, FRONT)
 			_log("%s hatches." % _unit_label(b))
 			break
-	_damage_core(boss.def["void_tide"], "The Void Tide")
+	_damage_core(boss.def["void_tide"], "The Void Tide", false, {"void_tide": boss.def["void_tide"]})
 
 
 func _apep_act(u) -> void:
@@ -1454,11 +1463,11 @@ func _heal(u, amount: int, source: String) -> void:
 		_log("%s heals %s for %d." % [source, u.display_name(), healed])
 
 
-func _damage_core(amount: int, source: String, enemy_hit := false) -> void:
+func _damage_core(amount: int, source: String, enemy_hit := false, extra := {}) -> void:
 	if enemy_hit and has_relic("wardens_plate"):
 		amount = max(1, amount - 2)
 	core_hp -= amount
-	_log("%s deals %d to the Core (%d left)." % [source, amount, max(core_hp, 0)])
+	_log("%s deals %d to the Core (%d left)." % [source, amount, max(core_hp, 0)], extra)
 	if core_hp <= 0 and result == "":
 		result = "defeat"
 

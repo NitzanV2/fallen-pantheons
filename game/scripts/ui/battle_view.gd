@@ -20,6 +20,8 @@ const FRONT := 0
 const BACK := 1
 const STEP_DELAY := 0.45
 const ATTACK_DELAY := 0.6
+const VOID_TIDE_DELAY := 1.0
+const VOID_COLOR := Color(0.78, 0.55, 1.0)
 const BOARD_RECT := Rect2(0, 0, 1250, 640)
 const SIDEBAR_RECT := Rect2(1262, 10, 328, 880)
 const GOLD := Color(0.95, 0.78, 0.35)
@@ -43,6 +45,9 @@ var log_label: RichTextLabel
 var end_button: Button
 var cancel_button: Button
 var restart_button: Button
+var void_row: HBoxContainer
+var void_icon: TextureRect
+var void_label: Label
 var push_panel: PanelContainer
 var push_title: Label
 var push_outcomes := {}
@@ -226,6 +231,22 @@ func _build_sidebar() -> void:
 	core_bar.add_theme_stylebox_override("background", bar_bg)
 	core_bar.add_theme_stylebox_override("fill", bar_fill)
 	core_box.add_child(core_bar)
+
+	void_row = HBoxContainer.new()
+	void_row.add_theme_constant_override("separation", 8)
+	void_row.mouse_filter = Control.MOUSE_FILTER_STOP
+	void_row.visible = false
+	box.add_child(void_row)
+	void_icon = CardWidget.icon("void_tide", 40)
+	void_icon.pivot_offset = Vector2(20, 20)
+	void_row.add_child(void_icon)
+	var void_box := VBoxContainer.new()
+	void_box.add_theme_constant_override("separation", 0)
+	void_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	void_row.add_child(void_box)
+	void_box.add_child(CardWidget._label("VOID TIDE", 18, VOID_COLOR, true))
+	void_label = CardWidget._label("", 13, Color(0.8, 0.75, 0.9), false)
+	void_box.add_child(void_label)
 
 	info_label = RichTextLabel.new()
 	info_label.bbcode_enabled = true
@@ -564,6 +585,10 @@ func _render_status(snap: Dictionary) -> void:
 	core_bar.max_value = max(combat.core_max, core, 1)
 	core_bar.value = core
 	core_label.text = "%d/%d" % [core, int(core_bar.max_value)]
+	var tide: int = snap.get("void_tide", 0)
+	void_row.visible = tide > 0
+	void_label.text = "The Core takes %d at the end of each round" % tide
+	void_row.tooltip_text = CardWidget.wrap_text("Void Tide: while the boss lives, your Core takes %d damage at the end of every round. Win quickly!" % tide)
 	info_label.text = "[color=#a8a8b8]Deck[/color] %d   [color=#a8a8b8]Discard[/color] %d   [color=#a8a8b8]Moves left[/color] %d%s" % [
 		snap["deck"], snap["discard"], snap["moves_left"],
 		"\n[color=#80ff90]Next spell is free (Hermes)[/color]" if snap["free_spell"] else "",
@@ -830,12 +855,69 @@ func _on_end_pressed() -> void:
 			_render(ev["snap"])
 			if actor_uid != -1:
 				board.play_event(ev, order, fresh)
-			var attack: bool = ev.has("target") or ev.has("core")
-			await get_tree().create_timer(ATTACK_DELAY if attack else STEP_DELAY).timeout
+			var delay := STEP_DELAY
+			if ev.has("void_tide"):
+				_play_void_tide(ev["void_tide"])
+				delay = VOID_TIDE_DELAY
+			elif ev.has("target") or ev.has("core"):
+				delay = ATTACK_DELAY
+			await get_tree().create_timer(delay).timeout
 	animating = false
 	_set_hint("")
 	_refresh()
 	_check_over()
+
+
+## The hourglass flips, a wave of void sweeps down the board toward the Core, and the damage floats off the Core bar.
+func _play_void_tide(amount: int) -> void:
+	void_icon.rotation = 0.0
+	void_icon.scale = Vector2.ONE
+	var flip := void_icon.create_tween()
+	flip.tween_property(void_icon, "scale", Vector2(1.3, 1.3), 0.12)
+	flip.tween_property(void_icon, "rotation", PI, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN_OUT)
+	flip.parallel().tween_property(void_icon, "scale", Vector2.ONE, 0.45).set_delay(0.2)
+	flip.tween_callback(func(): void_icon.rotation = 0.0)
+
+	var gradient := Gradient.new()
+	gradient.colors = PackedColorArray([Color(VOID_COLOR, 0.0), Color(0.45, 0.15, 0.75, 0.55), Color(VOID_COLOR, 0.0)])
+	gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	var band_tex := GradientTexture2D.new()
+	band_tex.gradient = gradient
+	band_tex.fill_from = Vector2(0, 0)
+	band_tex.fill_to = Vector2(0, 1)
+	band_tex.width = 8
+	band_tex.height = 64
+	var band := TextureRect.new()
+	band.texture = band_tex
+	band.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	band.stretch_mode = TextureRect.STRETCH_SCALE
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.size = Vector2(BOARD_RECT.size.x, 220)
+	band.position = Vector2(0, -220)
+	add_child(band)
+	var sweep := band.create_tween()
+	sweep.tween_property(band, "position:y", BOARD_RECT.size.y + 40, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	sweep.tween_callback(band.queue_free)
+
+	var tint := ColorRect.new()
+	tint.color = Color(0.35, 0.1, 0.6, 0.0)
+	tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tint.size = BOARD_RECT.size
+	add_child(tint)
+	var fade := tint.create_tween()
+	fade.tween_property(tint, "color:a", 0.22, 0.25)
+	fade.tween_property(tint, "color:a", 0.0, 0.5)
+	fade.tween_callback(tint.queue_free)
+
+	var num := CardWidget.number_label("-%d" % amount, 18, VOID_COLOR)
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	num.size = Vector2(80, 26)
+	num.position = core_label.get_global_rect().position - global_position + Vector2(-85, -4)
+	add_child(num)
+	var rise := num.create_tween().set_parallel(true)
+	rise.tween_property(num, "position:y", num.position.y - 40, 0.9)
+	rise.tween_property(num, "modulate:a", 0.0, 0.9).set_delay(0.4)
+	rise.chain().tween_callback(num.queue_free)
 
 
 func _check_over() -> void:
