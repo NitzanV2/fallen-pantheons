@@ -544,6 +544,8 @@ func _shoot(token: Control, to: Vector2, enemy: bool) -> float:
 
 ## A slash sweeps left to right across every lane the cleave covers; each tile in reach flashes
 ## and every unit hit (main target and splash) takes its impact as the blade passes it.
+# TODO: Mjolnir Shard also cleaves the back-row units behind front-row hits (combat._attack), but
+# combat._cleave_preview doesn't report them yet, so they get no impact or tile flash here.
 func _cleave(info: Dictionary, main_slot: Array, delay: float) -> void:
 	var side: int = info["side"]
 	var row: int = info["row"]
