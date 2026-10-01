@@ -7,7 +7,7 @@ The game picks it up automatically; anything missing shows a tinted placeholder 
 |---|---|---|
 | `art/cards/` | card id, e.g. `thor.png` | card art box, and the unit's portrait on the battle grid |
 | `art/enemies/` | enemy id, e.g. `void_herald.png` | enemy portrait on the battle grid |
-| `art/relics/` | relic id, e.g. `ember_of_faith.png` | relic icon (reward, shop, sidebar) |
+| `art/relics/` | relic id, e.g. `ember_of_faith.png` | relic icon (reward, shop, sidebar), transparent background, object cropped tight |
 | `art/patrons/` | `norse.png`, `greek.png`, `egypt.png` | patron portrait on the main menu |
 
 ## Image format

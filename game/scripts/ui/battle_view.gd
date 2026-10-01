@@ -528,15 +528,16 @@ func _build_relic_row() -> void:
 	for id in params["relics"]:
 		var relic: Dictionary = Data.RELICS[id]
 		var holder := PanelContainer.new()
-		holder.custom_minimum_size = Vector2(40, 40)
+		holder.custom_minimum_size = Vector2(46, 46)
 		holder.mouse_filter = Control.MOUSE_FILTER_STOP
 		holder.tooltip_text = CardWidget.wrap_text("%s (%s)\n%s" % [relic["name"], relic["rarity"], relic["text"]])
 		var frame := StyleBoxFlat.new()
-		frame.bg_color = Color(0.1, 0.08, 0.12)
-		frame.border_color = GOLD.darkened(0.3)
-		frame.set_border_width_all(1)
-		frame.set_corner_radius_all(20)
-		frame.set_content_margin_all(3)
+		frame.bg_color = Color(0.16, 0.12, 0.2)
+		frame.border_color = GOLD.darkened(0.25)
+		frame.set_border_width_all(2)
+		frame.set_corner_radius_all(23)
+		frame.corner_detail = 16
+		frame.set_content_margin_all(6)
 		holder.add_theme_stylebox_override("panel", frame)
 		holder.add_child(CardWidget.art("relics", id, relic["name"], CardWidget.RELIC_COLOR, 12))
 		relic_row.add_child(holder)

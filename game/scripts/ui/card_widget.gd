@@ -8,7 +8,6 @@ const RELIC_SIZE := Vector2(250, 110)
 const CARD_ART_TOP := 28
 const CARD_ART_BOTTOM := 104
 const RELIC_ICON := 78
-const RELIC_MARGIN := 0.15
 const ART_PATHS := ["res://art/%s/%s.png", "res://art/%s/%s.jpg"]
 const CARD_BG := Color(0.14, 0.14, 0.18)
 const SELECTED := Color(0.3, 1.0, 0.45)
@@ -80,14 +79,8 @@ static func art(kind: String, id: String, display_name: String, tint: Color, fon
 		if ResourceLoader.exists(path):
 			var tex := TextureRect.new()
 			tex.texture = load(path)
-			if kind == "relics":
-				var atlas := AtlasTexture.new()
-				atlas.atlas = tex.texture
-				var size: Vector2 = tex.texture.get_size()
-				atlas.region = Rect2(size * RELIC_MARGIN, size * (1.0 - 2.0 * RELIC_MARGIN))
-				tex.texture = atlas
 			tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if kind == "relics" else TextureRect.STRETCH_KEEP_ASPECT_COVERED
 			tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			if kind == "enemies" and ART_FOCUS.has(id):
