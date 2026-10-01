@@ -1280,7 +1280,10 @@ func _attack(u, target, atk: int) -> void:
 	var dmg := atk
 	if ranged and u.side == PLAYER and has_relic("eye_of_horus") and target.row == BACK:
 		dmg += 1
-	_log("%s attacks %s." % [_unit_label(u), _unit_label(target)], {"target": [target.side, target.row, target.lane], "ranged": ranged})
+	var extra := {"target": [target.side, target.row, target.lane], "ranged": ranged}
+	if u.has_kw("cleave"):
+		extra["cleave"] = _cleave_preview(u, target)
+	_log("%s attacks %s." % [_unit_label(u), _unit_label(target)], extra)
 	var hit: Array = [target]
 	var behind = unit_at(target.side, BACK, target.lane) if target.row == FRONT else null
 	var excess := _deal_damage(target, dmg, "ranged" if ranged else "melee")
@@ -1312,6 +1315,17 @@ func _attack(u, target, atk: int) -> void:
 					if b != null and not hit.has(b) and _can_target(u, b):
 						hit.append(b)
 						_deal_damage(b, atk, "cleave")
+
+
+## For the cleave animation: the row and lane span the swing covers, and the splash slots it will hit.
+func _cleave_preview(u, target) -> Dictionary:
+	var lanes := range(max(0, target.lane - 1), min(LANES, target.lane + target.width + 1))
+	var hits: Array = []
+	for lane in [target.lane - 1, target.lane + target.width]:
+		var t = unit_at(target.side, target.row, lane)
+		if t != null and t != target and _can_target(u, t):
+			hits.append([t.side, t.row, t.lane])
+	return {"side": target.side, "row": target.row, "lanes": lanes, "hits": hits}
 
 
 func _charge(u, lane: int) -> void:

@@ -450,7 +450,9 @@ func play_event(ev: Dictionary, order: int, fresh: bool) -> void:
 			hit_delay = _shoot(token, to, enemy)
 		else:
 			_lunge(token, to)
-		if target != null:
+		if ev.has("cleave"):
+			_cleave(ev["cleave"], ev["target"], hit_delay)
+		elif target != null:
 			_impact(target, hit_delay)
 	elif ev.get("core", false):
 		_lunge(token, token.position + Vector2(token.size.x / 2, token.size.y + 400))
@@ -538,6 +540,76 @@ func _shoot(token: Control, to: Vector2, enemy: bool) -> float:
 	tween.tween_property(bolt, "position", to - bolt.size / 2, time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	tween.tween_callback(bolt.queue_free)
 	return time
+
+
+## A slash sweeps left to right across every lane the cleave covers; each tile in reach flashes
+## and every unit hit (main target and splash) takes its impact as the blade passes it.
+func _cleave(info: Dictionary, main_slot: Array, delay: float) -> void:
+	var side: int = info["side"]
+	var row: int = info["row"]
+	var lanes: Array = info["lanes"]
+	if lanes.is_empty():
+		return
+	var first := tile_quad(side, row, lanes[0], 0)
+	var last := tile_quad(side, row, lanes[-1], 0)
+	var y_mid: float = first[3].y - TOKEN_SIZE.y * ROW_SCALE[row_index(side, row)] * 0.5
+	var x0: float = (first[0].x + first[3].x) / 2.0 + 10.0
+	var x1: float = (last[1].x + last[2].x) / 2.0 - 10.0
+	var sweep := 0.22
+
+	for lane in lanes:
+		var quad := tile_quad(side, row, lane)
+		var tile := Polygon2D.new()
+		tile.polygon = quad
+		tile.color = Color(1.0, 0.35, 0.25, 0.0)
+		add_child(tile)
+		move_child(tile, 0)
+		var cx: float = (quad[0].x + quad[1].x + quad[2].x + quad[3].x) / 4.0
+		var at: float = delay + sweep * inverse_lerp(x0, x1, clampf(cx, x0, x1))
+		var tw := tile.create_tween()
+		tw.tween_interval(at)
+		tw.tween_property(tile, "color:a", 0.5, 0.06)
+		tw.tween_property(tile, "color:a", 0.0, 0.4)
+		tw.tween_callback(tile.queue_free)
+
+	var arc := Line2D.new()
+	arc.width = 28.0
+	arc.joint_mode = Line2D.LINE_JOINT_ROUND
+	arc.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	arc.end_cap_mode = Line2D.LINE_CAP_ROUND
+	var curve := Curve.new()
+	curve.add_point(Vector2(0, 0.1))
+	curve.add_point(Vector2(0.75, 1.0))
+	curve.add_point(Vector2(1, 0.3))
+	arc.width_curve = curve
+	var grad := Gradient.new()
+	grad.colors = PackedColorArray([Color(1, 0.8, 0.5, 0.0), Color(1, 0.95, 0.8, 0.95), Color(1, 1, 1, 1)])
+	grad.offsets = PackedFloat32Array([0.0, 0.7, 1.0])
+	arc.gradient = grad
+	add_child(arc)
+	var bow := 20.0 if side == E else -20.0
+	var draw_arc_to := func(p: float):
+		var pts := PackedVector2Array()
+		var steps := 16
+		var tail := maxf(0.0, p - 0.55)
+		for k in steps + 1:
+			var t := lerpf(tail, p, k / float(steps))
+			pts.append(Vector2(lerpf(x0, x1, t), y_mid - bow * sin(t * PI)))
+		arc.points = pts
+	arc.modulate.a = 0.0
+	var tw := arc.create_tween()
+	tw.tween_interval(delay)
+	tw.tween_property(arc, "modulate:a", 1.0, 0.01)
+	tw.tween_method(draw_arc_to, 0.0, 1.0, sweep).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_method(draw_arc_to, 1.0, 1.55, 0.12)
+	tw.tween_property(arc, "modulate:a", 0.0, 0.1)
+	tw.tween_callback(arc.queue_free)
+
+	for slot in [main_slot] + info["hits"]:
+		var t := _token_for(slot)
+		if t != null:
+			var cx: float = t.position.x + t.size.x / 2
+			_impact(t, delay + sweep * inverse_lerp(x0, x1, clampf(cx, x0, x1)))
 
 
 func _impact(target: Control, delay: float) -> void:
