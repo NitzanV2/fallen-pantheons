@@ -23,6 +23,7 @@ const SLAB := 9.0
 const GOLD := Color(0.95, 0.78, 0.35)
 const TARGET := Color(1.0, 0.85, 0.25)
 const SELECTED := Color(0.35, 1.0, 0.5)
+const ACTOR_GLOW := Color(1.0, 0.85, 0.35)
 
 var snap: Dictionary = {}
 var terrain := {}
@@ -427,6 +428,144 @@ static func short_intent(text: String, type: String) -> String:
 			return "SANDSTORM"
 	var cut := text.split("(")[0].split(",")[0]
 	return cut.replace("lanes ", "").replace("lane ", "").replace(" at", "").replace(" and ", "+").strip_edges().to_upper()
+
+
+# ---------------------------------------------------------------- turn animation
+
+## Animates one resolve event: the acting unit glows with its place in the turn order
+## (popping in when its turn starts), melee attacks lunge, ranged attacks fire a bolt.
+func play_event(ev: Dictionary, order: int, fresh: bool) -> void:
+	var token := _token_for(ev.get("actor"))
+	if token == null:
+		return
+	move_child(token, get_child_count() - 1)
+	move_child(labels, get_child_count() - 1)
+	_actor_glow(token, order, fresh)
+	var enemy: bool = ev["actor"][0] == E
+	if ev.has("target"):
+		var target := _token_for(ev["target"])
+		var to: Vector2 = target.position + target.size / 2 if target != null else token.position + token.size / 2
+		var hit_delay := 0.12
+		if ev.get("ranged", false):
+			hit_delay = _shoot(token, to, enemy)
+		else:
+			_lunge(token, to)
+		if target != null:
+			_impact(target, hit_delay)
+	elif ev.get("core", false):
+		_lunge(token, token.position + Vector2(token.size.x / 2, token.size.y + 400))
+
+
+func _token_for(slot) -> Control:
+	if slot == null:
+		return null
+	for t in tokens:
+		if t.get_meta("slot") == slot:
+			return t
+	return null
+
+
+func _actor_glow(token: Control, order: int, fresh: bool) -> void:
+	var glow := Panel.new()
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.draw_center = false
+	sb.border_color = ACTOR_GLOW
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(8)
+	sb.shadow_color = Color(ACTOR_GLOW, 0.65)
+	sb.shadow_size = 16
+	glow.add_theme_stylebox_override("panel", sb)
+	glow.size = token.size
+	token.add_child(glow)
+
+	var badge := Panel.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bs := StyleBoxFlat.new()
+	bs.bg_color = Color(0.2, 0.13, 0.03)
+	bs.border_color = ACTOR_GLOW
+	bs.set_border_width_all(2)
+	bs.set_corner_radius_all(16)
+	bs.shadow_color = Color(0, 0, 0, 0.6)
+	bs.shadow_size = 4
+	badge.add_theme_stylebox_override("panel", bs)
+	badge.size = Vector2(32, 32)
+	badge.position = Vector2(token.size.x / 2 - 16, -20)
+	badge.pivot_offset = badge.size / 2
+	var num := CardWidget.number_label(str(order), 13, ACTOR_GLOW)
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	CardWidget.place(badge, num, 0, 1, -0.001, -0.001)
+	token.add_child(badge)
+
+	if fresh:
+		token.scale = Vector2(1.12, 1.12)
+		token.create_tween().tween_property(token, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		glow.modulate.a = 0.0
+		glow.create_tween().tween_property(glow, "modulate:a", 1.0, 0.15)
+		badge.scale = Vector2(0.3, 0.3)
+		badge.create_tween().tween_property(badge, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _lunge(token: Control, to: Vector2) -> void:
+	var start := token.position
+	var dir := (to - (start + token.size / 2)).normalized()
+	var tween := token.create_tween()
+	tween.tween_property(token, "position", start + dir * 36, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(token, "position", start, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+
+
+## Fires a glowing bolt at `to`; returns how long it takes to arrive.
+func _shoot(token: Control, to: Vector2, enemy: bool) -> float:
+	var from := token.position + token.size / 2
+	var start := token.position
+	var recoil := token.create_tween()
+	recoil.tween_property(token, "position", start - (to - from).normalized() * 10, 0.08)
+	recoil.tween_property(token, "position", start, 0.15)
+	var color := Color(1.0, 0.45, 0.4) if enemy else Color(1.0, 0.9, 0.55)
+	var bolt := Panel.new()
+	bolt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = color.lightened(0.5)
+	sb.set_corner_radius_all(8)
+	sb.shadow_color = Color(color, 0.9)
+	sb.shadow_size = 10
+	bolt.add_theme_stylebox_override("panel", sb)
+	bolt.size = Vector2(16, 16)
+	bolt.position = from - bolt.size / 2
+	add_child(bolt)
+	var time := clampf(from.distance_to(to) / 1400.0, 0.12, 0.28)
+	var tween := bolt.create_tween()
+	tween.tween_property(bolt, "position", to - bolt.size / 2, time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_callback(bolt.queue_free)
+	return time
+
+
+func _impact(target: Control, delay: float) -> void:
+	var start := target.position
+	var shake := target.create_tween()
+	shake.tween_interval(delay)
+	for dx in [7.0, -6.0, 4.0, 0.0]:
+		shake.tween_property(target, "position", start + Vector2(dx, 0), 0.04)
+	var burst := Panel.new()
+	burst.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1.0, 0.95, 0.8, 0.85)
+	sb.set_corner_radius_all(20)
+	sb.shadow_color = Color(1.0, 0.7, 0.3, 0.7)
+	sb.shadow_size = 12
+	burst.add_theme_stylebox_override("panel", sb)
+	burst.size = Vector2(40, 40)
+	burst.pivot_offset = burst.size / 2
+	burst.position = start + target.size / 2 - burst.size / 2
+	burst.scale = Vector2(0.2, 0.2)
+	burst.modulate.a = 0.0
+	add_child(burst)
+	var tween := burst.create_tween()
+	tween.tween_interval(delay)
+	tween.tween_property(burst, "modulate:a", 1.0, 0.01)
+	tween.tween_property(burst, "scale", Vector2(1.8, 1.8), 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(burst, "modulate:a", 0.0, 0.22)
+	tween.tween_callback(burst.queue_free)
 
 
 func _flash(token: Control, delta_hp: int) -> void:

@@ -19,6 +19,7 @@ const E := 1
 const FRONT := 0
 const BACK := 1
 const STEP_DELAY := 0.45
+const ATTACK_DELAY := 0.6
 const BOARD_RECT := Rect2(0, 0, 1250, 640)
 const SIDEBAR_RECT := Rect2(1262, 10, 328, 880)
 const GOLD := Color(0.95, 0.78, 0.35)
@@ -816,11 +817,21 @@ func _on_end_pressed() -> void:
 	skip_animation = false
 	_set_hint("Resolving...")
 	var events: Array = combat.end_plan()
+	var order := 0
+	var last_actor := -1
 	for ev in events:
 		_log_line(ev["text"])
+		var actor_uid: int = ev.get("actor_uid", -1)
+		var fresh := actor_uid != -1 and actor_uid != last_actor
+		if fresh:
+			order += 1
+		last_actor = actor_uid
 		if not skip_animation:
 			_render(ev["snap"])
-			await get_tree().create_timer(STEP_DELAY).timeout
+			if actor_uid != -1:
+				board.play_event(ev, order, fresh)
+			var attack: bool = ev.has("target") or ev.has("core")
+			await get_tree().create_timer(ATTACK_DELAY if attack else STEP_DELAY).timeout
 	animating = false
 	_set_hint("")
 	_refresh()

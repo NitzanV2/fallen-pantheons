@@ -43,6 +43,8 @@ var petrified_lane := -1
 var sandstorm_row := -1
 var transformed_uid := -1
 var events: Array = []
+## The unit taking its turn in the attack step, so its events can be tagged with it.
+var actor = null
 var aegis_used := false
 var mead_used := false
 var valhalla_returned := {}
@@ -213,8 +215,14 @@ func _unit_label(u) -> String:
 
 # ---------------------------------------------------------------- events
 
-func _log(text: String) -> void:
-	events.append({"text": text, "snap": snapshot()})
+## `extra` carries data for the battle animation, e.g. an attack's "target" slot or "core": true.
+func _log(text: String, extra := {}) -> void:
+	var ev := {"text": text, "snap": snapshot()}
+	if actor != null:
+		ev["actor"] = [actor.side, actor.row, actor.lane]
+		ev["actor_uid"] = actor.uid
+	ev.merge(extra)
+	events.append(ev)
 
 
 func snapshot() -> Dictionary:
@@ -1042,7 +1050,9 @@ func end_plan() -> Array:
 		if result != "":
 			break
 		if u.alive:
+			actor = u
 			_act(u)
+			actor = null
 
 	if result == "":
 		for u in _initiative_order():
@@ -1248,7 +1258,7 @@ func _act(u) -> void:
 	if target == null:
 		return
 	if target is String:
-		_log("%s hits the Core." % _unit_label(u))
+		_log("%s hits the Core." % _unit_label(u), {"core": true})
 		_damage_core(atk, u.display_name(), true)
 	else:
 		_attack(u, target, atk)
@@ -1261,7 +1271,7 @@ func _attack(u, target, atk: int) -> void:
 	var dmg := atk
 	if ranged and u.side == PLAYER and has_relic("eye_of_horus") and target.row == BACK:
 		dmg += 1
-	_log("%s attacks %s." % [_unit_label(u), _unit_label(target)])
+	_log("%s attacks %s." % [_unit_label(u), _unit_label(target)], {"target": [target.side, target.row, target.lane], "ranged": ranged})
 	var hit: Array = [target]
 	var behind = unit_at(target.side, BACK, target.lane) if target.row == FRONT else null
 	var excess := _deal_damage(target, dmg, "ranged" if ranged else "melee")
