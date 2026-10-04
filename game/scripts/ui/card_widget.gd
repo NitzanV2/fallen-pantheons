@@ -18,6 +18,8 @@ const FACTION_COLORS := {
 }
 const TITLE_FONT = preload("res://fonts/title_font.tres")
 const NUMBER_FONT = preload("res://fonts/PressStart2P.ttf")
+## Headings and buttons outside the cards use a modern display font; cards keep the pixel one.
+const UI_FONT = preload("res://fonts/ui_font.tres")
 const RARITY_STYLES := {
 	"Starter": {"metal": Color(0.42, 0.43, 0.48), "light": Color(0.68, 0.7, 0.75)},
 	"Token": {"metal": Color(0.42, 0.43, 0.48), "light": Color(0.68, 0.7, 0.75)},
@@ -179,31 +181,89 @@ static func button_icon(b: Button, icon: String, width := 22) -> void:
 	b.add_theme_constant_override("h_separation", 8)
 
 
-## The shared UI button look: dark with a bronze edge, or gold for the main action on a screen.
+## The shared UI button look: dark glass with a hairline edge, or warm gold for the main action
+## on a screen. Buttons ease up slightly and brighten while hovered.
 static func style_button(b: Button, primary := false, font_size := 14) -> void:
 	b.focus_mode = Control.FOCUS_NONE
 	for state in ["normal", "hover", "pressed", "disabled"]:
 		var sb := StyleBoxFlat.new()
-		sb.set_corner_radius_all(6)
-		sb.set_content_margin_all(6)
+		sb.set_corner_radius_all(8)
+		sb.corner_detail = 10
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
 		if primary:
-			sb.bg_color = {"normal": Color(0.72, 0.52, 0.16), "hover": Color(0.85, 0.63, 0.22), "pressed": Color(0.6, 0.42, 0.12), "disabled": Color(0.25, 0.23, 0.22)}[state]
-			sb.border_color = Color(1.0, 0.88, 0.5) if state != "disabled" else Color(0.4, 0.38, 0.36)
-			sb.set_border_width_all(2)
-			sb.shadow_color = Color(1.0, 0.75, 0.25, 0.35) if state != "disabled" else Color(0, 0, 0, 0)
-			sb.shadow_size = 6
-		else:
-			sb.bg_color = {"normal": Color(0.12, 0.11, 0.17, 0.95), "hover": Color(0.2, 0.18, 0.26, 0.95), "pressed": Color(0.08, 0.08, 0.12), "disabled": Color(0.1, 0.1, 0.13, 0.6)}[state]
-			sb.border_color = Color(0.5, 0.44, 0.34, 0.8) if state != "hover" else Color(0.85, 0.7, 0.4)
+			sb.bg_color = {"normal": Color(0.8, 0.6, 0.24), "hover": Color(0.9, 0.7, 0.32), "pressed": Color(0.66, 0.48, 0.17), "disabled": Color(0.22, 0.2, 0.22)}[state]
+			sb.border_color = Color(1.0, 0.9, 0.62, 0.9) if state != "disabled" else Color(1, 1, 1, 0.08)
 			sb.set_border_width_all(1)
+			sb.shadow_color = Color(1.0, 0.72, 0.25, 0.45 if state == "hover" else 0.28) if state != "disabled" else Color(0, 0, 0, 0)
+			sb.shadow_size = 12 if state == "hover" else 8
+		else:
+			sb.bg_color = {"normal": Color(0.1, 0.09, 0.15, 0.82), "hover": Color(0.17, 0.15, 0.25, 0.9), "pressed": Color(0.07, 0.06, 0.11, 0.9), "disabled": Color(0.08, 0.08, 0.11, 0.5)}[state]
+			sb.border_color = {"normal": Color(1, 1, 1, 0.1), "hover": Color(0.95, 0.78, 0.4, 0.65), "pressed": Color(0.95, 0.78, 0.4, 0.4), "disabled": Color(1, 1, 1, 0.05)}[state]
+			sb.set_border_width_all(1)
+			if state == "hover":
+				sb.shadow_color = Color(0.95, 0.75, 0.35, 0.18)
+				sb.shadow_size = 8
 		b.add_theme_stylebox_override(state, sb)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	if primary:
-		b.add_theme_font_override("font", TITLE_FONT)
+		b.add_theme_font_override("font", UI_FONT)
 		for c in ["font_color", "font_hover_color", "font_pressed_color"]:
-			b.add_theme_color_override(c, Color(0.14, 0.08, 0.02))
-		b.add_theme_color_override("font_disabled_color", Color(0.55, 0.52, 0.5))
+			b.add_theme_color_override(c, Color(0.13, 0.08, 0.03))
+		b.add_theme_color_override("font_disabled_color", Color(0.5, 0.48, 0.5))
+	else:
+		b.add_theme_color_override("font_color", Color(0.88, 0.86, 0.9))
+		b.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.85))
+		b.add_theme_color_override("font_disabled_color", Color(0.5, 0.49, 0.55))
 	b.add_theme_font_size_override("font_size", font_size)
+	_hover_motion(b)
+
+
+## Eases a control up a little while hovered. Safe to call more than once on the same control.
+static func _hover_motion(c: Control, lift := 1.03) -> void:
+	if c.has_meta("hover_motion"):
+		return
+	c.set_meta("hover_motion", true)
+	var ease_to := func(target: Vector2):
+		if c.is_inside_tree() and not (c is BaseButton and c.disabled):
+			c.pivot_offset = c.size / 2
+			c.create_tween().tween_property(c, "scale", target, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	c.mouse_entered.connect(ease_to.bind(Vector2(lift, lift)))
+	c.mouse_exited.connect(func():
+		if c.is_inside_tree():
+			c.create_tween().tween_property(c, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT))
+
+
+## A heading in the modern UI font with a soft drop shadow.
+static func heading(text: String, font_size: int, color: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_override("font", UI_FONT)
+	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
+	l.add_theme_constant_override("shadow_offset_x", 0)
+	l.add_theme_constant_override("shadow_offset_y", 2)
+	l.add_theme_constant_override("shadow_outline_size", 4)
+	return l
+
+
+## The shared glass panel: translucent dark fill, hairline edge, soft deep shadow.
+static func glass_style(radius := 14, margin := 16) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.055, 0.05, 0.095, 0.82)
+	sb.border_color = Color(1, 1, 1, 0.09)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(radius)
+	sb.corner_detail = 12
+	sb.set_content_margin_all(margin)
+	sb.shadow_color = Color(0, 0, 0, 0.45)
+	sb.shadow_size = 18
+	sb.shadow_offset = Vector2(0, 6)
+	return sb
 
 
 static func overlay_label(parent: Control, font_size: int) -> RichTextLabel:

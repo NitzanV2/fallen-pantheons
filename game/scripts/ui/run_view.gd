@@ -109,13 +109,7 @@ func _build() -> void:
 
 	var side_panel := PanelContainer.new()
 	side_panel.custom_minimum_size = Vector2(320, 0)
-	var ssb := StyleBoxFlat.new()
-	ssb.bg_color = Color(0.05, 0.045, 0.08, 0.86)
-	ssb.border_color = Color(GOLD, 0.45)
-	ssb.set_border_width_all(2)
-	ssb.set_corner_radius_all(10)
-	ssb.set_content_margin_all(14)
-	side_panel.add_theme_stylebox_override("panel", ssb)
+	side_panel.add_theme_stylebox_override("panel", CardWidget.glass_style(16, 18))
 	root.add_child(side_panel)
 	var sidebar := VBoxContainer.new()
 	sidebar.add_theme_constant_override("separation", 8)
@@ -176,7 +170,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _heading(text: String, size := 30) -> Label:
-	return CardWidget._label(text, size + 4, GOLD if size >= 30 else Color(0.92, 0.88, 0.8), true)
+	return CardWidget.heading(text, size, GOLD if size >= 30 else Color(0.92, 0.88, 0.8))
 
 
 func _text(text: String, color := Color(0.8, 0.8, 0.85)) -> Label:
@@ -206,7 +200,7 @@ func _row() -> HBoxContainer:
 
 
 func _update_sidebar() -> void:
-	sidebar_label.text = "[font_size=26][color=#f2c75a]Act 1[/color][/font_size]\n[font_size=18][img=22]res://art/icons/hp.png[/img] Core [b]%d[/b] / %d\n[img=22]res://art/map/shop.png[/img] Gold [b]%d[/b][/font_size]\n[color=#a8a8b8]Floor[/color] %d / %d   [color=#a8a8b8]Fights won[/color] %d\n[color=#a8a8b8]Boss:[/color] [color=#ff7a70]%s[/color]\n[color=#77778a]Seed %d[/color]" % [
+	sidebar_label.text = "[font=res://fonts/ui_font.tres][font_size=26][color=#f2c75a]Act 1[/color][/font_size][/font]\n[font_size=18][img=22]res://art/icons/hp.png[/img] Core [b]%d[/b] / %d\n[img=22]res://art/icons/opt_gold.png[/img] Gold [b]%d[/b][/font_size]\n[color=#a8a8b8]Floor[/color] %d / %d   [color=#a8a8b8]Fights won[/color] %d\n[color=#a8a8b8]Boss:[/color] [color=#ff7a70]%s[/color]\n[color=#77778a]Seed %d[/color]" % [
 		run.core_hp, run.max_hp, run.gold, run.floor_number(), Run.FLOORS, run.fights_won,
 		run.boss_name(), run.seed_value]
 	deck_button.text = "View deck (D) - %d cards" % run.deck.size()
@@ -253,6 +247,13 @@ func _show() -> void:
 			_show_rest()
 		"victory", "defeat":
 			_show_end()
+	if run.state != "combat":
+		_fade_in(content)
+
+
+func _fade_in(c: CanvasItem, duration := 0.3) -> void:
+	c.modulate.a = 0.0
+	c.create_tween().tween_property(c, "modulate:a", 1.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 func _show_map() -> void:
@@ -260,7 +261,7 @@ func _show_map() -> void:
 	if flash != "":
 		content.add_child(_text(flash, Color(1.0, 0.9, 0.55)))
 		flash = ""
-	content.add_child(_text("Choose your next destination (the glowing medallions). The path climbs from the Reliquary to the boss at the top. Hover over a node for details."))
+	content.add_child(_text("Choose your next destination (the glowing nodes). The path climbs from the Reliquary to the boss at the top. Hover over a node for details."))
 	content.add_child(_map_scroll(true))
 
 
@@ -276,8 +277,9 @@ func _map_header() -> HBoxContainer:
 		item.add_theme_constant_override("separation", 5)
 		item.tooltip_text = CardWidget.wrap_text(NODE_HELP[type])
 		item.mouse_filter = Control.MOUSE_FILTER_STOP
-		var icon := _medallion_face("res://art/map/%s.png" % type, 30, NODE_COLORS[type])
+		var icon := _node_face(type, 30, NODE_COLORS[type], NODE_COLORS[type], false)
 		icon.custom_minimum_size = Vector2(30, 30)
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		item.add_child(icon)
 		var l := _text(NODE_LABELS[type], Color(0.85, 0.83, 0.9))
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -307,7 +309,7 @@ func _map_canvas(interactive: bool) -> Control:
 	var canvas = MapCanvas.new()
 	canvas.custom_minimum_size = MAP_SIZE
 	canvas.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	canvas.background = load("res://art/map/background.jpg")
+	canvas.background = load("res://art/map/background_soft.jpg")
 
 	var available: Array = run.available_nodes()
 	var paths: Array = []
@@ -332,8 +334,7 @@ func _map_canvas(interactive: bool) -> Control:
 			paths.append([_start_pos(), _node_pos(first), style, 40.0, NODE_SIZES[first["type"]] / 2])
 	canvas.paths = paths
 
-	var start := _medallion_face("res://art/map/start.png", 80, GOLD, run.current == -1)
-	start.size = Vector2(80, 80)
+	var start := _node_face("start", 80, GOLD, GOLD, run.current == -1)
 	start.position = _start_pos() - start.size / 2
 	start.tooltip_text = "The Reliquary: where every run begins. Defend its Core on the way to the boss."
 	start.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -351,7 +352,8 @@ func _map_canvas(interactive: bool) -> Control:
 	return canvas
 
 
-## A medallion: circular art in a metal ring. Reachable nodes glow and pulse; visited ones dim.
+## A glass disc with the node's glyph. Reachable nodes glow, breathe and carry a rotating orbit;
+## visited nodes dim to gold, passed ones fade out. Nodes fade in floor by floor when the map opens.
 func _map_node(node: Dictionary, reachable: bool, visited: bool, passed: bool, here: bool) -> Button:
 	var type: String = node["type"]
 	var d: float = NODE_SIZES[type]
@@ -364,8 +366,8 @@ func _map_node(node: Dictionary, reachable: bool, visited: bool, passed: bool, h
 		b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
 	b.tooltip_text = CardWidget.wrap_text("%s\n%s" % [NODE_LABELS[type], NODE_HELP[type]])
 
-	var ring_color: Color = NODE_COLORS[type]
-	var path := "res://art/map/%s.png" % type
+	var tint: Color = NODE_COLORS[type]
+	var art := ""
 	var focus := -1.0
 	if type == "boss":
 		var boss: Dictionary = run.boss_def()
@@ -373,97 +375,158 @@ func _map_node(node: Dictionary, reachable: bool, visited: bool, passed: bool, h
 		focus = CardWidget.ART_FOCUS.get(boss_id, -1.0)
 		for pattern in CardWidget.ART_PATHS:
 			if ResourceLoader.exists(pattern % ["enemies", boss_id]):
-				path = pattern % ["enemies", boss_id]
+				art = pattern % ["enemies", boss_id]
 		b.tooltip_text = CardWidget.wrap_text("BOSS: %s\n%s\n%s" % [run.boss_name(), boss["hint"], NODE_HELP["boss"]])
-	if reachable:
-		ring_color = REACHABLE
-	elif visited or here:
-		ring_color = GOLD
-	var face := _medallion_face(path, d, ring_color, reachable or here, focus)
-	face.size = b.size
+	var ring: Color = REACHABLE if reachable else (GOLD if visited or here else tint)
+	var face := _node_face(type, d, tint, ring, reachable or here, art, focus)
 	b.add_child(face)
 
 	if type == "boss":
-		var name_label := CardWidget._label(run.boss_def()["short"].to_upper(), 22, Color(1.0, 0.55, 0.5), true)
+		var name_label := CardWidget.heading(run.boss_def()["short"].to_upper(), 22, Color(1.0, 0.6, 0.55))
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_label.size = Vector2(240, 30)
-		name_label.position = Vector2(d / 2 - 120, d + 4)
+		name_label.size = Vector2(260, 30)
+		name_label.position = Vector2(d / 2 - 130, d + 8)
 		b.add_child(name_label)
 	if visited and not here:
-		face.modulate = Color(0.62, 0.6, 0.58)
+		face.modulate = Color(0.7, 0.66, 0.6)
 	elif passed:
-		b.modulate = Color(1, 1, 1, 0.35)
+		b.modulate = Color(1, 1, 1, 0.3)
 	elif not reachable and not here:
-		face.modulate = Color(0.82, 0.8, 0.88)
+		face.modulate = Color(0.78, 0.76, 0.86)
 	if here:
-		var marker := CardWidget._label("YOU", 13, REACHABLE, true)
-		marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		marker.size = Vector2(60, 18)
-		marker.position = Vector2(d / 2 - 30, -20)
-		b.add_child(marker)
+		b.add_child(_pill("YOU", Vector2(-36, d / 2)))
 
 	if reachable:
-		var tween := b.create_tween().set_loops()
-		tween.tween_property(face, "scale", Vector2(1.08, 1.08), 0.6).set_trans(Tween.TRANS_SINE)
-		tween.tween_property(face, "scale", Vector2.ONE, 0.6).set_trans(Tween.TRANS_SINE)
-		face.pivot_offset = b.size / 2
-		b.mouse_entered.connect(func(): b.scale = Vector2(1.12, 1.12))
-		b.mouse_exited.connect(func(): b.scale = Vector2.ONE)
+		var orbit := OrbitRing.new()
+		orbit.color = REACHABLE
+		orbit.size = Vector2(d + 18, d + 18)
+		orbit.position = Vector2(-9, -9)
+		orbit.pivot_offset = orbit.size / 2
+		b.add_child(orbit)
+		b.move_child(orbit, 0)
+		orbit.create_tween().set_loops().tween_property(orbit, "rotation", TAU, 7.0).from(0.0)
+		var breathe := face.create_tween().set_loops()
+		breathe.tween_property(face, "modulate", Color(1.15, 1.12, 1.05), 0.9).set_trans(Tween.TRANS_SINE)
+		breathe.tween_property(face, "modulate", Color.WHITE, 0.9).set_trans(Tween.TRANS_SINE)
+		b.mouse_entered.connect(func():
+			b.create_tween().tween_property(b, "scale", Vector2(1.14, 1.14), 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
+		b.mouse_exited.connect(func():
+			b.create_tween().tween_property(b, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT))
 	else:
 		b.mouse_filter = Control.MOUSE_FILTER_PASS
+
+	var target_alpha := b.modulate.a
+	b.modulate.a = 0.0
+	b.scale = Vector2(0.7, 0.7)
+	var intro := b.create_tween().set_parallel(true)
+	var delay: float = 0.15 + node["floor"] * 0.035
+	intro.tween_property(b, "modulate:a", target_alpha, 0.35).set_delay(delay)
+	intro.tween_property(b, "scale", Vector2.ONE, 0.4).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	return b
 
 
-## The glow sits on its own panel: a clipping panel with a shadow would clip the art to a square.
-## `focus` >= 0 zooms the art in on that height (a boss's face, see CardWidget.ART_FOCUS).
-func _medallion_face(path: String, d: float, ring_color: Color, glow := false, focus := -1.0) -> Control:
+## The disc behind every map icon: dark glass, a soft glow in the ring colour, a hairline inner ring
+## and the type's glyph (or, for the boss, its portrait clipped to the circle).
+func _node_face(type: String, d: float, tint: Color, ring: Color, glow: bool, art := "", focus := -1.0) -> Control:
 	var root := Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var halo := Panel.new()
-	var hsb := StyleBoxFlat.new()
-	hsb.bg_color = Color(0, 0, 0, 0.5)
-	hsb.set_corner_radius_all(int(d))
-	hsb.shadow_color = Color(ring_color, 0.55) if glow else Color(0, 0, 0, 0.6)
-	hsb.shadow_size = int(d / 5) if glow else 4
-	halo.add_theme_stylebox_override("panel", hsb)
-	halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	CardWidget.place(root, halo, 0, 0, -0.001, -0.001)
+	root.size = Vector2(d, d)
+	root.pivot_offset = root.size / 2
 
-	# The art is clipped by a filled circle; the ring is drawn on top so the square art can't cover it.
-	var mask := Panel.new()
-	var msb := StyleBoxFlat.new()
-	msb.bg_color = Color(0.05, 0.05, 0.1)
-	msb.set_corner_radius_all(int(d))
-	msb.corner_detail = 24
-	mask.add_theme_stylebox_override("panel", msb)
-	mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mask.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
-	CardWidget.place(root, mask, 0, 0, -0.001, -0.001)
-	var tex := TextureRect.new()
-	if ResourceLoader.exists(path):
-		tex.texture = load(path)
-	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	CardWidget.place(mask, tex, 0, 0, -0.001, -0.001)
-	if focus >= 0.0 and tex.texture != null:
-		CardWidget.focus_art(tex, focus, 1.8)
+	var disc := Panel.new()
+	var dsb := StyleBoxFlat.new()
+	dsb.bg_color = Color(0.06, 0.05, 0.1, 0.9)
+	dsb.set_corner_radius_all(int(d))
+	dsb.corner_detail = 24
+	dsb.shadow_color = Color(ring, 0.5) if glow else Color(0, 0, 0, 0.55)
+	dsb.shadow_size = int(d * 0.28) if glow else int(d * 0.1)
+	disc.add_theme_stylebox_override("panel", dsb)
+	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(root, disc, 0, 0, -0.001, -0.001)
 
-	var width: int = max(2, int(d / 16))
-	for layer in [[ring_color, width, 0.0], [Color(ring_color.lightened(0.45), 0.7), 1, float(width)]]:
-		var ring := Panel.new()
+	if art != "":
+		var mask := Panel.new()
+		var msb := StyleBoxFlat.new()
+		msb.bg_color = Color(0.05, 0.05, 0.1)
+		msb.set_corner_radius_all(int(d))
+		msb.corner_detail = 24
+		mask.add_theme_stylebox_override("panel", msb)
+		mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mask.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+		CardWidget.place(root, mask, 3, 3, -3.001, -3.001)
+		var tex := TextureRect.new()
+		tex.texture = load(art)
+		tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		CardWidget.place(mask, tex, 0, 0, -0.001, -0.001)
+		if focus >= 0.0:
+			CardWidget.focus_art(tex, focus, 1.8)
+	else:
+		var glyph := TextureRect.new()
+		glyph.texture = load("res://art/glyphs/%s.svg" % type)
+		glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		glyph.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		glyph.modulate = tint.lightened(0.25)
+		var inset := d * 0.24
+		CardWidget.place(root, glyph, inset, inset, -inset - 0.001, -inset - 0.001)
+
+	for layer in [[Color(ring, 0.95), max(2, int(d / 28)), 0.0], [Color(ring, 0.22), 1, d * 0.1]]:
+		var edge := Panel.new()
 		var sb := StyleBoxFlat.new()
 		sb.draw_center = false
 		sb.border_color = layer[0]
 		sb.set_border_width_all(layer[1])
 		sb.set_corner_radius_all(int(d))
 		sb.corner_detail = 24
-		ring.add_theme_stylebox_override("panel", sb)
-		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sb.anti_aliasing_size = 1.2
+		edge.add_theme_stylebox_override("panel", sb)
+		edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var inset: float = layer[2]
-		CardWidget.place(root, ring, inset, inset, -inset - 0.001, -inset - 0.001)
+		CardWidget.place(root, edge, inset, inset, -inset - 0.001, -inset - 0.001)
 	return root
+
+
+## A small rounded label centred on `center`, e.g. the "YOU" marker.
+func _pill(text: String, center: Vector2) -> PanelContainer:
+	var pill := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.95, 0.78, 0.38)
+	sb.set_corner_radius_all(9)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 1
+	sb.content_margin_bottom = 1
+	sb.shadow_color = Color(1.0, 0.75, 0.3, 0.4)
+	sb.shadow_size = 6
+	pill.add_theme_stylebox_override("panel", sb)
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var l := CardWidget.heading(text, 11, Color(0.15, 0.09, 0.03))
+	l.remove_theme_color_override("font_shadow_color")
+	pill.add_child(l)
+	pill.position = center - Vector2(24, 10)
+	pill.custom_minimum_size = Vector2(48, 20)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return pill
+
+
+## Three thin arcs that slowly circle a node you can travel to.
+class OrbitRing extends Control:
+	var color := Color.WHITE
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var c := size / 2
+		var r := size.x / 2 - 2
+		for k in 3:
+			var a := k * TAU / 3.0
+			draw_arc(c, r, a, a + TAU / 5.0, 24, Color(color, 0.85), 2.0, true)
+			draw_arc(c, r, a, a + TAU / 5.0, 24, Color(color, 0.18), 6.0, true)
 
 
 ## Nodes spread across the width with a small, stable wobble so the map doesn't look like a grid.
@@ -717,15 +780,7 @@ func _show_end() -> void:
 # ---------------------------------------------------------------- scene panels
 
 func _panel_style() -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.045, 0.08, 0.9)
-	sb.border_color = Color(GOLD, 0.5)
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(10)
-	sb.set_content_margin_all(26)
-	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.shadow_size = 12
-	return sb
+	return CardWidget.glass_style(18, 28)
 
 
 ## Event-style screen: a framed illustration on the left and a titled panel on the right.
@@ -738,14 +793,14 @@ func _scene(art: String, title: String, text: String) -> VBoxContainer:
 
 	var frame := PanelContainer.new()
 	var fsb := StyleBoxFlat.new()
-	fsb.bg_color = Color(0.1, 0.08, 0.06)
-	fsb.border_color = Color(0.78, 0.6, 0.3)
-	fsb.set_border_width_all(3)
-	fsb.set_corner_radius_all(6)
-	fsb.set_content_margin_all(5)
+	fsb.bg_color = Color(0.06, 0.05, 0.09)
+	fsb.set_corner_radius_all(18)
+	fsb.corner_detail = 12
 	fsb.shadow_color = Color(0, 0, 0, 0.6)
-	fsb.shadow_size = 14
+	fsb.shadow_size = 22
+	fsb.shadow_offset = Vector2(0, 8)
 	frame.add_theme_stylebox_override("panel", fsb)
+	frame.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(frame)
 	var pic := TextureRect.new()
@@ -754,7 +809,18 @@ func _scene(art: String, title: String, text: String) -> VBoxContainer:
 	pic.custom_minimum_size = ART_SIZE
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	frame.add_child(pic)
+	var edge := Panel.new()
+	var esb := StyleBoxFlat.new()
+	esb.draw_center = false
+	esb.border_color = Color(1, 1, 1, 0.14)
+	esb.set_border_width_all(1)
+	esb.set_corner_radius_all(18)
+	esb.corner_detail = 12
+	edge.add_theme_stylebox_override("panel", esb)
+	edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(edge)
 
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", _panel_style())
@@ -875,10 +941,11 @@ func _new_overlay(title: String) -> VBoxContainer:
 	overlay = PanelContainer.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.05, 0.08, 1.0)
+	sb.bg_color = Color(0.035, 0.03, 0.06, 0.97)
 	sb.set_content_margin_all(30)
 	overlay.add_theme_stylebox_override("panel", sb)
 	add_child(overlay)
+	_fade_in(overlay, 0.2)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
@@ -904,10 +971,11 @@ func _open_info(kind: String) -> void:
 	info_overlay = PanelContainer.new()
 	info_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.05, 0.08, 1.0)
+	sb.bg_color = Color(0.035, 0.03, 0.06, 0.97)
 	sb.set_content_margin_all(30)
 	info_overlay.add_theme_stylebox_override("panel", sb)
 	add_child(info_overlay)
+	_fade_in(info_overlay, 0.2)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
