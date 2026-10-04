@@ -547,6 +547,8 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["", "Swine", "Transformed: can't attack or use start-of-round effects this round.", Color(1.0, 0.6, 0.8)])
 		if u.get("move_block", "") != "":
 			out.append(["", "Can't move", u["move_block"], Color(0.7, 0.7, 0.8)])
+		if u.get("fresh", false):
+			out.append(["", "Not locked in", "Deployed this round: move it freely, without using a move, until you end planning.", Color(0.6, 0.85, 1.0)])
 	var terrain: String = combat.terrain_at(side, row, lane)
 	if terrain != "":
 		out.append(["", Data.TERRAIN[terrain]["name"], Data.TERRAIN[terrain]["text"], TERRAIN_COLORS[terrain]])
@@ -869,7 +871,7 @@ func _on_slot_pressed(side: int, row: int, lane: int) -> void:
 	if sel_move == null:
 		if u == null:
 			return
-		if combat.moves_left <= 0:
+		if combat.moves_left <= 0 and not combat.is_fresh(u):
 			_set_hint("No moves left this round.")
 		elif not combat.can_move(u):
 			_set_hint("%s can't move: %s." % [u.display_name(), combat.move_block(u).to_lower()])

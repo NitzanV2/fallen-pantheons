@@ -309,6 +309,7 @@ func _unit_snapshot(u) -> Dictionary:
 		"revive": (u.has_kw("revive") or (u.side == PLAYER and has_relic("ankh_of_eternity"))) and not u.revive_used,
 		"text": u.def["text"], "intent": intent.get("text", ""), "intent_type": intent.get("type", ""), "width": u.width,
 		"move_block": move_block(u) if phase == "plan" and u.side == PLAYER else "",
+		"fresh": is_fresh(u),
 		"poisoned": u.poisoned, "swine": u.uid == transformed_uid,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
 		"spellward": u.side == ENEMY and is_spellwarded(u),
@@ -1185,11 +1186,16 @@ func can_move(u) -> bool:
 	return move_block(u) == ""
 
 
-## Why a unit can't move right now, or "" if it can. Units that entered the board
-## during this plan phase can't move until the next one.
+## Units that entered the board during this plan phase aren't locked in yet: they can be
+## repositioned freely (no move used, no move triggers, Quicksand ignored).
+func is_fresh(u) -> bool:
+	return u.side == PLAYER and phase == "plan" and u.deployed_round == round_num
+
+
+## Why a unit can't move right now, or "" if it can.
 func move_block(u) -> String:
-	if u.deployed_round == round_num:
-		return "Just deployed - can move next round"
+	if is_fresh(u):
+		return ""
 	if terrain_at(u.side, u.row, u.lane) == "quicksand":
 		return "Stuck in Quicksand"
 	return ""
@@ -1198,17 +1204,22 @@ func move_block(u) -> String:
 func move_unit(from_lane: int, from_row: int, to_lane: int, to_row: int) -> String:
 	if phase != "plan":
 		return "Not in the plan phase."
-	if moves_left <= 0:
-		return "No moves left this round."
 	var u = unit_at(PLAYER, from_row, from_lane)
 	if u == null:
 		return "No unit there."
+	if not is_fresh(u) and moves_left <= 0:
+		return "No moves left this round."
 	if not can_move(u):
 		return "%s can't move: %s." % [u.display_name(), move_block(u).to_lower()]
 	if unit_at(PLAYER, to_row, to_lane) != null:
 		return "Destination is occupied."
 	_remove(u)
 	_place(u, to_row, to_lane)
+	if is_fresh(u):
+		acted_this_plan = true
+		events.clear()
+		_log("Repositioned %s." % _unit_label(u))
+		return ""
 	moves_left -= 1
 	acted_this_plan = true
 	events.clear()

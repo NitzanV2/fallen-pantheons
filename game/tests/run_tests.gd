@@ -457,15 +457,22 @@ func test_raiders() -> void:
 
 	c = fresh()
 	c.debug_place("hollowed_bulwark", E, 3, B)
-	c.hand = [c._new_card("ark_sentinel"), c._new_card("sandswarm")]
+	c.hand = [c._new_card("ark_sentinel"), c._new_card("sandswarm"), c._new_card("raider")]
 	c._plan_start = c._capture()
-	check(c.play_unit(0, 0, F) == "", "deploy lock: deploy")
-	check(c.move_unit(0, F, 0, B) != "" and c.moves_left == 1, "deploy lock: a unit deployed this round can't move")
-	check(c.play_spell(0, []) == "", "deploy lock: sandswarm")
-	check(c.move_unit(1, F, 1, B) != "", "deploy lock: tokens summoned this round can't move")
+	check(c.play_unit(0, 0, F) == "", "fresh: deploy")
+	check(c.move_unit(0, F, 0, B) == "" and c.move_unit(0, B, 2, F) == "" and c.moves_left == 1,
+		"fresh: a unit deployed this round moves freely without using a move")
+	check(c.unit_at(P, F, 2) != null and c.unit_at(P, F, 0) == null, "fresh: it ends where it was last put")
+	check(c.play_spell(0, []) == "", "fresh: sandswarm")
+	var scarab = c.unit_at(P, F, 1)
+	check(scarab != null and c.move_unit(1, F, 1, B) == "" and c.moves_left == 1, "fresh: tokens summoned this round move freely too")
+	check(c.play_unit(0, 3, B) == "", "fresh: deploy raider")
+	var fresh_raider = c.unit_at(P, B, 3)
+	check(c.move_unit(3, B, 1, F) == "" and fresh_raider.atk == fresh_raider.def["atk"], "fresh: repositioning doesn't trigger Raider")
 	c.end_plan()
 	if c.result == "":
-		check(c.move_unit(0, F, 0, B) == "", "deploy lock: it can move the next round")
+		check(not c.is_fresh(c.unit_at(P, F, 2)), "fresh: locked in after planning")
+		check(c.move_unit(2, F, 2, B) == "" and c.moves_left == 0, "fresh: the next round, moving uses a move")
 
 	c = fresh()
 	c.debug_place("hollowed_bulwark", E, 3, B)
@@ -1012,7 +1019,7 @@ func _autoplay(c, rng: RandomNumberGenerator, total_cards: int, tag: String) -> 
 			var i := rng.randi_range(0, c.hand.size() - 1)
 			_random_play(c, i, rng)
 			_check_invariants(c, total_cards, tag)
-		while c.phase == "plan" and c.moves_left > 0 and rng.randf() < 0.4:
+		while c.phase == "plan" and rng.randf() < 0.5:
 			_random_move(c, rng)
 			_check_invariants(c, total_cards, tag)
 		if c.phase == "plan" and rng.randf() < 0.5:
@@ -1315,7 +1322,7 @@ func _random_power(c, rng: RandomNumberGenerator) -> void:
 
 
 func _random_move(c, rng: RandomNumberGenerator) -> void:
-	var mine: Array = c.units(P).filter(func(u): return c.can_move(u))
+	var mine: Array = c.units(P).filter(func(u): return c.can_move(u) and (c.moves_left > 0 or c.is_fresh(u)))
 	if mine.is_empty():
 		return
 	var u = mine[rng.randi_range(0, mine.size() - 1)]
