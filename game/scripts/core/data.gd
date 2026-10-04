@@ -177,21 +177,18 @@ const DECKS := {
 
 # Enemy placement: [enemy_id, lane, row]. Terrain: [type, side, lane, row] (side 0 = player).
 const BATTLES := [
-	{"id": "first_contact", "name": "1. First Contact", "deck": "starter_norse", "core": 50, "relics": [],
-		"enemies": [["void_spawn", 0, 0], ["void_spawn", 1, 0]], "terrain": [],
-		"blurb": "Learn the flow against two Void Spawn."},
-	{"id": "hollow_procession", "name": "2. Hollow Procession", "deck": "greek", "core": 50, "relics": [],
+	{"id": "hollow_procession", "name": "1. Hollow Procession", "deck": "greek", "core": 50, "relics": [],
 		"enemies": [["hollowed_zealot", 1, 0], ["hollowed_bulwark", 2, 0], ["hollow_archer", 1, 1]],
 		"terrain": [["ley_line", 0, 2, 0]],
 		"blurb": "Formation play, a Taunt wall, and a Ley Line."},
-	{"id": "breach", "name": "3. Breach", "deck": "norse", "core": 50, "relics": [],
+	{"id": "breach", "name": "2. Breach", "deck": "norse", "core": 50, "relics": [],
 		"enemies": [["void_charger", 0, 0], ["void_spawn", 2, 0], ["hollow_archer", 3, 1]],
 		"terrain": [["ruins", 0, 1, 1], ["ruins", 1, 3, 1]],
 		"blurb": "A Charger with Pierce that charges in even rounds. The archer shelters in Ruins."},
-	{"id": "medusa", "name": "4. Echo of Medusa (elite)", "deck": "egypt", "core": 40, "relics": ["eye_of_horus"],
+	{"id": "medusa", "name": "3. Echo of Medusa (elite)", "deck": "egypt", "core": 40, "relics": ["eye_of_horus"],
 		"enemies": [["hollowed_bulwark", 1, 0], ["void_spawn", 2, 0], ["echo_of_medusa", 1, 1]], "terrain": [],
 		"blurb": "Petrify punishes stacking one lane. Includes Eye of Horus."},
-	{"id": "herald", "name": "5. Void Herald (boss)", "deck": "norse", "core": 55, "relics": [],
+	{"id": "herald", "name": "4. Void Herald (boss)", "deck": "norse", "core": 55, "relics": [],
 		"enemies": [["void_herald", 1, 0]], "terrain": [], "boss": true, "short": "Herald",
 		"hint": "Its Void Tide drains the Core every round and it hammers your strongest lane. Hurts slow, scaling decks.",
 		"blurb": "No round limit, but the Void Tide drains the Core. Pick relics in the menu."},
@@ -355,7 +352,7 @@ const GOD_POWERS := {
 
 # Which run encounters each battle can appear as.
 const BATTLE_POOLS := {
-	"first_contact": "early", "hollow_procession": "early", "swarm": "early", "tangled_ruins": "early", "carrion_flock": "early",
+	"hollow_procession": "early", "swarm": "early", "tangled_ruins": "early", "carrion_flock": "early",
 	"breach": "late", "shield_wall": "late", "double_charge": "late", "hex_coven": "late", "ashen_tide": "late",
 	"plague_pit": "late", "sieging_host": "late", "ooze_tide": "late", "silent_chapel": "late", "sinking_sands": "late",
 	"medusa": "elite", "fenrir": "elite", "set": "elite", "hydra": "elite", "circe": "elite",

@@ -12,15 +12,16 @@ Things to check later. Add to this list as new questions come up.
 
 | Fight type | Avg HP lost (median / p90) |
 |---|---|
-| Early fights | 2.0 (2 / 6) |
-| Late fights | 7.4 (6 / 15) |
-| Elites | 8.1 (7 / 15) |
-| Bosses | 27.5 (25 / 41) |
-| Floors 1-6 / 7-12 / 13-14 | 3.6 / 8.1 / 12.5 |
+| Early fights | 2.7 (2 / 6) |
+| Late fights | 7.3 (6 / 15) |
+| Elites | 7.9 (7 / 15) |
+| Bosses | 28.2 (26 / 41) |
+| Floors 1-6 / 7-12 / 13-14 | 3.9 / 8.1 / 12.0 |
 
-- **Powers are close by HP:** 6.9 (Osiris) to 7.7 (Thor, Zeus) per fight. The Norse powers aren't clearly weaker by this measure, despite lower run win rates.
-- **Encounter outliers:** Double Charge 13.2 and Ashen Tide 12.3 cost far more than other late fights (3.6-8.7); Fenrir 12.6 vs other elites 5.3-8.5; Swarm 5.9 vs other early fights 0.1-2.1. First Contact (0.1) and Hollow Procession (0.7) cost almost nothing.
-- **Bosses:** Herald 31.7, Hel 26.3, Apep 24.8. After today's buff the Herald costs the most HP, though its win rate matches Hel's.
+- **First Contact removed** (0.1 HP per fight, 100% wins). The early pool is now Hollow Procession, Swarm, Tangled Ruins and Carrion Flock.
+- **Powers are close by HP:** 7.0 (Osiris) to 7.9 (Tyr, Zeus) per fight. The Norse powers aren't clearly weaker by this measure, despite lower run win rates.
+- **Encounter outliers:** Double Charge 13.3 and Ashen Tide 12.2 cost far more than other late fights (3.6-8.8); Fenrir 12.3 vs other elites 5.1-8.6; Swarm 6.2 vs other early fights 0.7-2.2. Hollow Procession (0.7) costs almost nothing.
+- **Bosses:** Herald 32.3, Hel 26.1, Apep 26.2. After today's buff the Herald costs the most HP, though its win rate matches Hel's.
 - Runs reach the boss having lost about 19 of 55 HP, and the boss costs about 27 more on average.
 
 ## Current difficulty setup
@@ -47,7 +48,7 @@ Things to check later. Add to this list as new questions come up.
 - **The economy changes barely matter.** No timeout gold, rest heal 10 and shop heal at 40 gold only cost about 4 Core HP by the boss. Check whether gold or healing should be tightened further, or whether the shop needs better things to spend on.
 - **Round scaling.** Fights get +1 round per scaling step. This cut timeouts sharply but barely changed win rates. Watch that longer late fights don't feel slow, and that Golden Fleece (now "+1 round") still feels worth taking.
 - **Timeouts give nothing now.** Check whether this makes elites feel punishing rather than interesting.
-- **Early fights are trivial.** First Contact and Hollow Procession are won nearly 100% of the time with almost no HP lost. Check whether they should threaten a little more.
+- **Early fights are trivial.** Hollow Procession and Tangled Ruins are won nearly 100% of the time with almost no HP lost. Check whether they should threaten a little more.
 - **God power spread.** With cooldown and the new scaling (60 runs each): Tyr 27%, Thor 30%, Zeus 30%, Poseidon 35%, Sekhmet 40%, Osiris 47%. The Norse powers trail and Osiris leads; the bot plays Tyr cautiously and Osiris's revive is easy for it to use well. Re-check with 300 runs before tuning individual powers.
 - **Cooldown dial.** Without a cooldown the bot won 50% (vs 28% never using a power); a 3-floor cooldown brought it to 41% before the scaling change. The bot uses its power on elites and the boss, and in normal fights only if it will recharge before the boss. Humans will likely save it better.
 - **Herald summons dial** (bot win rate vs the Herald, 60 runs per power): old (one Spawn in phase 1) 61%; two Spawns in both phases plus Wisps 9%; two Spawns in phase 1 plus Wisps 19%; one Spawn plus Wisps in both phases 35%; one Spawn plus Wisps in phase 1 only (current) 43%, level with Hel (44%).

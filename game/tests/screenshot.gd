@@ -19,7 +19,7 @@ func _run() -> void:
 	await _frames(3)
 	_save(out_dir + "/shot_sandbox.png")
 
-	main._start_battle(Data.BATTLES[2])
+	main._start_battle(Data.BATTLES[1])
 	var view = main.battle_view
 	view._new_combat(42)
 	var c = view.combat
