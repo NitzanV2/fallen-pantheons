@@ -51,6 +51,12 @@ var valhalla_returned := {}
 var last_dead_ally = null
 var enemy_bonus := {"atk": 0, "hp": 0}
 var acted_this_plan := false
+## The run's god power: {"id": power id, "nodes": owned upgrade ids}, or empty for none.
+var power := {}
+var power_uses := 0
+var power_refunded := false
+## How many times one of your units fell this fight (deaths and Revives).
+var falls := 0
 var _unmaking := false
 var _plan_start := {}
 var _next_uid := 1
@@ -69,6 +75,8 @@ func setup(battle_def: Dictionary, deck_ids: Array, relic_ids: Array, seed_value
 	is_boss = battle_def.get("boss", false)
 	enemy_bonus = battle_def.get("enemy_bonus", enemy_bonus)
 	max_rounds = 3 + enemy_bonus.get("rounds", 0) + (1 if has_relic("golden_fleece") else 0)
+	power = battle_def.get("god_power", {})
+	power_uses = 1 if Data.GOD_POWERS.has(power.get("id", "")) else 0
 	for id in deck_ids:
 		deck.append(_new_card(id))
 	_shuffle(deck)
@@ -257,6 +265,7 @@ func snapshot() -> Dictionary:
 		"lane_warnings": _lane_warnings(),
 		"quicksand_targets": _quicksand_targets(),
 		"void_tide": _void_tide(),
+		"power_uses": power_uses,
 	}
 
 
@@ -381,6 +390,7 @@ func _capture() -> Dictionary:
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
+		"power_uses": power_uses, "power_refunded": power_refunded, "falls": falls,
 	}
 
 
@@ -416,6 +426,9 @@ func restart_plan() -> String:
 	rng.state = s["rng"]
 	terrain = s["terrain"]
 	transformed_uid = s["transformed_uid"]
+	power_uses = s["power_uses"]
+	power_refunded = s["power_refunded"]
+	falls = s["falls"]
 	acted_this_plan = false
 	_plan_start = _capture()
 	events.clear()
@@ -628,10 +641,15 @@ func valid_targets(hand_index: int) -> Array:
 	if not can_afford(hand_index):
 		return out
 	var def := card_def(hand[hand_index])
-	var kind: String = "empty_ally_slot" if def["type"] == "unit" else def["target"]
+	return _targets_for(def, "empty_ally_slot" if def["type"] == "unit" else def["target"])
+
+
+## Legal targets of the given kind. `def` is a card or a god power ("row" for ally_slot).
+func _targets_for(def: Dictionary, kind: String) -> Array:
+	var out: Array = []
 	match kind:
 		"empty_ally_slot":
-			if def["type"] == "spell" and not _book_target_available():
+			if def.get("type", "") != "unit" and not _book_target_available():
 				return out
 			for row in 2:
 				for lane in LANES:
@@ -725,7 +743,7 @@ func play_spell(hand_index: int, targets: Array, direction := 0) -> String:
 	var cost := card_cost(card)
 	if cost > faith:
 		return "Not enough Faith."
-	var err := _check_spell_targets(card["id"], targets, direction)
+	var err := _check_targets(def, targets, direction)
 	if err != "":
 		return err
 	faith -= cost
@@ -746,8 +764,8 @@ func play_spell(hand_index: int, targets: Array, direction := 0) -> String:
 	return ""
 
 
-func _check_spell_targets(id: String, targets: Array, direction: int) -> String:
-	var kind: String = Data.CARDS[id]["target"]
+func _check_targets(def: Dictionary, targets: Array, direction: int) -> String:
+	var kind: String = def["target"]
 	match kind:
 		"none":
 			return ""
@@ -755,7 +773,6 @@ func _check_spell_targets(id: String, targets: Array, direction: int) -> String:
 			if targets.size() != 1 or targets[0][0] != PLAYER or _at(targets[0]) == null:
 				return "Choose one of your units."
 		"ally_slot":
-			var def: Dictionary = Data.CARDS[id]
 			if targets.size() != 1 or targets[0][0] != PLAYER or targets[0][1] != def["row"]:
 				return "Choose a %s slot on your grid." % ("front" if def["row"] == FRONT else "back")
 			if not _terrain_slot_ok(def, targets[0][1], targets[0][2]):
@@ -800,6 +817,181 @@ func _check_spell_targets(id: String, targets: Array, direction: int) -> String:
 
 func _at(slot: Array):
 	return unit_at(slot[0], slot[1], slot[2])
+
+
+# ---------------------------------------------------------------- god power
+
+func power_def() -> Dictionary:
+	return Data.GOD_POWERS.get(power.get("id", ""), {})
+
+
+func _up(node: String) -> bool:
+	return node in power.get("nodes", [])
+
+
+func power_targets() -> Array:
+	if phase != "plan" or power_uses <= 0:
+		return []
+	return _targets_for(power_def(), power_def()["target"])
+
+
+func can_use_power() -> bool:
+	return not power_targets().is_empty()
+
+
+## Impact damage of the god power's push (Poseidon's Tide).
+func power_push_damage() -> int:
+	return 4 if _up("wave_1") else 2
+
+
+func use_power(targets: Array, direction := 0) -> String:
+	if phase != "plan":
+		return "Not in the plan phase."
+	if power_uses <= 0:
+		return "Your god power is spent for this fight."
+	var def := power_def()
+	var err := _check_targets(def, targets, direction)
+	if err != "":
+		return err
+	power_uses -= 1
+	acted_this_plan = true
+	events.clear()
+	_log("Invoked %s." % def["name"])
+	_resolve_power(targets, direction)
+	_check_enemies_cleared()
+	if result != "":
+		_finish_fight()
+	return ""
+
+
+func _resolve_power(targets: Array, direction: int) -> void:
+	var t = _at(targets[0]) if not targets.is_empty() else null
+	match power["id"]:
+		"tyrs_oath":
+			var hp: int = t.hp
+			var bonus := 2 if _up("blood_1") else 1
+			_log("Tyr's Oath: %s is sacrificed." % _unit_label(t))
+			t.hp = 0
+			_kill(t)
+			for a in units(PLAYER):
+				if a == t:
+					continue
+				if _up("blood_2"):
+					a.atk += bonus
+				else:
+					a.temp_atk += bonus
+			_log("Your other units gain +%d ATK%s." % [bonus, " for the fight" if _up("blood_2") else " this round"])
+			if _up("oath_1"):
+				_heal_core(hp, "Hand of Tyr")
+			if _up("oath_2") and not t.alive and t.card != null and discard.has(t.card):
+				discard.erase(t.card)
+				hand.append(t.card)
+				_log("Sworn Return: %s returns to your hand." % t.display_name())
+			if _up("pact"):
+				faith += 1
+				_log("Blood Pact: +1 Faith.")
+		"thors_thunderclap":
+			var dmg := 3 + (mini(falls, 3) if _up("storm_1") else 0)
+			var lane: int = t.lane
+			var main = t
+			var hits := [[t, dmg]]
+			if _up("hammer_1"):
+				var other = unit_at(ENEMY, 1 - t.row, t.lane)
+				if other != null and other != t:
+					hits.append([other, dmg])
+			if _up("hammer_2"):
+				for side_unit in [unit_at(ENEMY, t.row, t.lane - 1), unit_at(ENEMY, t.row, t.lane + t.width)]:
+					if side_unit != null and side_unit != t:
+						hits.append([side_unit, 2])
+			_log("Thor's Thunderclap strikes %s." % _unit_label(t))
+			for h in hits:
+				_deal_damage(h[0], h[1], "effect")
+			if _up("pact"):
+				for row in 2:
+					var a = unit_at(PLAYER, row, lane)
+					if a != null:
+						a.shield += 2
+						_log("Storm Shield: %s gains Shield 2." % a.display_name())
+			if _up("storm_2") and not main.alive and not power_refunded:
+				power_refunded = true
+				power_uses += 1
+				_log("Thunder Returns: Thor's Thunderclap can be used again.")
+		"zeus_lightning_bolt":
+			var hit: Array = [t]
+			_log("Zeus's Lightning Bolt strikes %s." % _unit_label(t))
+			_deal_damage(t, 4 if _up("sky_1") else 2, "effect")
+			for n in (3 if _up("chain_1") else 1):
+				var pool: Array = units(ENEMY).filter(func(e): return not hit.has(e))
+				if pool.is_empty():
+					break
+				var next = pool[rng.randi_range(0, pool.size() - 1)]
+				hit.append(next)
+				_log("The bolt chains to %s." % _unit_label(next))
+				_deal_damage(next, 2 if _up("chain_2") else 1, "effect")
+			if _up("sky_2"):
+				var kills: int = hit.filter(func(e): return not e.alive).size()
+				if kills > 0:
+					faith += kills
+					_log("Divine Spark: +%d Faith." % kills)
+			if _up("pact"):
+				for a in units(PLAYER):
+					if a.has_kw("ranged"):
+						a.temp_atk += 1
+				_log("Charged Ranks: your Ranged units gain +1 ATK this round.")
+		"poseidons_tide":
+			var impact := power_push_damage()
+			var moved := _push(t, direction, impact)
+			if moved and _up("wave_2") and t.alive:
+				_log("Riptide drags %s under." % _unit_label(t))
+				_deal_damage(t, impact, "effect")
+			if _up("undertow_1") and t.alive:
+				var a = unit_at(PLAYER, FRONT, t.lane)
+				if a != null and effective_atk(a) > 0:
+					_log("Ambush Current: %s strikes %s." % [a.display_name(), t.display_name()])
+					_deal_damage(t, effective_atk(a), "effect")
+			if _up("undertow_2"):
+				moves_left += 1
+				_log("Flowing Ranks: +1 move this round.")
+			if _up("pact"):
+				_draw(1)
+				_log("Sea Spray: drew a card.")
+		"osiris_return":
+			var fallen: Dictionary = last_dead_ally
+			discard.erase(fallen)
+			var u = _spawn(fallen["id"], PLAYER, targets[0][2], targets[0][1], fallen)
+			last_dead_ally = null
+			if not _up("life_1"):
+				u.hp = 1
+			if _up("life_2"):
+				u.shield += 3
+			if _up("wings_1"):
+				u.atk += 2
+			if _up("wings_2") and not u.has_kw("revive"):
+				u.bonus_kw.append("revive")
+			_log("Osiris returns %s with %d HP." % [_unit_label(u), u.hp])
+			if _up("pact"):
+				_heal_core(3, "Gift of the Nile")
+		"sekhmets_plague":
+			var lanes: Array = range(t.lane, t.lane + t.width)
+			if _up("plague_1"):
+				lanes = range(t.lane - 1, t.lane + t.width + 1)
+			var hit: Array = []
+			for lane in lanes:
+				for row in 2:
+					var e = unit_at(ENEMY, row, lane)
+					if e != null and not hit.has(e):
+						hit.append(e)
+			_log("Sekhmet's Plague sweeps lane%s %s." % ["s" if lanes.size() > 1 else "", ", ".join(lanes.filter(func(l): return l >= 0 and l < LANES).map(func(l): return str(l + 1)))])
+			for e in hit:
+				if not e.poisoned:
+					e.poisoned = true
+					_log("%s is Poisoned." % _unit_label(e))
+			if _up("hunt_1"):
+				for e in hit:
+					_deal_damage(e, 1, "effect")
+			if _up("pact"):
+				for a in units(PLAYER):
+					_heal(a, 1, "Sun's Mercy")
 
 
 func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
@@ -966,25 +1158,27 @@ func _on_moved(u, from_lane: int) -> void:
 			_deal_damage(t, 1, "effect")
 
 
-func _push(u, direction: int) -> void:
+## Returns true if the unit moved, false if it hit the edge or another unit.
+func _push(u, direction: int, impact := 3) -> bool:
 	var dest: int = u.lane + direction
 	if dest < 0 or dest >= LANES:
 		_log("%s is slammed against the edge." % _unit_label(u))
-		_deal_damage(u, 3, "effect")
-		return
+		_deal_damage(u, impact, "effect")
+		return false
 	var other = unit_at(ENEMY, FRONT, dest)
 	if other != null and other.has_kw("immovable"):
 		_log("%s collides with the Immovable %s." % [_unit_label(u), other.display_name()])
-		_deal_damage(u, 3, "effect")
-		return
+		_deal_damage(u, impact, "effect")
+		return false
 	if other != null:
 		_log("%s collides with %s." % [_unit_label(u), other.display_name()])
-		_deal_damage(u, 3, "effect")
-		_deal_damage(other, 3, "effect")
-		return
+		_deal_damage(u, impact, "effect")
+		_deal_damage(other, impact, "effect")
+		return false
 	_remove(u)
 	_place(u, FRONT, dest)
 	_log("Pushed %s to lane %d." % [u.display_name(), dest + 1])
+	return true
 
 
 func can_move(u) -> bool:
@@ -1071,10 +1265,10 @@ func end_plan() -> Array:
 				_end_of_round(u)
 
 	if result == "":
-		for u in units(PLAYER):
-			if u.poisoned:
+		for u in units(PLAYER) + units(ENEMY):
+			if u.poisoned and u.alive and result == "":
 				_log("Poison eats at %s." % _unit_label(u))
-				_deal_damage(u, 1, "poison")
+				_deal_damage(u, 2 if u.side == ENEMY and _up("plague_2") else 1, "poison")
 
 	if result == "" and has_relic("scarab_amulet"):
 		for u in units(PLAYER):
@@ -1520,6 +1714,8 @@ func _kill(u) -> void:
 	u.alive = false
 	_remove(u)
 	_log("%s dies." % _unit_label(u))
+	if u.side == ENEMY and u.poisoned and _up("hunt_2"):
+		_heal_core(2, "Feast")
 
 	if u.side == PLAYER and not u.is_token:
 		last_dead_ally = u.card
@@ -1597,6 +1793,8 @@ func _split(u) -> void:
 
 ## "Whenever an ally dies" effects. Also fire when a unit Revives, but never for the unit itself.
 func _death_triggers(u) -> void:
+	if u.side == PLAYER:
+		falls += 1
 	if u.side == PLAYER and has_relic("mead_of_the_einherjar") and not mead_used:
 		mead_used = true
 		for a in units(PLAYER):

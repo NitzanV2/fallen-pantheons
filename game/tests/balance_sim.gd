@@ -1,6 +1,6 @@
 extends SceneTree
 ## Plays many runs with a simple greedy bot and reports win rates.
-##   godot --headless --path . --script res://tests/balance_sim.gd -- [runs_per_patron] [no_patron_relics]
+##   godot --headless --path . --script res://tests/balance_sim.gd -- [runs_per_power] [no_powers]
 ##
 ## The bot is a rough stand-in for a thoughtful player: it blocks lanes with
 ## enemies, puts ranged and support units behind allies, and makes sensible
@@ -17,36 +17,39 @@ const RARITY_VALUE := {"Common": 1, "Uncommon": 2, "Rare": 3}
 
 var encounter_stats := {}
 var boss_stats := {}
-var no_patron_relics := false
+var no_powers := false
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	var runs := int(args[0]) if not args.is_empty() else 100
-	no_patron_relics = args.has("no_patron_relics")
+	no_powers = args.has("no_powers")
 	print("Balance: ", Data.BALANCE)
-	if no_patron_relics:
-		print("Patron relics disabled")
+	if no_powers:
+		print("God powers are never used")
 	var total_wins := 0
 	var total_runs := 0
 	for patron in Data.PATRONS:
-		var wins := 0
-		var floors := 0
-		var boss_hp_total := 0
-		var boss_reached := 0
-		for s in range(1, runs + 1):
-			var r := _play_run(s * 7 + patron["card"].length(), patron["card"])
-			if r["won"]:
-				wins += 1
-			floors += r["floor"]
-			if r["boss_hp"] >= 0:
-				boss_reached += 1
-				boss_hp_total += r["boss_hp"]
-		total_wins += wins
-		total_runs += runs
-		print("%-28s win %5.1f%%   avg floor %.1f   reached boss %5.1f%%   avg HP entering boss %.1f" % [
-			patron["label"], 100.0 * wins / runs, float(floors) / runs, 100.0 * boss_reached / runs,
-			float(boss_hp_total) / max(boss_reached, 1)])
+		for power in patron["powers"]:
+			var wins := 0
+			var floors := 0
+			var boss_hp_total := 0
+			var boss_reached := 0
+			var upgrades := 0
+			for s in range(1, runs + 1):
+				var r := _play_run(s * 7 + power.length(), patron["card"], power)
+				if r["won"]:
+					wins += 1
+				floors += r["floor"]
+				upgrades += r["upgrades"]
+				if r["boss_hp"] >= 0:
+					boss_reached += 1
+					boss_hp_total += r["boss_hp"]
+			total_wins += wins
+			total_runs += runs
+			print("%-28s win %5.1f%%   avg floor %.1f   reached boss %5.1f%%   avg HP entering boss %.1f   avg upgrades %.1f" % [
+				Data.GOD_POWERS[power]["name"], 100.0 * wins / runs, float(floors) / runs, 100.0 * boss_reached / runs,
+				float(boss_hp_total) / max(boss_reached, 1), float(upgrades) / runs])
 	print("%-28s win %5.1f%%" % ["OVERALL", 100.0 * total_wins / total_runs])
 	print("")
 	print("%-20s %6s %6s %8s %6s %10s %8s %12s" % ["Encounter", "fights", "win%", "timeout%", "loss%", "avg HP lost", "HP/win", "HP/timeout"])
@@ -59,29 +62,28 @@ func _initialize() -> void:
 			100.0 * (st["loss"] + st["defeat"]) / n, float(st["hp_lost"]) / n,
 			float(st["hp_win"]) / max(st["win"], 1), float(st["hp_timeout"]) / max(st["timeout"], 1)])
 	print("")
-	print("Boss win% by patron (fights)")
+	print("Boss win% by god power (fights)")
 	for boss in ids.filter(func(id): return Data.BATTLE_POOLS.get(id, "") == "boss"):
-		var line := "%-10s" % boss
-		for patron in Data.PATRONS:
-			var bs: Array = boss_stats.get("%s|%s" % [boss, patron["card"]], [0, 0])
-			line += "   %-15s %5.1f%% (%d)" % [patron["card"], 100.0 * bs[1] / max(bs[0], 1), bs[0]]
-		print(line)
+		print(boss)
+		for power in Data.GOD_POWERS:
+			var bs: Array = boss_stats.get("%s|%s" % [boss, power], [0, 0])
+			print("   %-26s %5.1f%% (%d)" % [Data.GOD_POWERS[power]["name"], 100.0 * bs[1] / max(bs[0], 1), bs[0]])
 	quit()
 
 
 # ---------------------------------------------------------------- run decisions
 
-func _play_run(seed_value: int, patron: String) -> Dictionary:
+func _play_run(seed_value: int, patron: String, power: String) -> Dictionary:
 	var run = Run.new()
-	run.setup(seed_value, patron)
-	if no_patron_relics:
-		run.relics.clear()
+	run.setup(seed_value, patron, power)
 	var boss_hp := -1
 	var guard := 0
 	while not (run.state in ["victory", "defeat"]) and guard < 200:
 		guard += 1
 		match run.state:
 			"map":
+				while run.pending_upgrades() > 0:
+					run.choose_upgrade(_choose_upgrade(run))
 				run.enter_node(_choose_node(run))
 			"combat":
 				if run.nodes[run.current]["type"] == "boss":
@@ -92,7 +94,7 @@ func _play_run(seed_value: int, patron: String) -> Dictionary:
 				run.finish_combat(c)
 				_record(run.battle_id, c.result, before - max(run.core_hp, 0))
 				if run.nodes[run.current]["type"] == "boss":
-					var key: String = "%s|%s" % [run.battle_id, patron]
+					var key: String = "%s|%s" % [run.battle_id, power]
 					var bs: Array = boss_stats.get(key, [0, 0])
 					boss_stats[key] = [bs[0] + 1, bs[1] + (1 if c.result == "win" else 0)]
 			"reward":
@@ -106,7 +108,22 @@ func _play_run(seed_value: int, patron: String) -> Dictionary:
 					run.rest_heal()
 				else:
 					run.rest_remove(_worst_card(run))
-	return {"won": run.state == "victory", "floor": run.floor_number(), "boss_hp": boss_hp}
+	return {"won": run.state == "victory", "floor": run.floor_number(), "boss_hp": boss_hp, "upgrades": run.power_nodes.size()}
+
+
+## Finishes a branch before starting the next; Pact comes last.
+func _choose_upgrade(run) -> String:
+	var options: Array = run.upgrade_options()
+	var nodes: Dictionary = Data.GOD_POWERS[run.power]["nodes"]
+	var best: String = options[0]
+	for id in options:
+		if _upgrade_score(nodes[id]) > _upgrade_score(nodes[best]):
+			best = id
+	return best
+
+
+func _upgrade_score(node: Dictionary) -> int:
+	return -1 if node["branch"] == "Pact" else node["tier"]
 
 
 func _record(id: String, result: String, hp_lost: int) -> void:
@@ -146,7 +163,7 @@ func _choose_node(run) -> int:
 func _card_value(run, id: String) -> float:
 	var def: Dictionary = Data.CARDS[id]
 	var v: float = RARITY_VALUE.get(def["rarity"], 0) * 2.0
-	if def["faction"] in run.owned_pantheons():
+	if def["faction"] == run.main_pantheon():
 		v += 1.5
 	if def["type"] == "spell":
 		v -= 1.0
@@ -226,8 +243,49 @@ func _play_fight(c) -> void:
 		for step in 10:
 			if c.phase != "plan" or not _play_best_card(c):
 				break
+		if c.phase == "plan" and not no_powers:
+			_use_power(c)
 		if c.phase == "plan":
 			c.end_plan()
+
+
+## Uses the god power once it has a worthwhile target.
+func _use_power(c) -> void:
+	var targets: Array = c.power_targets()
+	if targets.is_empty():
+		return
+	match c.power["id"]:
+		"tyrs_oath":
+			var allies: Array = c.units(P)
+			if allies.size() < 3:
+				return
+			var weakest = allies[0]
+			for u in allies:
+				if u.atk + u.hp < weakest.atk + weakest.hp:
+					weakest = u
+			c.use_power([[P, weakest.row, weakest.lane]])
+		"poseidons_tide":
+			var t: Array = targets[0]
+			for dir in [-1, 1]:
+				var dest: int = t[2] + dir
+				if dest < 0 or dest > 3 or c.unit_at(E, FRONT, dest) != null:
+					c.use_power([t], dir)
+					return
+			if c.round_num >= 3:
+				c.use_power([t], 1 if t[2] < 2 else -1)
+		"osiris_return":
+			var slot := _best_slot(c, c.last_dead_ally["id"])
+			if not slot.is_empty() and targets.has([P, slot[1], slot[0]]):
+				c.use_power([[P, slot[1], slot[0]]])
+		_:
+			var best: Array = targets[0]
+			var best_threat := -1
+			for t in targets:
+				var u = c.unit_at(t[0], t[1], t[2])
+				if u != null and u.atk + u.threat > best_threat:
+					best_threat = u.atk + u.threat
+					best = t
+			c.use_power([best])
 
 
 func _play_best_card(c) -> bool:

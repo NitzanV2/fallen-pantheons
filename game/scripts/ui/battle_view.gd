@@ -61,6 +61,10 @@ var single_buttons: HBoxContainer
 var run_buttons: HBoxContainer
 var run_mode := false
 var help_panel: Control = null
+var power_button: Button
+var power_status: Label
+
+var sel_power := false
 
 var sel_hand := -1
 var sel_move = null
@@ -116,6 +120,7 @@ func _begin(header: String) -> void:
 	_log_line(header)
 	_log_line("--- Round 1: plan your moves ---")
 	_build_relic_row()
+	_build_power_button()
 	_clear_selection()
 	_set_hint("")
 	_refresh()
@@ -260,6 +265,13 @@ func _build_sidebar() -> void:
 	relic_row.add_theme_constant_override("v_separation", 6)
 	box.add_child(relic_row)
 
+	power_button = Button.new()
+	power_button.custom_minimum_size = Vector2(0, 66)
+	power_button.pressed.connect(_on_power_pressed)
+	CardWidget.style_button(power_button)
+	power_button.visible = false
+	box.add_child(power_button)
+
 	hint_label = Label.new()
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_label.custom_minimum_size = Vector2(0, 74)
@@ -314,6 +326,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.keycode in [KEY_H, KEY_F1]:
 		_toggle_help()
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_G and power_button.visible:
+		_on_power_pressed()
 		get_viewport().set_input_as_handled()
 	elif push_target != null and event.keycode in [KEY_LEFT, KEY_RIGHT]:
 		_on_push(-1 if event.keycode == KEY_LEFT else 1)
@@ -395,16 +410,19 @@ func _update_push_panel() -> void:
 	if u == null:
 		return
 	push_title.text = "Push %s which way?" % u.display_name()
+	var impact: int = combat.power_push_damage() if sel_power else 3
 	for direction in push_outcomes:
 		var dest: int = push_target[2] + direction
 		var other = combat.unit_at(push_target[0], push_target[1], dest)
 		var text := "Moves to lane %d" % (dest + 1)
+		if sel_power and combat._up("wave_2"):
+			text += ": %d damage" % impact
 		if dest < 0 or dest >= Combat.LANES:
-			text = "Slams into the edge: 3 damage"
+			text = "Slams into the edge: %d damage" % impact
 		elif other != null and other.has_kw("immovable"):
-			text = "Hits the Immovable %s: 3 damage" % other.display_name()
+			text = "Hits the Immovable %s: %d damage" % [other.display_name(), impact]
 		elif other != null:
-			text = "Collides with %s: 3 damage each" % other.display_name()
+			text = "Collides with %s: %d damage each" % [other.display_name(), impact]
 		push_outcomes[direction].text = text
 	push_panel.reset_size()
 	push_panel.position = Vector2((BOARD_RECT.size.x - push_panel.size.x) / 2, 385)
@@ -465,6 +483,7 @@ func _render(snap: Dictionary) -> void:
 	cancel_button.disabled = animating or not _has_selection()
 	restart_button.disabled = animating or not combat.can_restart_plan()
 	skip_button.disabled = not animating
+	_update_power_button(snap)
 	_update_push_panel()
 	if board.hover != null:
 		_on_slot_hovered(board.hover)
@@ -566,6 +585,79 @@ func _build_relic_row() -> void:
 		relic_icons[id] = holder
 
 
+func _build_power_button() -> void:
+	for child in power_button.get_children():
+		child.queue_free()
+	var def: Dictionary = combat.power_def()
+	power_button.visible = not def.is_empty()
+	if def.is_empty():
+		return
+	power_button.tooltip_text = CardWidget.wrap_text("%s (once per fight, free; key G)\n%s" % [def["name"], Data.power_text(combat.power["id"], combat.power.get("nodes", []))])
+	var disc := CardWidget.power_disc(combat.power["id"], 48, true)
+	disc.position = Vector2(9, 9)
+	power_button.add_child(disc)
+	var title := CardWidget.heading(def["name"].to_upper(), 15, Color(0.96, 0.93, 0.85))
+	CardWidget.place(power_button, title, 68, 10, -8, 32)
+	power_status = CardWidget._label("", 12, Color(0.7, 0.68, 0.78), false)
+	CardWidget.place(power_button, power_status, 68, 34, -8, 56)
+
+
+func _update_power_button(snap: Dictionary) -> void:
+	if not power_button.visible:
+		return
+	var uses: int = snap.get("power_uses", 0)
+	var plan: bool = snap["phase"] == "plan" and not animating
+	var usable: bool = plan and uses > 0 and combat.can_use_power()
+	power_button.disabled = not usable and not sel_power
+	power_button.modulate = Color(1, 1, 1, 1.0 if uses > 0 else 0.45)
+	if sel_power:
+		power_status.text = "Choose a target (Esc to cancel)"
+	elif uses <= 0:
+		power_status.text = "Used this fight"
+	elif not usable and plan:
+		power_status.text = "No legal target right now"
+	else:
+		power_status.text = "Ready: free, once per fight" if uses == 1 else "Ready again (%d)" % uses
+	var sb: StyleBoxFlat = power_button.get_theme_stylebox("normal")
+	sb.border_color = GOLD if sel_power else Color(1, 1, 1, 0.1)
+	sb.set_border_width_all(2 if sel_power else 1)
+
+
+func _on_power_pressed() -> void:
+	if animating or combat.phase != "plan":
+		return
+	if sel_power:
+		_on_cancel_pressed()
+		return
+	_clear_selection()
+	if not combat.can_use_power():
+		_set_hint("Your god power has no legal target right now." if combat.power_uses > 0 else "Your god power is spent for this fight.")
+		_refresh()
+		return
+	sel_power = true
+	_set_hint({
+		"ally": "%s: choose one of your units.",
+		"enemy": "%s: choose an enemy unit.",
+		"enemy_front": "%s: choose an enemy front unit to push.",
+		"empty_ally_slot": "%s: choose an empty tile for the returning ally.",
+	}[combat.power_def()["target"]] % combat.power_def()["name"])
+	_refresh()
+
+
+func _target_with_power(slot: Array) -> void:
+	if push_target != null:
+		return
+	if not _slot_in(_current_targets(), slot):
+		_set_hint("That is not a legal target for your god power.")
+		return
+	if combat.power_def()["target"] == "enemy_front":
+		push_target = slot
+		_set_hint("Push which way?")
+		_refresh()
+	else:
+		_apply(combat.use_power([slot]))
+
+
 ## Once-per-fight relics dim after they trigger.
 func _update_relic_icons() -> void:
 	var spent := {"aegis_fragment": combat.aegis_used, "mead_of_the_einherjar": combat.mead_used}
@@ -614,6 +706,8 @@ func _render_hand(snap: Dictionary) -> void:
 func _current_targets() -> Array:
 	if animating or combat.phase != "plan":
 		return []
+	if sel_power:
+		return [] if push_target != null else combat.power_targets()
 	if sel_hand >= 0 and sel_hand < combat.hand.size():
 		if push_target != null:
 			return []
@@ -692,11 +786,12 @@ func _board_drop(pos: Vector2, _data) -> void:
 # ---------------------------------------------------------------- input
 
 func _has_selection() -> bool:
-	return sel_hand >= 0 or sel_move != null
+	return sel_hand >= 0 or sel_move != null or sel_power
 
 
 func _clear_selection() -> void:
 	sel_hand = -1
+	sel_power = false
 	sel_move = null
 	pair_first = null
 	push_target = null
@@ -762,6 +857,9 @@ func _on_slot_pressed(side: int, row: int, lane: int) -> void:
 	if animating or combat.phase != "plan":
 		return
 	var slot := [side, row, lane]
+	if sel_power:
+		_target_with_power(slot)
+		return
 	if sel_hand >= 0:
 		_target_with_card(slot)
 		return
@@ -818,7 +916,10 @@ func _target_with_card(slot: Array) -> void:
 func _on_push(direction: int) -> void:
 	if push_target == null:
 		return
-	_apply(combat.play_spell(sel_hand, [push_target], direction))
+	if sel_power:
+		_apply(combat.use_power([push_target], direction))
+	else:
+		_apply(combat.play_spell(sel_hand, [push_target], direction))
 
 
 func _apply(err: String) -> void:

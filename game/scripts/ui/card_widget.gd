@@ -251,6 +251,38 @@ static func heading(text: String, font_size: int, color: Color) -> Label:
 	return l
 
 
+## A god power's emblem: its glyph tinted in the pantheon colour on a dark glass disc.
+static func power_disc(power_id: String, d: float, glow := false) -> Control:
+	var tint: Color = FACTION_COLORS[Data.GOD_POWERS[power_id]["pantheon"]].lightened(0.2)
+	var root := Control.new()
+	root.custom_minimum_size = Vector2(d, d)
+	root.size = Vector2(d, d)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var disc := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.05, 0.1, 0.92)
+	sb.border_color = Color(tint, 0.9)
+	sb.set_border_width_all(max(2, int(d / 28)))
+	sb.set_corner_radius_all(int(d))
+	sb.corner_detail = 24
+	sb.anti_aliasing_size = 1.2
+	sb.shadow_color = Color(tint, 0.5) if glow else Color(0, 0, 0, 0.5)
+	sb.shadow_size = int(d * 0.25) if glow else int(d * 0.08)
+	disc.add_theme_stylebox_override("panel", sb)
+	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	place(root, disc, 0, 0, -0.001, -0.001)
+	var glyph := TextureRect.new()
+	glyph.texture = load("res://art/glyphs/%s.svg" % power_id)
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	glyph.modulate = tint.lightened(0.35)
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var inset := d * 0.22
+	place(root, glyph, inset, inset, -inset - 0.001, -inset - 0.001)
+	return root
+
+
 ## The shared glass panel: translucent dark fill, hairline edge, soft deep shadow.
 static func glass_style(radius := 14, margin := 16) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()

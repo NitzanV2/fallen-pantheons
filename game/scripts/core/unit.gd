@@ -26,6 +26,8 @@ var deployed_round := 0
 var veil_round := 0
 var poisoned := false
 var siege_lane := -1
+## Keywords granted during the fight, on top of the card's own.
+var bonus_kw: Array = []
 
 
 func setup(p_uid: int, p_id: String, p_def: Dictionary, p_side: int) -> void:
@@ -49,11 +51,12 @@ func copy():
 			"shield", "alive", "revive_used", "is_token", "wide", "width", "empowered", "card", "temp_atk", "moved_round", "deployed_round",
 			"veil_round", "poisoned", "siege_lane"]:
 		u.set(prop, get(prop))
+	u.bonus_kw = bonus_kw.duplicate()
 	return u
 
 
 func has_kw(keyword: String) -> bool:
-	return keyword in def.get("keywords", [])
+	return keyword in def.get("keywords", []) or keyword in bonus_kw
 
 
 func display_name() -> String:

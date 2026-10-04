@@ -59,9 +59,16 @@ var shrine := {}
 var seen_events: Array = []
 var fights_won := 0
 var boss_id := ""
+## The chosen god power and its owned upgrade nodes.
+var power := ""
+var power_nodes: Array = []
+## Cards gained during the run (not the starting deck): from the power's pantheon, and from the other pantheons.
+var devotion := 0
+var foreign := 0
 
 
-func setup(p_seed: int, p_patron: String) -> void:
+## `p_power` defaults to the patron's first god power.
+func setup(p_seed: int, p_patron: String, p_power := "") -> void:
 	seed_value = p_seed
 	patron = p_patron
 	map_rng.seed = p_seed
@@ -71,12 +78,10 @@ func setup(p_seed: int, p_patron: String) -> void:
 	encounter_rng.seed = p_seed * 31 + 4
 	deck = Data.STARTER.duplicate()
 	deck.append(patron)
-	for p in Data.PATRONS:
-		if p["card"] == patron:
-			if p.has("relic"):
-				relics.append(p["relic"])
-			max_hp = p.get("hp", MAX_HP)
-			core_hp = max_hp
+	var p: Dictionary = Data.patron(patron)
+	max_hp = p.get("hp", MAX_HP)
+	core_hp = max_hp
+	power = p_power if p_power != "" else p["powers"][0]
 	_generate_map()
 	var bosses: Array = Data.BATTLE_POOLS.keys().filter(func(id): return Data.BATTLE_POOLS[id] == "boss")
 	boss_id = bosses[map_rng.randi_range(0, bosses.size() - 1)]
@@ -84,6 +89,67 @@ func setup(p_seed: int, p_patron: String) -> void:
 
 func has_relic(id: String) -> bool:
 	return id in relics
+
+
+func main_pantheon() -> String:
+	return Data.GOD_POWERS[power]["pantheon"]
+
+
+## Adds a gained card to the deck and counts it toward god-power upgrades.
+func add_card(id: String) -> void:
+	deck.append(id)
+	var faction: String = Data.CARDS[id]["faction"]
+	if faction == main_pantheon():
+		devotion += 1
+	elif faction in PANTHEONS:
+		foreign += 1
+
+
+# ---------------------------------------------------------------- god power
+
+## The next devotion count that earns an upgrade, or -1 when none are left.
+func next_threshold() -> int:
+	for t in Data.POWER_THRESHOLDS:
+		if devotion < t:
+			return t
+	return -1
+
+
+func upgrade_options() -> Array:
+	var nodes: Dictionary = Data.GOD_POWERS[power]["nodes"]
+	var out: Array = []
+	for id in nodes:
+		if power_nodes.has(id):
+			continue
+		var node: Dictionary = nodes[id]
+		if node["branch"] == "Pact":
+			if foreign >= Data.PACT_CARDS:
+				out.append(id)
+		elif node["tier"] == 1 or power_nodes.any(func(o): return nodes[o]["branch"] == node["branch"] and nodes[o]["tier"] == node["tier"] - 1):
+			out.append(id)
+	return out
+
+
+## Upgrades earned by devotion but not yet picked (0 when nothing can be picked).
+func pending_upgrades() -> int:
+	var earned: int = Data.POWER_THRESHOLDS.filter(func(t): return devotion >= t).size()
+	if upgrade_options().is_empty():
+		return 0
+	return maxi(0, earned - power_nodes.size())
+
+
+## What a fight needs to know about the god power.
+func power_state() -> Dictionary:
+	return {"id": power, "nodes": power_nodes.duplicate()}
+
+
+func choose_upgrade(node: String) -> String:
+	if pending_upgrades() <= 0:
+		return "No upgrade to pick."
+	if not upgrade_options().has(node):
+		return "That upgrade isn't available."
+	power_nodes.append(node)
+	return ""
 
 
 func floor_number() -> int:
@@ -336,6 +402,7 @@ func make_combat():
 	b["core"] = core_hp
 	b["core_max"] = max_hp
 	b["enemy_bonus"] = enemy_bonus()
+	b["god_power"] = power_state()
 	var c = Combat.new()
 	c.setup(b, deck, relics, seed_value * 1000 + current)
 	return c
@@ -376,29 +443,15 @@ func finish_reward(card_index: int) -> void:
 	if state != "reward":
 		return
 	if card_index >= 0 and card_index < reward["cards"].size():
-		deck.append(reward["cards"][card_index])
+		add_card(reward["cards"][card_index])
 	state = "map"
 
 
 # ---------------------------------------------------------------- cards and relics
 
-func owned_pantheons() -> Array:
-	var out: Array = []
-	for id in deck:
-		var f: String = Data.CARDS[id]["faction"]
-		if f in PANTHEONS and not out.has(f):
-			out.append(f)
-	return out
-
-
+## Three different cards: one from the god power's pantheon, two from the whole pool.
 func _card_choices(odds: Array, rng: RandomNumberGenerator) -> Array:
-	var picks: Array = []
-	var owned := owned_pantheons()
-	var unowned: Array = PANTHEONS.filter(func(p): return not owned.has(p))
-	if not owned.is_empty():
-		picks.append(_roll_card(odds, owned, picks, rng))
-	if not unowned.is_empty():
-		picks.append(_roll_card(odds, unowned, picks, rng))
+	var picks: Array = [_roll_card(odds, [main_pantheon()], [], rng)]
 	while picks.size() < 3:
 		picks.append(_roll_card(odds, [], picks, rng))
 	for i in range(picks.size() - 1, 0, -1):
@@ -490,7 +543,7 @@ func buy_card(i: int) -> String:
 		return "Not enough gold."
 	gold -= item["price"]
 	item["sold"] = true
-	deck.append(item["id"])
+	add_card(item["id"])
 	return ""
 
 
@@ -667,7 +720,7 @@ func _apply_fx(fx: Dictionary) -> Array:
 		else:
 			var odds: Array = NORMAL_ODDS if fx["card"] == "any" else RARITY_ONLY[fx["card"]]
 			id = _roll_card(odds, [], [], event_rng)
-		deck.append(id)
+		add_card(id)
 		notes.append("%s joins your deck." % Data.CARDS[id]["name"])
 	if fx.has("relic"):
 		var relic := _random_relic(event_rng)
@@ -730,7 +783,7 @@ func shrine_take_card(i: int) -> void:
 	if shrine["pending"] != "choose":
 		return
 	if i >= 0 and i < shrine["cards"].size():
-		deck.append(shrine["cards"][i])
+		add_card(shrine["cards"][i])
 		_add_result("%s joins your deck." % Data.CARDS[shrine["cards"][i]]["name"])
 	else:
 		_add_result("You take nothing.")

@@ -33,6 +33,7 @@ var run
 var content: VBoxContainer
 var sidebar_label: RichTextLabel
 var relic_box: VBoxContainer
+var power_box: Button
 var deck_button: Button
 var overlay: Control = null
 var info_overlay: Control = null
@@ -46,9 +47,9 @@ var flash := ""
 var sandbox_mode := false
 
 
-func start(seed_value: int, patron: String) -> void:
+func start(seed_value: int, patron: String, power := "") -> void:
 	run = Run.new()
-	run.setup(seed_value, patron)
+	run.setup(seed_value, patron, power)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build()
 	_show()
@@ -120,6 +121,12 @@ func _build() -> void:
 	sidebar_label.fit_content = true
 	sidebar_label.scroll_active = false
 	sidebar.add_child(sidebar_label)
+
+	power_box = Button.new()
+	power_box.custom_minimum_size = Vector2(0, 78)
+	power_box.pressed.connect(_open_power_tree)
+	CardWidget.style_button(power_box)
+	sidebar.add_child(power_box)
 
 	deck_button = Button.new()
 	deck_button.custom_minimum_size = Vector2(0, 40)
@@ -203,6 +210,7 @@ func _update_sidebar() -> void:
 	sidebar_label.text = "[font=res://fonts/ui_font.tres][font_size=26][color=#f2c75a]Act 1[/color][/font_size][/font]\n[font_size=18][img=22]res://art/icons/hp.png[/img] Core [b]%d[/b] / %d\n[img=22]res://art/icons/opt_gold.png[/img] Gold [b]%d[/b][/font_size]\n[color=#a8a8b8]Floor[/color] %d / %d   [color=#a8a8b8]Fights won[/color] %d\n[color=#a8a8b8]Boss:[/color] [color=#ff7a70]%s[/color]\n[color=#77778a]Seed %d[/color]" % [
 		run.core_hp, run.max_hp, run.gold, run.floor_number(), Run.FLOORS, run.fights_won,
 		run.boss_name(), run.seed_value]
+	_fill_power_box()
 	deck_button.text = "View deck (D) - %d cards" % run.deck.size()
 	map_button.visible = run.state != "map"
 	for child in relic_box.get_children():
@@ -223,6 +231,136 @@ func _update_sidebar() -> void:
 		relic_box.add_child(row)
 
 
+## The god power in the sidebar: emblem, name and progress toward the next upgrade. Click for the tree.
+func _fill_power_box() -> void:
+	for child in power_box.get_children():
+		child.queue_free()
+	var power: Dictionary = Data.GOD_POWERS[run.power]
+	power_box.tooltip_text = CardWidget.wrap_text("%s (once per fight)\n%s\n\nClick to see the upgrade tree." % [power["name"], Data.power_text(run.power, run.power_nodes)])
+	var disc := CardWidget.power_disc(run.power, 54)
+	disc.position = Vector2(10, 12)
+	power_box.add_child(disc)
+	var title := CardWidget.heading(power["name"], 16, Color(0.95, 0.92, 0.85))
+	CardWidget.place(power_box, title, 74, 12, -8, 36)
+	var next: int = run.next_threshold()
+	var status := "%d/%d upgrades" % [run.power_nodes.size(), Data.POWER_THRESHOLDS.size()]
+	if next != -1:
+		status += "   %s cards %d/%d" % [Data.FACTION_NAMES[run.main_pantheon()], run.devotion, next]
+	var l := CardWidget._label(status, 12, Color(0.68, 0.66, 0.76), false)
+	CardWidget.place(power_box, l, 74, 40, -8, 62)
+	for c in [title, l]:
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## Shown on the map step after a card pushed devotion past a threshold.
+func _show_upgrade() -> void:
+	var power: Dictionary = Data.GOD_POWERS[run.power]
+	var box := _centered_panel("%s answers your devotion" % power["god"])
+	box.get_parent().custom_minimum_size = Vector2(980, 0)
+	box.add_child(_power_header(run.power))
+	box.add_child(_rich("You have drafted [b]%d %s cards[/b]. Choose one upgrade for your god power." % [run.devotion, Data.FACTION_NAMES[run.main_pantheon()]]))
+	box.add_child(_power_tree(true))
+
+
+func _open_power_tree() -> void:
+	var box := _new_overlay(Data.GOD_POWERS[run.power]["name"])
+	box.add_child(_power_header(run.power))
+	box.add_child(_rich("Upgrades are earned at %s %s cards drafted (%d so far). The Pact needs %d cards from other pantheons (%d so far)." % [
+		", ".join(Data.POWER_THRESHOLDS.map(func(t): return str(t))), Data.FACTION_NAMES[run.main_pantheon()], run.devotion, Data.PACT_CARDS, run.foreign]))
+	box.add_child(_power_tree(false))
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(spacer)
+	var close := _button("Close", _close_overlay, box)
+	close.custom_minimum_size = Vector2(200, 44)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+
+
+func _power_header(id: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 18)
+	var disc := CardWidget.power_disc(id, 76, true)
+	disc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(disc)
+	var text := _rich("[b]Base:[/b] %s" % Data.GOD_POWERS[id]["text"], 17)
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(text)
+	return row
+
+
+## One column per branch, tiers top to bottom. When `pickable`, the nodes you can take are buttons.
+func _power_tree(pickable: bool) -> HBoxContainer:
+	var power: Dictionary = Data.GOD_POWERS[run.power]
+	var options: Array = run.upgrade_options()
+	var columns := {}
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	for n in power["nodes"]:
+		var node: Dictionary = power["nodes"][n]
+		if not columns.has(node["branch"]):
+			var col := VBoxContainer.new()
+			col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			col.add_theme_constant_override("separation", 10)
+			var label := CardWidget.heading(node["branch"].to_upper(), 16, GOLD)
+			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			col.add_child(label)
+			row.add_child(col)
+			columns[node["branch"]] = col
+		var state := "owned" if run.power_nodes.has(n) else ("open" if options.has(n) else "locked")
+		columns[node["branch"]].add_child(_tree_node(n, node, state, pickable and state == "open"))
+	return row
+
+
+func _tree_node(id: String, node: Dictionary, state: String, pickable: bool) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(0, 110)
+	CardWidget.style_button(b, false)
+	var accent: Color = {"owned": GOLD, "open": REACHABLE, "locked": Color(0.5, 0.48, 0.56)}[state]
+	for s in ["normal", "hover", "pressed", "disabled"]:
+		var sb: StyleBoxFlat = b.get_theme_stylebox(s)
+		sb.border_color = Color(accent, {"owned": 0.95, "open": 0.9 if pickable else 0.45, "locked": 0.25}[state])
+		sb.set_border_width_all(2 if state == "owned" or pickable else 1)
+		if state == "owned":
+			sb.bg_color = sb.bg_color.lerp(GOLD, 0.16)
+		if pickable:
+			sb.shadow_color = Color(accent, 0.35 if s == "hover" else 0.18)
+			sb.shadow_size = 14 if s == "hover" else 8
+	if pickable:
+		b.pressed.connect(_pick_upgrade.bind(id))
+	else:
+		b.mouse_filter = Control.MOUSE_FILTER_PASS
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(b, box, 14, 10, -14, -10)
+	var tag: String = {"owned": "OWNED", "open": "CHOOSE" if pickable else ("OPEN AT NEXT UPGRADE" if run.next_threshold() != -1 else "NOT CHOSEN"), "locked": _requirement(node)}[state]
+	var head := CardWidget._label("Tier %d  -  %s" % [node["tier"], tag] if node["branch"] != "Pact" else tag, 11, Color(accent, 0.9), true)
+	box.add_child(head)
+	var title := CardWidget.heading(node["name"], 16, Color(0.96, 0.94, 0.88) if state != "locked" else Color(0.7, 0.68, 0.75))
+	box.add_child(title)
+	var text := CardWidget._label(node["text"], 13, Color(0.82, 0.8, 0.86) if state != "locked" else Color(0.6, 0.58, 0.66), false)
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(text)
+	for c in [head, title, text]:
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return b
+
+
+func _requirement(node: Dictionary) -> String:
+	if node["branch"] == "Pact":
+		return "NEEDS %d CARDS FROM OTHER PANTHEONS (%d)" % [Data.PACT_CARDS, run.foreign]
+	return "NEEDS TIER %d" % (node["tier"] - 1)
+
+
+func _pick_upgrade(id: String) -> void:
+	var err: String = run.choose_upgrade(id)
+	if err == "":
+		var node: Dictionary = Data.GOD_POWERS[run.power]["nodes"][id]
+		flash = "%s: %s" % [node["name"], node["text"]]
+	_show()
+
+
 # ---------------------------------------------------------------- screens
 
 func _show() -> void:
@@ -234,7 +372,10 @@ func _show() -> void:
 	_update_sidebar()
 	match run.state:
 		"map":
-			_show_map()
+			if run.pending_upgrades() > 0:
+				_show_upgrade()
+			else:
+				_show_map()
 		"combat":
 			_start_combat()
 		"reward":

@@ -18,8 +18,14 @@ const TITLE_CROP := Rect2(0.02, 0.28, 0.96, 0.48)
 const TITLE_HEIGHT := 235
 const LIST_GROUPS := {"neutral": "Neutral", "norse": "Norse", "greek": "Greek", "egypt": "Egyptian", "divine": "Divine (shrines only)", "other": "Tokens, curses and statuses"}
 const RARITY_ORDER := ["Starter", "Common", "Uncommon", "Rare"]
+const PATRON_PROMPT := "The gods are dead. Choose the pantheon whose echoes will defend the Reliquary."
+const POWER_TILE := Vector2(420, 540)
 
 var menu: Control
+var subtitle: Label
+var patron_row: HBoxContainer
+var power_row: HBoxContainer
+var power_back: Button
 var sandbox: Control
 var sandbox_button: Button
 var card_list: Control = null
@@ -28,6 +34,8 @@ var run_view: Control
 var deck_option: OptionButton
 var seed_box: SpinBox
 var event_patron: OptionButton
+var power_option: OptionButton
+var power_upgraded: CheckBox
 var relic_checks := {}
 var deck_keys: Array = []
 
@@ -93,7 +101,7 @@ func _build_menu() -> void:
 	menu.add_child(root)
 
 	root.add_child(_title())
-	var subtitle := CardWidget._label("The gods are dead. Choose the pantheon whose echoes will defend the Reliquary.", 20, Color(0.82, 0.8, 0.9), true)
+	subtitle = CardWidget._label(PATRON_PROMPT, 20, Color(0.82, 0.8, 0.9), true)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(subtitle)
 
@@ -101,12 +109,26 @@ func _build_menu() -> void:
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(spacer)
-	var patrons := HBoxContainer.new()
-	patrons.alignment = BoxContainer.ALIGNMENT_CENTER
-	patrons.add_theme_constant_override("separation", 44)
-	root.add_child(patrons)
+	patron_row = HBoxContainer.new()
+	patron_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	patron_row.add_theme_constant_override("separation", 44)
+	root.add_child(patron_row)
 	for patron in Data.PATRONS:
-		patrons.add_child(_patron_tile(patron))
+		patron_row.add_child(_patron_tile(patron))
+	power_row = HBoxContainer.new()
+	power_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	power_row.add_theme_constant_override("separation", 44)
+	power_row.visible = false
+	root.add_child(power_row)
+
+	power_back = Button.new()
+	power_back.text = "Back to patrons"
+	power_back.position = Vector2(24, 24)
+	power_back.custom_minimum_size = Vector2(180, 40)
+	power_back.pressed.connect(_show_patrons)
+	power_back.visible = false
+	CardWidget.style_button(power_back, false, 16)
+	add_child(power_back)
 
 	sandbox_button = Button.new()
 	sandbox_button.text = "Battle sandbox"
@@ -118,10 +140,9 @@ func _build_menu() -> void:
 	CardWidget.style_button(sandbox_button)
 	add_child(sandbox_button)
 
-## A patron as an ornate card: art, name, Core HP, starting card and relic, and a Begin banner.
+## A patron as an ornate card: art, name, Core HP, starting card, its god powers, and a Choose banner.
 func _patron_tile(patron: Dictionary) -> Button:
 	var card: Dictionary = Data.CARDS[patron["card"]]
-	var relic: Dictionary = Data.RELICS[patron["relic"]]
 	var faction: String = card["faction"]
 	var tint: Color = CardWidget.FACTION_COLORS[faction]
 	var metal: Color = tint.lerp(GOLD, 0.35)
@@ -131,7 +152,7 @@ func _patron_tile(patron: Dictionary) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
-	b.pressed.connect(_start_run.bind(patron["card"]))
+	b.pressed.connect(_show_powers.bind(patron))
 	var face := Control.new()
 	face.size = PATRON_TILE
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -202,9 +223,25 @@ func _patron_tile(patron: Dictionary) -> Button:
 		var preview = get_tree().get_first_node_in_group("card_preview")
 		if preview:
 			preview.hide_card(card_row))
-	var relic_row := _patron_row(CardWidget.art("relics", patron["relic"], relic["name"], CardWidget.RELIC_COLOR, 20),
-		"Starting relic", relic["name"], relic["text"], GOLD.darkened(0.25), 28)
-	CardWidget.place(face, relic_row, 12, y + 114, -12, y + 190)
+	var powers_row := Panel.new()
+	var prsb := StyleBoxFlat.new()
+	prsb.bg_color = Color(1, 1, 1, 0.04)
+	prsb.set_corner_radius_all(6)
+	powers_row.add_theme_stylebox_override("panel", prsb)
+	powers_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(face, powers_row, 12, y + 114, -12, y + 190)
+	var powers_label := CardWidget._label("God powers (choose one)", 12, Color(0.56, 0.55, 0.63), false)
+	CardWidget.place(powers_row, powers_label, 10, 4, -10, 22)
+	for i in patron["powers"].size():
+		var id: String = patron["powers"][i]
+		var x: int = 8 + i * 166
+		var disc := CardWidget.power_disc(id, 40)
+		disc.position = Vector2(x, 26)
+		powers_row.add_child(disc)
+		var pname := CardWidget._label(Data.GOD_POWERS[id]["name"], 13, Color(0.92, 0.9, 0.96), false)
+		pname.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		pname.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		CardWidget.place(powers_row, pname, x + 46, 22, x + 162, 72)
 
 	var banner := Panel.new()
 	var bsb := StyleBoxFlat.new()
@@ -215,7 +252,7 @@ func _patron_tile(patron: Dictionary) -> Button:
 	banner.add_theme_stylebox_override("panel", bsb)
 	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	CardWidget.place(face, banner, 60, PATRON_TILE.y - 46, -60, PATRON_TILE.y - 12)
-	var begin := CardWidget._label("BEGIN RUN", 22, Color(0.14, 0.08, 0.02), false)
+	var begin := CardWidget._label("CHOOSE", 22, Color(0.14, 0.08, 0.02), false)
 	begin.add_theme_font_override("font", CardWidget.TITLE_FONT)
 	begin.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	begin.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -234,6 +271,120 @@ func _patron_tile(patron: Dictionary) -> Button:
 		sb.shadow_offset = Vector2(0, 5)
 		bsb.bg_color = Color(0.72, 0.52, 0.16))
 	return b
+
+
+## Step two of a new run: the chosen patron's god powers.
+func _show_powers(patron: Dictionary) -> void:
+	for child in power_row.get_children():
+		child.queue_free()
+	for id in patron["powers"]:
+		power_row.add_child(_power_tile(patron, id))
+	var faction: String = Data.CARDS[patron["card"]]["faction"]
+	subtitle.text = "Choose the %s god power you will carry into every fight." % Data.FACTION_NAMES[faction]
+	patron_row.visible = false
+	power_row.visible = true
+	power_back.visible = true
+	sandbox_button.visible = false
+	power_row.modulate.a = 0.0
+	power_row.create_tween().tween_property(power_row, "modulate:a", 1.0, 0.25)
+
+
+func _show_patrons() -> void:
+	subtitle.text = PATRON_PROMPT
+	patron_row.visible = true
+	power_row.visible = false
+	power_back.visible = false
+	sandbox_button.visible = true
+
+
+## A god power as a glass tile: emblem, name, base effect, the upgrade tree, and a Begin banner.
+func _power_tile(patron: Dictionary, id: String) -> Button:
+	var power: Dictionary = Data.GOD_POWERS[id]
+	var tint: Color = CardWidget.FACTION_COLORS[power["pantheon"]].lightened(0.2)
+	var b := Button.new()
+	b.custom_minimum_size = POWER_TILE
+	b.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	b.pressed.connect(_start_run.bind(patron["card"], id))
+	var panel := Panel.new()
+	var sb := CardWidget.glass_style(18, 0)
+	sb.bg_color = Color(0.05, 0.045, 0.085, 0.92)
+	sb.border_color = Color(tint, 0.35)
+	panel.add_theme_stylebox_override("panel", sb)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(b, panel, 0, 0, -0.001, -0.001)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(panel, box, 26, 22, -26, -70)
+	var disc := CardWidget.power_disc(id, 96, true)
+	disc.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(disc)
+	var title := CardWidget.heading(power["name"], 26, tint.lightened(0.45))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(title)
+	var sub := CardWidget._label("Once per fight, free, during planning", 13, Color(0.62, 0.6, 0.7), false)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(sub)
+	var text := CardWidget._label(power["text"], 16, Color(0.92, 0.9, 0.86), false)
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(text)
+	var tree_title := CardWidget.heading("Upgrade tree", 15, GOLD)
+	box.add_child(tree_title)
+	var tree := RichTextLabel.new()
+	tree.bbcode_enabled = true
+	tree.fit_content = true
+	tree.scroll_active = false
+	tree.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tree.add_theme_font_size_override("normal_font_size", 13)
+	tree.add_theme_font_size_override("bold_font_size", 13)
+	tree.text = _tree_summary(power, Data.FACTION_NAMES[power["pantheon"]])
+	box.add_child(tree)
+
+	var banner := Panel.new()
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.8, 0.6, 0.24)
+	bsb.border_color = Color(1.0, 0.9, 0.62, 0.9)
+	bsb.set_border_width_all(1)
+	bsb.set_corner_radius_all(8)
+	banner.add_theme_stylebox_override("panel", bsb)
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CardWidget.place(panel, banner, 90, POWER_TILE.y - 54, -90, POWER_TILE.y - 16)
+	var begin := CardWidget.heading("BEGIN RUN", 18, Color(0.14, 0.08, 0.02))
+	begin.remove_theme_color_override("font_shadow_color")
+	begin.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	begin.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	CardWidget.place(banner, begin, 0, 0, -0.001, -0.001)
+
+	b.mouse_entered.connect(func():
+		sb.border_color = Color(tint, 0.85)
+		sb.shadow_color = Color(tint, 0.35)
+		bsb.bg_color = Color(0.9, 0.7, 0.32))
+	b.mouse_exited.connect(func():
+		sb.border_color = Color(tint, 0.35)
+		sb.shadow_color = Color(0, 0, 0, 0.5)
+		bsb.bg_color = Color(0.8, 0.6, 0.24))
+	CardWidget._hover_motion(b, 1.02)
+	return b
+
+
+## One line per branch: "Chain: Forked Bolt > Storm Chain", plus how upgrades are earned.
+static func _tree_summary(power: Dictionary, pantheon_name: String) -> String:
+	var branches := {}
+	for n in power["nodes"]:
+		var node: Dictionary = power["nodes"][n]
+		if not branches.has(node["branch"]):
+			branches[node["branch"]] = []
+		branches[node["branch"]].append(node["name"])
+	var lines: Array = []
+	for branch in branches:
+		lines.append("[b][color=#f2c75a]%s[/color][/b]  %s" % [branch, "  >  ".join(branches[branch])])
+	lines.append("[color=#8f8ca0]Earn upgrades by drafting %s cards (at %s). Pact needs %d cards from other pantheons.[/color]" % [
+		pantheon_name, ", ".join(Data.POWER_THRESHOLDS.map(func(t): return str(t))), Data.PACT_CARDS])
+	return "\n".join(lines)
 
 
 ## "Starting card / relic" line: framed thumbnail, label, name and rules text. Clicks pass to the tile.
@@ -398,6 +549,16 @@ func _build_sandbox() -> void:
 	seed_box.max_value = 999999
 	seed_box.value = 0
 	options.add_child(seed_box)
+
+	options.add_child(_heading("God power"))
+	power_option = OptionButton.new()
+	power_option.add_item("None")
+	for id in Data.GOD_POWERS:
+		power_option.add_item(Data.GOD_POWERS[id]["name"])
+	options.add_child(power_option)
+	power_upgraded = CheckBox.new()
+	power_upgraded.text = "With every upgrade"
+	options.add_child(power_upgraded)
 
 	options.add_child(_heading("Extra relics"))
 	for id in Data.RELICS:
@@ -574,6 +735,7 @@ func _hide_menus() -> void:
 	menu.visible = false
 	sandbox.visible = false
 	sandbox_button.visible = false
+	power_back.visible = false
 
 
 func _start_battle(battle: Dictionary) -> void:
@@ -588,6 +750,11 @@ func _start_battle(battle: Dictionary) -> void:
 	if seed_value == 0:
 		seed_value = randi_range(1, 999999)
 
+	if power_option.selected > 0:
+		var power_id: String = Data.GOD_POWERS.keys()[power_option.selected - 1]
+		battle = battle.duplicate()
+		battle["god_power"] = {"id": power_id, "nodes": Data.GOD_POWERS[power_id]["nodes"].keys() if power_upgraded.button_pressed else []}
+
 	_hide_menus()
 	battle_view = BattleView.new()
 	add_child(battle_view)
@@ -595,7 +762,7 @@ func _start_battle(battle: Dictionary) -> void:
 	battle_view.start(battle, deck_key, relics, seed_value)
 
 
-func _start_run(patron: String) -> void:
+func _start_run(patron: String, power := "") -> void:
 	var seed_value := int(seed_box.value)
 	if seed_value == 0:
 		seed_value = randi_range(1, 999999)
@@ -603,7 +770,7 @@ func _start_run(patron: String) -> void:
 	run_view = RunView.new()
 	add_child(run_view)
 	run_view.exit_requested.connect(_back_to_menu)
-	run_view.start(seed_value, patron)
+	run_view.start(seed_value, patron, power)
 
 
 ## Sandbox battles return to the sandbox; runs return to the patron screen.
@@ -614,4 +781,5 @@ func _back_to_menu() -> void:
 			view.queue_free()
 	battle_view = null
 	run_view = null
+	_show_patrons()
 	_show_sandbox(to_sandbox)

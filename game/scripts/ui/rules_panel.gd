@@ -234,6 +234,7 @@ func _cards(page: VBoxContainer) -> void:
 		["cards/divine_favor.jpg", "Spells", "Go to the discard pile after casting, unless they [b]Exhaust[/b]."],
 	], 64)
 	_tip(page, "Dimmed cards can't be played right now: not enough Faith, or no legal target.")
+	page.add_child(_rich("[b]God power:[/b] the power you chose for the run sits in the sidebar (or press [b]G[/b]). Use it [b]once per fight[/b] during planning; it costs no Faith. Drafting cards of your patron's pantheon unlocks upgrades for it between fights."))
 	_heading(page, "push_right", "Moving units")
 	page.add_child(_rich("Once per round, click one of your units, then an empty slot on your grid, to move it (or drag it there). Some cards give extra moves (Loki, Longship). The status panel shows your moves left.\n\nUnits that entered the board this round - deployed, returned by Book of the Dead, or summoned by a spell - can't move until the next round. Units on Quicksand can't move at all."))
 	_heading(page, "opt_curse", "Curses and statuses")

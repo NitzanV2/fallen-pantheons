@@ -40,6 +40,8 @@ func _initialize() -> void:
 	test_terrain_cards()
 	test_restart_plan()
 	test_patron_relics()
+	test_god_powers()
+	test_power_upgrades()
 	test_round_scaling()
 	test_tooltip_wrap()
 	fuzz_all_battles()
@@ -684,8 +686,201 @@ func test_patron_relics() -> void:
 	for patron in Data.PATRONS:
 		var run = Run.new()
 		run.setup(1, patron["card"])
-		check(run.relics == [patron["relic"]], "patron %s starts with its relic" % patron["card"])
-		check(not run._relics_left() or run._random_relic(RandomNumberGenerator.new()) != patron["relic"], "patron relic not in pool")
+		check(run.relics.is_empty(), "patron %s starts without a relic" % patron["card"])
+		check(run.power == patron["powers"][0], "patron %s defaults to its first power" % patron["card"])
+		for id in patron["powers"]:
+			check(Data.GOD_POWERS[id]["pantheon"] == Data.CARDS[patron["card"]]["faction"], "power %s belongs to the patron's pantheon" % id)
+	for id in ["mead_of_the_einherjar", "spartan_standard", "scarab_amulet"]:
+		check(Data.RELICS[id].get("pool", true), "former patron relic %s is in the relic pool" % id)
+
+
+func _with_power(c, id: String, nodes: Array = []):
+	c.power = {"id": id, "nodes": nodes}
+	c.power_uses = 1
+	return c
+
+
+func test_god_powers() -> void:
+	for id in Data.GOD_POWERS:
+		var power: Dictionary = Data.GOD_POWERS[id]
+		check(ResourceLoader.exists("res://art/glyphs/%s.svg" % id), "power %s has a glyph" % id)
+		check(power["target"] in ["ally", "enemy", "enemy_front", "empty_ally_slot"], "power %s target" % id)
+		var branches := {}
+		for n in power["nodes"]:
+			var node: Dictionary = power["nodes"][n]
+			branches[node["branch"]] = branches.get(node["branch"], 0) + 1
+			if node["tier"] > 1:
+				check(power["nodes"].values().any(func(o): return o["branch"] == node["branch"] and o["tier"] == node["tier"] - 1), "power %s node %s has a lower tier" % [id, n])
+		check(branches.get("Pact", 0) == 1 and branches.size() == 3, "power %s: two branches and a Pact" % id)
+
+	# Tyr's Oath
+	var c = _with_power(fresh(), "tyrs_oath")
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var victim = c.debug_place("ark_sentinel", P, 0, F)
+	var other = c.debug_place("ark_sentinel", P, 1, F)
+	check(c.use_power([[P, F, 0]]) == "", "tyr: used")
+	check(not victim.alive and c.effective_atk(other) == 3 and other.atk == 2, "tyr: sacrifice, others +1 ATK this round")
+	check(c.use_power([[P, F, 1]]) != "", "tyr: only once per fight")
+	c = _with_power(fresh(), "tyrs_oath", ["blood_1", "blood_2", "oath_1", "oath_2", "pact"])
+	c.core_hp = 40
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	victim = c.debug_place("ark_sentinel", P, 0, F)
+	other = c.debug_place("ark_sentinel", P, 1, F)
+	var faith_before: int = c.faith
+	c.use_power([[P, F, 0]])
+	check(other.atk == 4, "tyr full: +2 ATK for the fight")
+	check(c.core_hp == 44, "tyr full: Core healed by the unit's HP")
+	check(c.hand.has(victim.card) and not c.discard.has(victim.card), "tyr full: card returns to hand")
+	check(c.faith == faith_before + 1, "tyr full: +1 Faith")
+
+	# Thor's Thunderclap
+	c = _with_power(fresh(), "thors_thunderclap")
+	var z = c.debug_place("hollowed_zealot", E, 1, F)
+	c.use_power([[E, F, 1]])
+	check(z.hp == 2, "thor: 3 damage")
+	c = _with_power(fresh(), "thors_thunderclap", ["storm_1", "storm_2", "hammer_1", "hammer_2", "pact"])
+	var front = c.debug_place("void_spawn", E, 1, F)
+	var back = c.debug_place("hollow_archer", E, 1, B)
+	var left = c.debug_place("hollowed_zealot", E, 0, F)
+	var ally = c.debug_place("ark_sentinel", P, 1, F)
+	c.use_power([[E, F, 1]])
+	check(not front.alive and not back.alive, "thor full: hits both units in the lane")
+	check(left.hp == 3, "thor full: shockwave hits the neighbour for 2")
+	check(ally.shield == 2, "thor full: Storm Shield")
+	check(c.power_uses == 1, "thor full: a kill refunds the power once")
+	c.use_power([[E, F, 0]])
+	check(c.power_uses == 0, "thor full: refund only once")
+	c = _with_power(fresh(), "thors_thunderclap", ["storm_1"])
+	c.falls = 5
+	z = c.debug_place("hollowed_zealot", E, 1, F)
+	z.max_hp = 20
+	z.hp = 20
+	c.use_power([[E, F, 1]])
+	check(z.hp == 14, "thor storm: +1 per fall, capped at +3")
+
+	# Zeus's Lightning Bolt
+	c = _with_power(fresh(), "zeus_lightning_bolt")
+	var a1 = c.debug_place("hollowed_zealot", E, 0, F)
+	var a2 = c.debug_place("hollowed_zealot", E, 2, F)
+	c.use_power([[E, F, 0]])
+	check(a1.hp == 3 and a2.hp == 4, "zeus: 2 to the target, chain 1")
+	c = _with_power(fresh(), "zeus_lightning_bolt", ["chain_1", "chain_2", "sky_1", "sky_2", "pact"])
+	var targets: Array = []
+	for lane in 4:
+		targets.append(c.debug_place("void_spawn", E, lane, F))
+	var archer = c.debug_place("echo_archer", P, 0, B)
+	faith_before = c.faith
+	c.use_power([[E, F, 0]])
+	check(not targets[0].alive, "zeus full: 4 damage kills")
+	check(targets.slice(1).all(func(t): return t.hp == 1), "zeus full: chains to three more for 2")
+	check(c.faith == faith_before + 1, "zeus full: Faith per kill")
+	check(c.effective_atk(archer) == 3, "zeus full: Ranged units +1 ATK")
+
+	# Poseidon's Tide
+	c = _with_power(fresh(), "poseidons_tide")
+	var s = c.debug_place("void_spawn", E, 1, F)
+	check(c.use_power([[E, F, 1]], 1) == "" and s.lane == 2 and s.hp == 3, "poseidon: pushed into an empty lane, no damage")
+	c = _with_power(fresh(), "poseidons_tide")
+	s = c.debug_place("void_spawn", E, 0, F)
+	c.use_power([[E, F, 0]], -1)
+	check(s.hp == 1, "poseidon: edge impact 2")
+	c = _with_power(fresh(), "poseidons_tide", ["wave_1", "wave_2", "undertow_1", "undertow_2"])
+	z = c.debug_place("hollowed_zealot", E, 1, F)
+	c.debug_place("ark_sentinel", P, 2, F)
+	var moves: int = c.moves_left
+	c.use_power([[E, F, 1]], 1)
+	check(not z.alive, "poseidon full: riptide 4 + ambush 2 kill a 5 HP zealot")
+	check(c.moves_left == moves + 1, "poseidon full: +1 move")
+
+	# Osiris's Return
+	c = _with_power(fresh(), "osiris_return")
+	check(not c.can_use_power(), "osiris: needs a fallen ally")
+	var dead = c.debug_place("ark_sentinel", P, 0, F)
+	c.debug_place("void_spawn", E, 3, F)
+	dead.hp = 0
+	c._kill(dead)
+	check(c.can_use_power(), "osiris: usable once an ally died")
+	c.use_power([[P, B, 2]])
+	var back_unit = c.unit_at(P, B, 2)
+	check(back_unit != null and back_unit.id == "ark_sentinel" and back_unit.hp == 1, "osiris: returns with 1 HP")
+	c = _with_power(fresh(), "osiris_return", ["life_1", "life_2", "wings_1", "wings_2", "pact"])
+	c.core_hp = 40
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	dead = c.debug_place("ark_sentinel", P, 0, F)
+	dead.hp = 0
+	c._kill(dead)
+	c.use_power([[P, F, 1]])
+	back_unit = c.unit_at(P, F, 1)
+	check(back_unit.hp == 4 and back_unit.shield == 3 and back_unit.atk == 4, "osiris full: full HP, Shield 3, +2 ATK")
+	check(back_unit.has_kw("revive") and c.core_hp == 43, "osiris full: Revive and Core healed")
+	back_unit.hp = 0
+	c._kill(back_unit)
+	check(back_unit.alive and back_unit.hp >= 1, "osiris full: the returned unit revives")
+
+	# Sekhmet's Plague
+	c = _with_power(fresh(), "sekhmets_plague")
+	var p1 = c.debug_place("hollowed_bulwark", E, 1, F)
+	var p2 = c.debug_place("hollowed_bulwark", E, 1, B)
+	var p3 = c.debug_place("hollowed_bulwark", E, 2, F)
+	c.use_power([[E, F, 1]])
+	check(p1.poisoned and p2.poisoned and not p3.poisoned, "sekhmet: poisons the lane only")
+	c.end_plan()
+	check(p1.hp == 7 and p3.hp == 8, "sekhmet: poison ticks 1 on enemies")
+	c = _with_power(fresh(), "sekhmets_plague", ["plague_1", "plague_2", "hunt_1", "hunt_2", "pact"])
+	c.core_hp = 40
+	p1 = c.debug_place("hollowed_bulwark", E, 1, F)
+	p3 = c.debug_place("hollowed_bulwark", E, 2, F)
+	var weak = c.debug_place("void_spawn", E, 0, F)
+	weak.hp = 1
+	var hurt = c.debug_place("ark_sentinel", P, 3, B)
+	hurt.hp = 2
+	c.use_power([[E, F, 1]])
+	check(p3.poisoned and not weak.alive, "sekhmet full: adjacent lanes, Lion's Bite kills a 1 HP enemy")
+	check(c.core_hp == 42, "sekhmet full: Feast heals 2 on a poisoned death")
+	check(hurt.hp == 3, "sekhmet full: Sun's Mercy heals allies")
+	check(p1.hp == 7, "sekhmet full: bite 1")
+	c.end_plan()
+	check(p1.hp <= 5, "sekhmet full: Virulence ticks 2")
+
+	# Undo round restores the power.
+	c = _with_power(fresh(), "thors_thunderclap")
+	c.debug_place("hollowed_zealot", E, 1, F)
+	c._plan_start = c._capture()
+	c.use_power([[E, F, 1]])
+	check(c.power_uses == 0 and c.can_restart_plan(), "power: counts as a plan action")
+	c.restart_plan()
+	check(c.power_uses == 1 and c.unit_at(E, F, 1).hp == 5, "power: Undo round restores it")
+
+
+func test_power_upgrades() -> void:
+	var run = Run.new()
+	run.setup(1, "myrmidon", "poseidons_tide")
+	check(run.power == "poseidons_tide" and run.main_pantheon() == "greek", "upgrades: chosen power")
+	check(run.pending_upgrades() == 0, "upgrades: none at start")
+	run.add_card("faith_surge")
+	run.add_card("hoplite")
+	check(run.devotion == 1 and run.foreign == 0, "upgrades: neutral cards don't count")
+	run.add_card("hoplite")
+	check(run.pending_upgrades() == 1, "upgrades: first threshold reached")
+	var options: Array = run.upgrade_options()
+	options.sort()
+	check(options == ["undertow_1", "wave_1"], "upgrades: only tier 1 at first (%s)" % [options])
+	check(run.choose_upgrade("wave_2") != "", "upgrades: tier 2 locked")
+	check(run.choose_upgrade("wave_1") == "" and run.pending_upgrades() == 0, "upgrades: picked")
+	check(run.choose_upgrade("undertow_1") != "", "upgrades: nothing pending")
+	for n in 3:
+		run.add_card("einherjar")
+	run.add_card("hoplite")
+	run.add_card("hoplite")
+	check(run.foreign == 3 and run.devotion == 4, "upgrades: counts by pantheon")
+	options = run.upgrade_options()
+	options.sort()
+	check(options == ["pact", "undertow_1", "wave_2"], "upgrades: tier 2 and Pact open (%s)" % [options])
+	run.choose_upgrade("pact")
+	check(run.power_state()["nodes"] == ["wave_1", "pact"], "upgrades: passed to fights")
+	var before: int = run.devotion
+	run.deck.append("hoplite")
+	check(run.devotion == before, "upgrades: removing or appending outside add_card doesn't count")
 
 
 func test_round_scaling() -> void:
@@ -735,10 +930,14 @@ func test_restart_plan() -> void:
 	var fresh_c = fresh()
 	check(not fresh_c.can_restart_plan(), "restart: nothing to undo at start")
 	check(fresh_c.restart_plan() != "", "restart: refused with nothing to undo")
-	for battle in Data.BATTLES:
+	var power_ids: Array = Data.GOD_POWERS.keys()
+	for plain in Data.BATTLES:
 		for s in range(1, 6):
-			var tag := "restart %s seed %d" % [battle["id"], s]
+			var tag := "restart %s seed %d" % [plain["id"], s]
 			var deck_ids := Data.deck_cards("sandbox")
+			var battle: Dictionary = plain.duplicate()
+			var pid: String = power_ids[s % power_ids.size()]
+			battle["god_power"] = {"id": pid, "nodes": Data.GOD_POWERS[pid]["nodes"].keys() if s % 2 == 0 else []}
 			var a = Combat.new()
 			var b = Combat.new()
 			a.setup(battle, deck_ids, [], s)
@@ -752,6 +951,8 @@ func test_restart_plan() -> void:
 				for n in 4:
 					if b.phase == "plan" and not b.hand.is_empty():
 						_random_play(b, junk.randi_range(0, b.hand.size() - 1), junk)
+				if b.phase == "plan":
+					_random_power(b, junk)
 				if b.phase != "plan":
 					break
 				if b.can_restart_plan():
@@ -766,6 +967,9 @@ func test_restart_plan() -> void:
 						_random_play(a, ra.randi_range(0, a.hand.size() - 1), ra)
 					if b.phase == "plan" and not b.hand.is_empty():
 						_random_play(b, rb.randi_range(0, b.hand.size() - 1), rb)
+				if a.phase == "plan" and b.phase == "plan" and ra.randf() < 0.3 and rb.randf() < 0.3:
+					_random_power(a, ra)
+					_random_power(b, rb)
 				a.end_plan()
 				b.end_plan()
 				check(_state_text(a) == _state_text(b), "%s round %d: same result after restart" % [tag, a.round_num])
@@ -781,6 +985,13 @@ func fuzz_all_battles() -> void:
 			_fuzz_one(battle, Data.deck_cards(battle["deck"]), battle["relics"], s)
 		for s in range(21, 31):
 			_fuzz_one(battle, Data.deck_cards("sandbox"), combat_relics, s)
+		var n := 31
+		for id in Data.GOD_POWERS:
+			for full in [false, true]:
+				var with_power: Dictionary = battle.duplicate()
+				with_power["god_power"] = {"id": id, "nodes": Data.GOD_POWERS[id]["nodes"].keys() if full else []}
+				_fuzz_one(with_power, Data.deck_cards("sandbox"), combat_relics if full else [], n)
+				n += 1
 
 
 func _fuzz_one(battle: Dictionary, deck_ids: Array, relics: Array, seed_value: int) -> void:
@@ -803,6 +1014,9 @@ func _autoplay(c, rng: RandomNumberGenerator, total_cards: int, tag: String) -> 
 			_check_invariants(c, total_cards, tag)
 		while c.phase == "plan" and c.moves_left > 0 and rng.randf() < 0.4:
 			_random_move(c, rng)
+			_check_invariants(c, total_cards, tag)
+		if c.phase == "plan" and rng.randf() < 0.5:
+			_random_power(c, rng)
 			_check_invariants(c, total_cards, tag)
 		if c.phase == "plan" and c.can_restart_plan() and rng.randf() < 0.1:
 			c.restart_plan()
@@ -859,8 +1073,7 @@ func test_reward_rule() -> void:
 		var picks: Array = run._card_choices(Run.NORMAL_ODDS, run.reward_rng)
 		var factions: Array = picks.map(func(id): return Data.CARDS[id]["faction"])
 		check(picks.size() == 3, "reward: three choices")
-		check(factions.has("greek"), "reward: a safe pick from an owned pantheon (seed %d)" % s)
-		check(factions.has("norse") or factions.has("egypt"), "reward: a pivot pick (seed %d)" % s)
+		check(factions.has("greek"), "reward: a card from the god power's pantheon (seed %d)" % s)
 		check(picks[0] != picks[1] and picks[1] != picks[2] and picks[0] != picks[2], "reward: no duplicates")
 
 
@@ -1008,9 +1221,9 @@ func _play_shrine(run, rng: RandomNumberGenerator, tag: String) -> void:
 func fuzz_runs() -> void:
 	var outcomes := {"victory": 0, "defeat": 0}
 	for s in range(1, 61):
-		var patron: String = Data.PATRONS[s % 3]["card"]
+		var patron: Dictionary = Data.PATRONS[s % 3]
 		var run = Run.new()
-		run.setup(s, patron)
+		run.setup(s, patron["card"], patron["powers"][(s / 3) % 2])
 		var rng := RandomNumberGenerator.new()
 		rng.seed = s * 104729
 		var tag := "run seed %d" % s
@@ -1019,6 +1232,12 @@ func fuzz_runs() -> void:
 			guard += 1
 			match run.state:
 				"map":
+					while run.pending_upgrades() > 0:
+						var ups: Array = run.upgrade_options()
+						check(not ups.is_empty(), "%s: upgrade pending with no options" % tag)
+						if ups.is_empty():
+							break
+						check(run.choose_upgrade(ups[rng.randi_range(0, ups.size() - 1)]) == "", "%s: choose upgrade" % tag)
 					var options: Array = run.available_nodes()
 					check(not options.is_empty(), "%s: no available node on the map" % tag)
 					if options.is_empty():
@@ -1085,6 +1304,14 @@ func _random_play(c, i: int, rng: RandomNumberGenerator) -> void:
 					if a != b and a[1] == b[1]:
 						_expect_ok(c.play_spell(i, [a, b]), def["name"])
 						return
+
+
+func _random_power(c, rng: RandomNumberGenerator) -> void:
+	var targets: Array = c.power_targets()
+	if targets.is_empty():
+		return
+	var t: Array = targets[rng.randi_range(0, targets.size() - 1)]
+	_expect_ok(c.use_power([t], -1 if rng.randf() < 0.5 else 1), c.power_def()["name"])
 
 
 func _random_move(c, rng: RandomNumberGenerator) -> void:

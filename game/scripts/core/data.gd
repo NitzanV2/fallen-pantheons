@@ -146,13 +146,12 @@ const RELICS := {
 	"ankh_of_eternity": {"name": "Ankh of Eternity", "rarity": "Rare", "combat": true, "text": "All allies have Revive. Each time an ally Revives, the Core takes 2 damage."},
 	"golden_fleece": {"name": "Golden Fleece", "rarity": "Rare", "combat": true, "text": "Fights last 1 extra round."},
 	"void_touched_heart": {"name": "Void-Touched Heart", "rarity": "Rare", "combat": true, "text": "+1 Faith every round. The Core takes 3 damage at the start of each fight."},
-	# Patron starting relics (never offered in shops or rewards).
-	"mead_of_the_einherjar": {"name": "Mead of the Einherjar", "rarity": "Patron", "combat": true, "pool": false, "text": "The first time an ally dies each fight, all other allies gain +1 ATK."},
-	"spartan_standard": {"name": "Spartan Standard", "rarity": "Patron", "combat": true, "pool": false, "text": "Start of each round: front-row allies with allies on both sides gain Shield 1."},
+	"mead_of_the_einherjar": {"name": "Mead of the Einherjar", "rarity": "Uncommon", "combat": true, "text": "The first time an ally dies each fight, all other allies gain +1 ATK."},
+	"spartan_standard": {"name": "Spartan Standard", "rarity": "Uncommon", "combat": true, "text": "Start of each round: front-row allies with allies on both sides gain Shield 1."},
 	"dragon_prow": {"name": "Dragon Prow", "rarity": "Uncommon", "combat": true, "text": "Units you move gain +2 ATK for the rest of the round."},
 	"oracles_tripod": {"name": "Oracle's Tripod", "rarity": "Uncommon", "combat": true, "text": "When you cast your second spell in a round, gain 1 Faith."},
 	"sacred_hive": {"name": "Sacred Hive", "rarity": "Uncommon", "combat": true, "text": "Start of each fight: summon two 1/1 Scarabs in your back row."},
-	"scarab_amulet": {"name": "Scarab Amulet", "rarity": "Patron", "combat": true, "pool": false, "text": "End of each round: heal every ally by 1."},
+	"scarab_amulet": {"name": "Scarab Amulet", "rarity": "Uncommon", "combat": true, "text": "End of each round: heal every ally by 1."},
 	"seers_lens": {"name": "Seer's Lens", "rarity": "Common", "combat": false, "pool": false, "text": "At the start of each fight, see enemy intents for rounds 1 and 2."},
 	"pilgrims_pouch": {"name": "Pilgrim's Pouch", "rarity": "Common", "combat": false, "text": "+8 gold after each won fight."},
 	"healing_ampoule": {"name": "Healing Ampoule", "rarity": "Common", "combat": false, "text": "After each won fight, heal the Core by 3."},
@@ -278,10 +277,77 @@ const FACTION_NAMES := {"neutral": "Neutral", "norse": "Norse", "greek": "Greek"
 const FACTION_TITLES := {"norse": "The Doomed", "greek": "The Olympians", "egypt": "The Eternal"}
 
 const PATRONS := [
-	{"card": "shieldmaiden", "relic": "mead_of_the_einherjar", "hp": 55, "label": "Shieldmaiden (Norse)"},
-	{"card": "myrmidon", "relic": "spartan_standard", "hp": 55, "label": "Myrmidon (Greek)"},
-	{"card": "mummy_guardian", "relic": "scarab_amulet", "hp": 55, "label": "Mummy Guardian (Egyptian)"},
+	{"card": "shieldmaiden", "powers": ["tyrs_oath", "thors_thunderclap"], "hp": 55, "label": "Shieldmaiden (Norse)"},
+	{"card": "myrmidon", "powers": ["zeus_lightning_bolt", "poseidons_tide"], "hp": 55, "label": "Myrmidon (Greek)"},
+	{"card": "mummy_guardian", "powers": ["osiris_return", "sekhmets_plague"], "hp": 55, "label": "Mummy Guardian (Egyptian)"},
 ]
+
+# God powers: one is chosen at run start and used once per fight during planning, for free.
+# "target" uses the spell target values at the top of this file. Powers respect Spellward but
+# are not spells (they don't trigger Pythia, Hermes or Oracle's Tripod).
+#
+# Upgrade trees: two branches of tiers 1-2 plus one Pact node. Drafting cards of the power's
+# pantheon earns a pick at each POWER_THRESHOLDS count; a tier-2 node needs its tier-1 node.
+# The Pact node needs PACT_CARDS drafted cards from any other pantheon, so new pantheons never
+# change a tree. Later acts add thresholds and deeper tiers on top of these nodes.
+const POWER_THRESHOLDS := [2, 4, 6]
+const PACT_CARDS := 3
+const GOD_POWERS := {
+	"tyrs_oath": {"name": "Tyr's Oath", "short": "Oath", "god": "Tyr", "pantheon": "norse", "target": "ally",
+		"text": "Sacrifice one of your units (On-Death and Revive still trigger). Your other units gain +1 ATK this round.",
+		"nodes": {
+			"blood_1": {"branch": "Blood", "tier": 1, "name": "Blood Price", "text": "Your other units gain +2 ATK instead of +1."},
+			"blood_2": {"branch": "Blood", "tier": 2, "name": "Undying Oath", "text": "The ATK bonus lasts the whole fight."},
+			"oath_1": {"branch": "Oath", "tier": 1, "name": "Hand of Tyr", "text": "Heal the Core by the sacrificed unit's HP."},
+			"oath_2": {"branch": "Oath", "tier": 2, "name": "Sworn Return", "text": "If the unit stays dead, its card returns to your hand."},
+			"pact": {"branch": "Pact", "tier": 1, "name": "Blood Pact", "text": "Also gain 1 Faith."},
+		}},
+	"thors_thunderclap": {"name": "Thor's Thunderclap", "short": "Thunderclap", "god": "Thor", "pantheon": "norse", "target": "enemy",
+		"text": "Deal 3 damage to an enemy.",
+		"nodes": {
+			"storm_1": {"branch": "Storm", "tier": 1, "name": "Wrath of the Fallen", "text": "+1 damage for each time one of your units fell this fight (up to +3)."},
+			"storm_2": {"branch": "Storm", "tier": 2, "name": "Thunder Returns", "text": "If it kills, you can use it again this fight (once)."},
+			"hammer_1": {"branch": "Hammer", "tier": 1, "name": "Mjolnir's Arc", "text": "Also hits the other enemy in the target's lane."},
+			"hammer_2": {"branch": "Hammer", "tier": 2, "name": "Shockwave", "text": "Also deals 2 damage to the enemies left and right of the target."},
+			"pact": {"branch": "Pact", "tier": 1, "name": "Storm Shield", "text": "Your units in the target's lane gain Shield 2."},
+		}},
+	"zeus_lightning_bolt": {"name": "Zeus's Lightning Bolt", "short": "Lightning Bolt", "god": "Zeus", "pantheon": "greek", "target": "enemy",
+		"text": "Deal 2 damage to an enemy, then the bolt chains to one random other enemy for 1.",
+		"nodes": {
+			"chain_1": {"branch": "Chain", "tier": 1, "name": "Forked Bolt", "text": "Chains to two more enemies."},
+			"chain_2": {"branch": "Chain", "tier": 2, "name": "Storm Chain", "text": "Chains deal 2 damage."},
+			"sky_1": {"branch": "Sky", "tier": 1, "name": "Thunderhead", "text": "The first hit deals 4."},
+			"sky_2": {"branch": "Sky", "tier": 2, "name": "Divine Spark", "text": "Gain 1 Faith for each enemy the bolt kills."},
+			"pact": {"branch": "Pact", "tier": 1, "name": "Charged Ranks", "text": "Your Ranged units gain +1 ATK this round."},
+		}},
+	"poseidons_tide": {"name": "Poseidon's Tide", "short": "Tide", "god": "Poseidon", "pantheon": "greek", "target": "enemy_front",
+		"text": "Push an enemy front unit one lane. If it hits a unit or the edge, both take 2. Immovable units are immune.",
+		"nodes": {
+			"wave_1": {"branch": "Wave", "tier": 1, "name": "Crashing Wave", "text": "Impacts deal 4 instead of 2."},
+			"wave_2": {"branch": "Wave", "tier": 2, "name": "Riptide", "text": "The pushed enemy takes the impact damage even when nothing stops it."},
+			"undertow_1": {"branch": "Undertow", "tier": 1, "name": "Ambush Current", "text": "Your front unit in the lane where it ends up strikes it for its ATK."},
+			"undertow_2": {"branch": "Undertow", "tier": 2, "name": "Flowing Ranks", "text": "Gain 1 extra move this round."},
+			"pact": {"branch": "Pact", "tier": 1, "name": "Sea Spray", "text": "Draw a card."},
+		}},
+	"osiris_return": {"name": "Osiris's Return", "short": "Return", "god": "Osiris", "pantheon": "egypt", "target": "empty_ally_slot",
+		"text": "Return the last ally that died this fight to an empty tile with 1 HP.",
+		"nodes": {
+			"life_1": {"branch": "Life", "tier": 1, "name": "Breath of Life", "text": "It returns at full HP."},
+			"life_2": {"branch": "Life", "tier": 2, "name": "Embalmed", "text": "It also gains Shield 3."},
+			"wings_1": {"branch": "Wings", "tier": 1, "name": "Risen Fury", "text": "It gains +2 ATK."},
+			"wings_2": {"branch": "Wings", "tier": 2, "name": "Undying", "text": "It gains Revive."},
+			"pact": {"branch": "Pact", "tier": 1, "name": "Gift of the Nile", "text": "Also heal the Core by 3."},
+		}},
+	"sekhmets_plague": {"name": "Sekhmet's Plague", "short": "Plague", "god": "Sekhmet", "pantheon": "egypt", "target": "enemy",
+		"text": "Poison every enemy in the chosen enemy's lane. Poisoned units take 1 damage at the end of every round until healed.",
+		"nodes": {
+			"plague_1": {"branch": "Plague", "tier": 1, "name": "Spreading Sickness", "text": "Also poisons the lanes on either side."},
+			"plague_2": {"branch": "Plague", "tier": 2, "name": "Virulence", "text": "Poison deals 2 damage to enemies each round."},
+			"hunt_1": {"branch": "Hunt", "tier": 1, "name": "Lion's Bite", "text": "Also deal 1 damage to each enemy hit."},
+			"hunt_2": {"branch": "Hunt", "tier": 2, "name": "Feast", "text": "Whenever a poisoned enemy dies this fight, heal the Core by 2."},
+			"pact": {"branch": "Pact", "tier": 1, "name": "Sun's Mercy", "text": "Also heal each of your units by 1 (curing their Poison)."},
+		}},
+}
 
 # Which run encounters each battle can appear as.
 const BATTLE_POOLS := {
@@ -452,6 +518,23 @@ static func battle(id: String) -> Dictionary:
 	for b in BATTLES:
 		if b["id"] == id:
 			return b
+	return {}
+
+
+## A power's rules text with each owned upgrade appended on its own line.
+static func power_text(id: String, nodes: Array) -> String:
+	var power: Dictionary = GOD_POWERS[id]
+	var text: String = power["text"]
+	for n in power["nodes"]:
+		if nodes.has(n):
+			text += "\n+ %s: %s" % [power["nodes"][n]["name"], power["nodes"][n]["text"]]
+	return text
+
+
+static func patron(card: String) -> Dictionary:
+	for p in PATRONS:
+		if p["card"] == card:
+			return p
 	return {}
 
 

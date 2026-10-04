@@ -292,13 +292,41 @@ Each new pantheon costs about 16 cards, 2 trees, and one new pact node in every 
 - **Shrines and Divine cards:** shrine events name a random pantheon; they could favour the main pantheon.
 - **Existing relics** that assume the patron model (patron relics, Seer's Lens) need new homes.
 
-## 8. Rough implementation plan (when ready)
+## 8. Version 1 (implemented)
 
-1. **Data:** a powers table (id, pantheon, name, base effect, glyph) and a tree table per power (nodes, branch, requirements, effects).
-2. **Run setup:** the start screen picks one of six powers; starting deck and HP from the choice. Track cards added per pantheon and owned tree nodes.
-3. **Pools:** the reward rule guarantees one main-pantheon card per set of three.
-4. **Combat:** a god-power button in the plan phase, a free once-per-fight action reusing spell targeting; node effects as modifiers on the base effect; state saved for Restart planning.
-5. **Upgrades:** threshold and boss checks after each card is added; the node-pick screen; the tree view.
-6. **Tests and sim:** fuzz every power with random node sets; the sim reports win rate by power and capstone.
-7. **Docs:** update the content list, rulebook panel and print sheets.
+Act 1 only, so the trees are cut down from section 6. Sections 6-7 stay as the long-term target.
+
+### Flow
+
+1. **Choose a patron** (Norse, Greek, Egyptian): sets the main pantheon, the signature starting card and Core 55. Each patron tile shows its two powers.
+2. **Choose a god power** from that patron's two. "Back to patrons" returns to step 1.
+3. No starting relic. Mead of the Einherjar, Spartan Standard and Scarab Amulet are Uncommon pool relics.
+4. **Rewards:** one card of the three is always from the main pantheon; the other two come from the full pool.
+
+### Tree format (v1)
+
+- **Two branches** of the god's own pantheon, **two tiers** each. Tier 2 needs tier 1 of its branch.
+- **One generic Pact node:** needs 3 cards drafted from *any* other pantheon. Because it doesn't name a pantheon, adding a new pantheon changes no existing tree.
+- **Thresholds:** an upgrade at 2, 4 and 6 main-pantheon cards drafted, so 3 of the 5 nodes per run. Only cards added (rewards, shop, shrines) count; removing cards never loses progress.
+- The pick happens on the map right after a threshold is reached. The sidebar shows the power, upgrades owned and progress, and opens the tree.
+
+### Roster (v1)
+
+| Power | Base | Branch 1 | Branch 2 | Pact |
+|---|---|---|---|---|
+| Tyr's Oath | Sacrifice an ally; your other units gain +1 ATK this round | Blood: +2 ATK > lasts the fight | Oath: heal Core by its HP > the card returns to hand | +1 Faith |
+| Thor's Thunderclap | 3 damage to an enemy | Storm: +1 per ally fallen (max +3) > a kill refunds it once | Hammer: also hits another unit in the lane > 2 damage to the units left and right | Shield 2 to your units in the lane |
+| Zeus's Lightning Bolt | 2 damage, then chains to 1 random enemy for 1 | Chain: +2 chains > chains deal 2 | Sky: first hit deals 4 > Faith per kill | Ranged units +1 ATK this round |
+| Poseidon's Tide | Push an enemy front unit; impact 2 | Wave: impact 4 > Riptide | Undertow: your front unit in the new lane strikes > +1 move | Draw 1 |
+| Osiris's Return | Return the last dead ally to an empty tile at 1 HP | Life: full HP > Shield 3 | Wings: +2 ATK > Revive | Heal Core 3 |
+| Sekhmet's Plague | Poison every enemy in a lane | Plague: adjacent lanes too > enemy poison ticks for 2 | Hunt: 1 damage to each > poisoned kills heal Core 2 | Heal your units 1 |
+
+### Growing it later
+
+- **New acts:** append tier 3 nodes and more thresholds (8, 10, ...); add capstones and boss-granted upgrades. Existing nodes keep their ids and effects.
+- **New pantheons:** add a patron with two powers. The generic Pact needs no change; pantheon-specific pacts (section 6) can be added as extra nodes later.
+
+### First balance numbers (bot, 60 runs per power)
+
+Bot win rate is 50% with powers versus 28% when it never uses them. Per power: Tyr 30%, Thor 32%, Zeus 53%, Poseidon 58%, Osiris 60%, Sekhmet 68%. The Norse powers likely need a buff (the bot also plays Tyr cautiously).
 
