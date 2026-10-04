@@ -4,6 +4,7 @@ extends ColorRect
 
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const Data = preload("res://scripts/core/data.gd")
+const Run = preload("res://scripts/core/run.gd")
 
 const GOLD := Color(0.95, 0.78, 0.35)
 const TEXT := Color(0.88, 0.87, 0.92)
@@ -131,6 +132,15 @@ func _basics(page: VBoxContainer) -> void:
 		["revive", "Units may fall", "The run is lost only when the Core reaches 0 HP. Losing all your units does [b]not[/b] lose the fight - deploy again next round."],
 	])
 
+	var act2: Dictionary = Data.ACTS[1]
+	_heading(page, "map/void.png", "The run: %d acts" % Data.ACTS.size())
+	_grid(page, 3, [
+		["map/void.png", "Acts", "Each act is a %d-floor map that ends with a boss. Beat the last act's boss to win the run. No boss appears twice in a run." % Run.FLOORS],
+		["opt_heal", "Between acts", "Beating an act boss heals [b]%d%% of your missing Core HP[/b], recharges your god power and grants [b]a free god power upgrade[/b]." % roundi(Data.ACT_HEAL * 100)],
+		["map/elite.png", "Deeper acts", "Act 2's boss has +%d ATK / +%d HP, rewards are rarer and shop prices are %d%% higher." % [
+			act2["boss_bonus"].get("atk", 0), act2["boss_bonus"].get("hp", 0), roundi((act2["price_mult"] - 1.0) * 100)]],
+	])
+
 	_heading(page, "battle/tile_player.jpg", "The battlefield")
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 22)
@@ -210,7 +220,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["exhaust", "Exhaust", "After you cast it, the card is gone for the rest of this fight."],
 		["immovable", "Immovable", "Can't be pushed or swapped and takes no collision damage."],
 		["hp", "Threat", "Damage the enemy deals to your Core if it survives until time runs out."],
-		["map/elite.png", "Empowered", "Deeper floors Empower random enemies with +%d ATK / +%d HP: one per fight from floor %d, one more every %d floors after that (bosses excepted). They are marked on the board, and those fights get an extra round per step." % [
+		["map/elite.png", "Empowered", "Deeper floors Empower random enemies with +%d ATK / +%d HP: one per fight from floor %d, one more every %d floors after that (bosses excepted). The count restarts with each act's floors. They are marked on the board, and those fights get an extra round per step." % [
 			Data.BALANCE["empower_atk"], Data.BALANCE["empower_hp"], Data.BALANCE["scaling_every_floors"] + 1, Data.BALANCE["scaling_every_floors"]]],
 	])
 	_heading(page, "thorns", "Enemy keywords")
@@ -254,7 +264,7 @@ func _powers(page: VBoxContainer) -> void:
 	], 52)
 	_heading(page, "glyphs/poseidons_tide.svg", "Upgrades")
 	_grid(page, 2, [
-		["glyphs/sekhmets_plague.svg", "Devotion", "Every card of your main pantheon you [b]add[/b] to your deck (rewards, shop, events) counts. At [b]%s[/b] cards you choose an upgrade on the map. Removing cards never loses progress." % thresholds],
+		["glyphs/sekhmets_plague.svg", "Devotion", "Every card of your main pantheon you [b]add[/b] to your deck (rewards, shop, events) counts. At [b]%s[/b] cards you choose an upgrade on the map, and every act boss you beat grants one more. Removing cards never loses progress." % thresholds],
 		["glyphs/tyrs_oath.svg", "The tree", "Two branches of the god's own pantheon, two tiers each: tier 2 needs tier 1 of its branch. The [b]Pact[/b] node needs %d cards from [i]other[/i] pantheons, so mixing pays off too." % Data.PACT_CARDS],
 	], 52)
 	_tip(page, "Every set of three card rewards includes at least one card from your main pantheon. Click the power in the map sidebar to see your tree and progress.")
@@ -278,7 +288,7 @@ func _enemies(page: VBoxContainer) -> void:
 	], 60)
 
 	_heading(page, "map/void.png", "Bosses")
-	page.add_child(_rich("Each run faces one of three bosses, shown on the map from the start (hover the boss node). Boss fights have no round limit, and each boss favours some strategies and punishes others."))
+	page.add_child(_rich("Each act ends with a boss, shown on the map from the start of the act (hover the boss node); no boss appears twice in a run. Boss fights have no round limit, and each boss favours some strategies and punishes others."))
 	_grid(page, 3, [
 		["enemies/void_herald.jpg", "Void Herald", "Fills lanes 2-3. Its Void Tide deals 5 to your Core every round, so slow decks suffer. Until it drops to half HP it summons a Void Spawn every round and a Void Wisp in its back row every second round."],
 		["enemies/hel.jpg", "Hel", "Hides behind Draugr that rise again each round. HARVEST hits your lowest-HP unit, and every unit you lose for good heals her 2 and costs the Core 2. She grows stronger each round - keep your units alive."],

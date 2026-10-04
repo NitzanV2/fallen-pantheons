@@ -31,8 +31,24 @@ Things to check later. Add to this list as new questions come up.
 - **Bosses:** Herald 30.2, Hel ~25, Apep ~25. The Herald is still the costliest; Void Tide 5 -> 4 is the dial if it needs softening. After today's buff the Herald costs the most HP, though its win rate matches Hel's.
 - Runs reach the boss having lost about 19 of 55 HP, and the boss costs about 27 more on average.
 
+### Act 2 (placeholder, 60 runs per power)
+
+The run now has two acts. Act 2 reuses Act 1's battles at Act 1 difficulty until the Underworld battles exist; its boss gets +2 ATK / +15 HP.
+
+| Fight type | Act 2 avg HP lost (median / p90) |
+|---|---|
+| Early fights | 2.9 (2 / 6) |
+| Late fights | 7.2 (7 / 13) |
+| Elites | 7.3 (7 / 12) |
+| Bosses | 27.9 (25 / 40) |
+
+- About 29% of bot runs beat the Act 1 boss. With a 75% heal between acts, about 60% of those reach the Act 2 boss, entering with about 31 HP. Overall bot win rate is 6% (it was 28% when the run ended after Act 1).
+- **Heal between acts** (`ACT_HEAL`): 50% -> 10% of runs reach the Act 2 boss; 75% -> 18%; 100% -> 18% (with Act 1-difficulty placeholders).
+- **Act 2 at 8+ HP per fight is unsurvivable.** With an extra scaling step and late fights in the early pool, Act 2 cost about 8 HP per fight and only about 4% of runs reached its boss, even with a full heal (7%). Each act should cost about 20-25 HP before its boss.
+
 ## Current difficulty setup
 
+- Two acts of 15 floors each (`Data.ACTS`). Beating an act boss heals 75% of missing Core HP, recharges the power and grants a free upgrade.
 - 15-floor map (was 8), with two guaranteed shops, two guaranteed elites and a mid-act rest site.
 - Core HP 55 for every patron (set per patron in `PATRONS`, so classes can differ later). Rest sites heal 15.
 - Floor scaling every 6 floors: each step Empowers one more random enemy per fight (+2 ATK / +6 HP each) and adds a round. Floors 7-12 have one Empowered enemy and 4 rounds; floors 13-14 have two and 5 rounds.

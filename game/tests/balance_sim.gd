@@ -4,7 +4,8 @@ extends SceneTree
 ##
 ## Primary metric: Core HP lost per fight, by fight type, floor band, god power and encounter.
 ## Secondary: matchups (god power vs elite / boss) and win, timeout and loss rates per encounter.
-## Run win rate comes last: with one act and an unfinished card pool it depends on too much at once.
+## Run win rate comes last: with an unfinished card pool it depends on too much at once.
+## Every fight table is split by act; floors restart at 1 in each act.
 ##
 ## The bot is a rough stand-in for a thoughtful player: it blocks lanes with
 ## enemies, puts ranged and support units behind allies, and makes sensible
@@ -22,7 +23,7 @@ const POOLS := ["early", "late", "elite", "boss"]
 ## [label, first floor, last floor] using the 1-based floor numbers shown in game.
 const FLOOR_BANDS := [["floors 1-6", 1, 6], ["floors 7-12", 7, 12], ["floors 13-14", 13, 14], ["boss (15)", 15, 15]]
 
-## One entry per fight: {"id", "pool", "power", "floor", "lost", "result"}. "lost" is Core HP lost in
+## One entry per fight: {"id", "act", "pool", "power", "floor", "lost", "result"}. "lost" is Core HP lost in
 ## the fight, net of in-fight healing. A defeat ends the fight, so losses understate the true damage.
 var fights: Array = []
 var run_stats: Array = []
@@ -54,18 +55,22 @@ func _initialize() -> void:
 func _report_hp() -> void:
 	print("")
 	print("== CORE HP LOST PER FIGHT (primary) ==  avg (median / 90th percentile)")
-	var header := "%-24s" % ""
-	for pool in POOLS:
-		header += "%-18s" % pool
-	print(header + "all")
-	for power in Data.GOD_POWERS:
-		_hp_row(Data.GOD_POWERS[power]["name"], fights.filter(func(f): return f["power"] == power))
-	_hp_row("ALL POWERS", fights)
-	print("")
-	print("By floor band (all powers)")
-	for band in FLOOR_BANDS:
-		var in_band: Array = fights.filter(func(f): return f["floor"] >= band[1] and f["floor"] <= band[2])
-		print("  %-14s %5d fights   %s" % [band[0], in_band.size(), _summary(_lost(in_band))])
+	for act in range(1, Data.ACTS.size() + 1):
+		var in_act: Array = fights.filter(func(f): return f["act"] == act)
+		if in_act.is_empty():
+			continue
+		print("")
+		var header := "%-24s" % ("ACT %d" % act)
+		for pool in POOLS:
+			header += "%-18s" % pool
+		print(header + "all")
+		for power in Data.GOD_POWERS:
+			_hp_row(Data.GOD_POWERS[power]["name"], in_act.filter(func(f): return f["power"] == power))
+		_hp_row("ALL POWERS", in_act)
+		print("By floor band (all powers)")
+		for band in FLOOR_BANDS:
+			var in_band: Array = in_act.filter(func(f): return f["floor"] >= band[1] and f["floor"] <= band[2])
+			print("  %-14s %5d fights   %s" % [band[0], in_band.size(), _summary(_lost(in_band))])
 
 
 func _hp_row(label: String, rows: Array) -> void:
@@ -78,30 +83,37 @@ func _hp_row(label: String, rows: Array) -> void:
 func _report_encounters() -> void:
 	print("")
 	print("== ENCOUNTERS ==")
-	print("%-20s %-6s %6s %8s %7s %6s %5s   %6s %8s %6s" % ["encounter", "pool", "fights", "avg lost", "median", "p90", "max", "win%", "timeout%", "loss%"])
-	var ids: Array = []
+	print("%-4s %-20s %-6s %6s %8s %7s %6s %5s   %6s %8s %6s" % ["act", "encounter", "pool", "fights", "avg lost", "median", "p90", "max", "win%", "timeout%", "loss%"])
+	var keys: Array = []
 	for f in fights:
-		if not ids.has(f["id"]):
-			ids.append(f["id"])
-	ids.sort_custom(func(a, b): return [POOLS.find(Data.BATTLE_POOLS.get(a, "")), a] < [POOLS.find(Data.BATTLE_POOLS.get(b, "")), b])
-	for id in ids:
-		var rows: Array = fights.filter(func(f): return f["id"] == id)
+		var key: Array = [f["act"], POOLS.find(f["pool"]), f["id"], f["pool"]]
+		if not keys.has(key):
+			keys.append(key)
+	keys.sort()
+	for key in keys:
+		var rows: Array = fights.filter(func(f): return f["act"] == key[0] and f["id"] == key[2] and f["pool"] == key[3])
 		var lost := _lost(rows)
-		var n: int = rows.size()
-		print("%-20s %-6s %6d %8.1f %7.1f %6.1f %5d   %6.1f %8.1f %6.1f" % [id, Data.BATTLE_POOLS.get(id, "?"), n, _avg(lost),
+		print("%-4d %-20s %-6s %6d %8.1f %7.1f %6.1f %5d   %6.1f %8.1f %6.1f" % [key[0], key[2], key[3], rows.size(), _avg(lost),
 			_percentile(lost, 0.5), _percentile(lost, 0.9), lost.max(), _rate(rows, ["win"]), _rate(rows, ["timeout"]), _rate(rows, ["loss", "defeat"])])
 
 
 ## God power vs each elite and boss: avg Core HP lost / win%.
 func _report_matchups() -> void:
-	for pool in ["elite", "boss"]:
-		_matchup_table(pool, "elites" if pool == "elite" else "bosses")
+	for act in range(1, Data.ACTS.size() + 1):
+		for pool in ["elite", "boss"]:
+			_matchup_table(act, pool, "elites" if pool == "elite" else "bosses")
 
 
-func _matchup_table(pool: String, title: String) -> void:
+func _matchup_table(act: int, pool: String, title: String) -> void:
+	var rows_in: Array = fights.filter(func(f): return f["act"] == act and f["pool"] == pool)
+	if rows_in.is_empty():
+		return
 	print("")
-	print("== MATCHUPS: god power vs %s ==  avg HP lost / win%% (fights)" % title)
-	var ids: Array = Data.BATTLE_POOLS.keys().filter(func(id): return Data.BATTLE_POOLS[id] == pool)
+	print("== MATCHUPS (act %d): god power vs %s ==  avg HP lost / win%% (fights)" % [act, title])
+	var ids: Array = []
+	for f in rows_in:
+		if not ids.has(f["id"]):
+			ids.append(f["id"])
 	ids.sort()
 	var header := "%-24s" % ""
 	for id in ids:
@@ -110,24 +122,24 @@ func _matchup_table(pool: String, title: String) -> void:
 	for power in Data.GOD_POWERS:
 		var line := "%-24s" % Data.GOD_POWERS[power]["name"]
 		for id in ids:
-			var rows: Array = fights.filter(func(f): return f["power"] == power and f["id"] == id)
+			var rows: Array = rows_in.filter(func(f): return f["power"] == power and f["id"] == id)
 			line += "%-17s" % ("-" if rows.is_empty() else "%.1f / %d%% (%d)" % [_avg(_lost(rows)), roundi(_rate(rows, ["win"])), rows.size()])
 		print(line)
 
 
 func _report_runs() -> void:
 	print("")
-	print("== RUNS (least reliable: the game is one act long) ==")
+	print("== RUNS (least reliable) ==  per act boss: reached% / HP entering")
 	var total_wins := 0
 	for power in Data.GOD_POWERS:
 		var rows: Array = run_stats.filter(func(r): return r["power"] == power)
-		var boss_rows: Array = rows.filter(func(r): return r["boss_hp"] >= 0)
 		var wins: int = rows.filter(func(r): return r["won"]).size()
 		total_wins += wins
-		print("%-24s HP lost before boss %5.1f   HP entering boss %5.1f   reached boss %5.1f%%   avg floor %4.1f   upgrades %.1f   win %5.1f%%" % [
-			Data.GOD_POWERS[power]["name"], _avg(boss_rows.map(func(r): return r["max_hp"] - r["boss_hp"])),
-			_avg(boss_rows.map(func(r): return r["boss_hp"])), 100.0 * boss_rows.size() / max(rows.size(), 1),
-			_avg(rows.map(func(r): return r["floor"])), _avg(rows.map(func(r): return r["upgrades"])), 100.0 * wins / max(rows.size(), 1)])
+		var line := "%-24s" % Data.GOD_POWERS[power]["name"]
+		for a in Data.ACTS.size():
+			var reached: Array = rows.filter(func(r): return r["boss_hp"][a] >= 0)
+			line += "act %d boss %5.1f%% / %4.1f   " % [a + 1, 100.0 * reached.size() / max(rows.size(), 1), _avg(reached.map(func(r): return r["boss_hp"][a]))]
+		print(line + "upgrades %.1f   win %5.1f%%" % [_avg(rows.map(func(r): return r["upgrades"])), 100.0 * wins / max(rows.size(), 1)])
 	print("%-24s win %5.1f%%" % ["OVERALL", 100.0 * total_wins / max(run_stats.size(), 1)])
 
 
@@ -167,18 +179,22 @@ func _rate(rows: Array, results: Array) -> float:
 func _play_run(seed_value: int, patron: String, power: String) -> Dictionary:
 	var run = Run.new()
 	run.setup(seed_value, patron, power)
-	var boss_hp := -1
+	var boss_hp: Array = []
+	boss_hp.resize(Data.ACTS.size())
+	boss_hp.fill(-1)
 	var guard := 0
-	while not (run.state in ["victory", "defeat"]) and guard < 200:
+	while not (run.state in ["victory", "defeat"]) and guard < 400:
 		guard += 1
 		match run.state:
+			"act_complete":
+				run.start_next_act()
 			"map":
 				while run.pending_upgrades() > 0:
 					run.choose_upgrade(_choose_upgrade(run))
 				run.enter_node(_choose_node(run))
 			"combat":
 				if run.nodes[run.current]["type"] == "boss":
-					boss_hp = run.core_hp
+					boss_hp[run.act - 1] = run.core_hp
 				var before: int = run.core_hp
 				var c = run.make_combat()
 				var type: String = run.nodes[run.current]["type"]
@@ -187,7 +203,7 @@ func _play_run(seed_value: int, patron: String, power: String) -> Dictionary:
 				if result == "":
 					print("WARNING: %s did not finish within the round guard" % run.battle_id)
 					result = "loss"
-				fights.append({"id": run.battle_id, "pool": Data.BATTLE_POOLS.get(run.battle_id, "?"), "power": power,
+				fights.append({"id": run.battle_id, "act": run.act, "pool": run.battle_pool, "power": power,
 					"floor": run.floor_number(), "lost": before - c.core_hp, "result": result})
 				run.finish_combat(c)
 			"reward":
@@ -201,7 +217,7 @@ func _play_run(seed_value: int, patron: String, power: String) -> Dictionary:
 					run.rest_heal()
 				else:
 					run.rest_remove(_worst_card(run))
-	return {"won": run.state == "victory", "floor": run.floor_number(), "boss_hp": boss_hp, "max_hp": run.max_hp,
+	return {"won": run.state == "victory", "act": run.act, "floor": run.floor_number(), "boss_hp": boss_hp, "max_hp": run.max_hp,
 		"upgrades": run.power_nodes.size()}
 
 

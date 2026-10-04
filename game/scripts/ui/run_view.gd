@@ -207,7 +207,7 @@ func _row() -> HBoxContainer:
 
 
 func _update_sidebar() -> void:
-	sidebar_label.text = "[font=res://fonts/ui_font.tres][font_size=26][color=#f2c75a]Act 1[/color][/font_size][/font]\n[font_size=18][img=22]res://art/icons/hp.png[/img] Core [b]%d[/b] / %d\n[img=22]res://art/icons/opt_gold.png[/img] Gold [b]%d[/b][/font_size]\n[color=#a8a8b8]Floor[/color] %d / %d   [color=#a8a8b8]Fights won[/color] %d\n[color=#a8a8b8]Boss:[/color] [color=#ff7a70]%s[/color]\n[color=#77778a]Seed %d[/color]" % [
+	sidebar_label.text = ("[font=res://fonts/ui_font.tres][font_size=26][color=#f2c75a]Act %d[/color][/font_size][/font]\n" % run.act) + "[font_size=18][img=22]res://art/icons/hp.png[/img] Core [b]%d[/b] / %d\n[img=22]res://art/icons/opt_gold.png[/img] Gold [b]%d[/b][/font_size]\n[color=#a8a8b8]Floor[/color] %d / %d   [color=#a8a8b8]Fights won[/color] %d\n[color=#a8a8b8]Boss:[/color] [color=#ff7a70]%s[/color]\n[color=#77778a]Seed %d[/color]" % [
 		run.core_hp, run.max_hp, run.gold, run.floor_number(), Run.FLOORS, run.fights_won,
 		run.boss_name(), run.seed_value]
 	_fill_power_box()
@@ -249,7 +249,7 @@ func _fill_power_box() -> void:
 		Color(0.55, 0.9, 0.6) if charged else Color(0.95, 0.7, 0.45), false)
 	CardWidget.place(power_box, charge, 74, 36, -8, 54)
 	var next: int = run.next_threshold()
-	var status := "%d/%d upgrades" % [run.power_nodes.size(), Data.POWER_THRESHOLDS.size()]
+	var status := "%d/%d upgrades" % [run.power_nodes.size(), Data.POWER_THRESHOLDS.size() + Data.ACTS.size() - 1]
 	if next != -1:
 		status += "   %s cards %d/%d" % [Data.FACTION_NAMES[run.main_pantheon()], run.devotion, next]
 	var l := CardWidget._label(status, 12, Color(0.68, 0.66, 0.76), false)
@@ -264,7 +264,11 @@ func _show_upgrade() -> void:
 	var box := _centered_panel("%s answers your devotion" % power["god"])
 	box.get_parent().custom_minimum_size = Vector2(980, 0)
 	box.add_child(_power_header(run.power))
-	box.add_child(_rich("You have drafted [b]%d %s cards[/b]. Choose one upgrade for your god power." % [run.devotion, Data.FACTION_NAMES[run.main_pantheon()]]))
+	var from_devotion: int = Data.POWER_THRESHOLDS.filter(func(t): return run.devotion >= t).size()
+	if run.power_nodes.size() < from_devotion:
+		box.add_child(_rich("You have drafted [b]%d %s cards[/b]. Choose one upgrade for your god power." % [run.devotion, Data.FACTION_NAMES[run.main_pantheon()]]))
+	else:
+		box.add_child(_rich("Your victory over the act boss earns [b]a free upgrade[/b]. Choose one for your god power."))
 	box.add_child(_power_tree(true))
 
 
@@ -392,6 +396,8 @@ func _show() -> void:
 			_show_shrine()
 		"rest":
 			_show_rest()
+		"act_complete":
+			_show_act_complete()
 		"victory", "defeat":
 			_show_end()
 	if run.state != "combat":
@@ -416,7 +422,7 @@ func _show_map() -> void:
 func _map_header() -> HBoxContainer:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 14)
-	var title := _heading("The Dying Stars")
+	var title := _heading("Act %d: %s" % [run.act, run.act_def()["name"]])
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	for type in ["fight", "elite", "shop", "shrine", "rest"]:
@@ -457,6 +463,7 @@ func _map_canvas(interactive: bool) -> Control:
 	canvas.custom_minimum_size = MAP_SIZE
 	canvas.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	canvas.background = load("res://art/map/background_soft.jpg")
+	canvas.tint = run.act_def()["map_tint"]
 
 	var available: Array = run.available_nodes()
 	var paths: Array = []
@@ -907,9 +914,24 @@ func _show_rest() -> void:
 			_show()), box, run.deck.size() > Run.MIN_DECK)
 
 
+## Between acts: the heal and the free upgrade, then on to the next act's map.
+func _show_act_complete() -> void:
+	var s: Dictionary = run.act_summary
+	var next: Dictionary = Data.ACTS[run.act]
+	var box := _centered_panel("%s falls. Act %d complete!" % [s["boss"], s["act"]])
+	box.add_child(_rich("The path leads deeper, into [b]Act %d: %s[/b]." % [run.act + 1, next["name"]], 19, GOLD))
+	box.add_child(_rich("- Healed [b]%d[/b] Core HP (%d%% of what was missing). Core HP: [b]%d[/b] / %d\n- Your god power is recharged, and you earn [b]a free upgrade[/b].\n- Enemies in the next act are stronger, and so are the rewards. Next boss: [color=#ff7a70]%s[/color]" % [
+		s["healed"], roundi(Data.ACT_HEAL * 100), run.core_hp, run.max_hp, Data.ENEMIES[Data.battle(run.boss_ids[run.act])["enemies"][0][0]]["name"]], 17))
+	var go := _button("Descend into Act %d" % (run.act + 1), func():
+		run.start_next_act()
+		_show(), box)
+	CardWidget.style_button(go, true, 18)
+	go.custom_minimum_size = Vector2(0, 52)
+
+
 func _show_end() -> void:
 	var won: bool = run.state == "victory"
-	var box := _centered_panel("The Herald falls. Act 1 complete!" if won else "The Reliquary Core is lost.")
+	var box := _centered_panel("%s falls. The run is complete!" % run.boss_name() if won else "The Reliquary Core is lost.")
 	if won:
 		var faction: String = Data.CARDS[run.patron]["faction"]
 		var scene := CardWidget.art("victory", faction, Data.CARDS[run.patron]["name"], CardWidget.FACTION_COLORS[faction], 64)
@@ -917,8 +939,8 @@ func _show_end() -> void:
 			scene.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		scene.custom_minimum_size = Vector2(0, 340)
 		box.add_child(scene)
-	box.add_child(_rich("Floor reached: [b]%d[/b] / %d\nFights won: [b]%d[/b]\nCore HP: [b]%d[/b]\nGold: [b]%d[/b]\nDeck: [b]%d[/b] cards\nRelics: [b]%d[/b]" % [
-		run.floor_number(), Run.FLOORS, run.fights_won, max(run.core_hp, 0), run.gold, run.deck.size(), run.relics.size()]))
+	box.add_child(_rich("Reached: [b]Act %d, floor %d[/b] / %d\nFights won: [b]%d[/b]\nCore HP: [b]%d[/b]\nGold: [b]%d[/b]\nDeck: [b]%d[/b] cards\nRelics: [b]%d[/b]" % [
+		run.act, run.floor_number(), Run.FLOORS, run.fights_won, max(run.core_hp, 0), run.gold, run.deck.size(), run.relics.size()]))
 	_option("View final deck.", "opt_card", func(): _open_deck("Final deck"), box)
 	var menu := _button("Back to menu", func(): exit_requested.emit(), box)
 	CardWidget.style_button(menu, true, 18)

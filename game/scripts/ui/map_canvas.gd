@@ -9,6 +9,7 @@ const GAP := 9.0
 const MOTES := 70
 
 var background: Texture2D
+var tint := Color.WHITE
 ## [from, to, style ("normal", "taken", "next"), from radius, to radius]
 var paths: Array = []
 var pulse := 0.0
@@ -47,7 +48,7 @@ func _draw() -> void:
 	if background:
 		var drift := Vector2(sin(pulse * 0.07) * 16.0, cos(pulse * 0.05) * 12.0)
 		var pad := size * 0.03 + Vector2(20, 20)
-		draw_texture_rect(background, Rect2(-pad + drift, size + pad * 2), false)
+		draw_texture_rect(background, Rect2(-pad + drift, size + pad * 2), false, tint)
 	_draw_motes()
 	for p in paths:
 		_draw_path(p)

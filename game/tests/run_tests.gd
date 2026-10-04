@@ -47,6 +47,7 @@ func _initialize() -> void:
 	test_tooltip_wrap()
 	fuzz_all_battles()
 	test_maps()
+	test_acts()
 	test_reward_rule()
 	test_no_loss_when_units_die()
 	test_curses()
@@ -645,7 +646,7 @@ func test_divine() -> void:
 		check(run._card_pool(rarity, [], []).all(func(id): return Data.CARDS[id]["rarity"] != "Divine"), "divine: never in the %s pool" % rarity)
 	var rng := RandomNumberGenerator.new()
 	for i in 300:
-		for id in run._card_choices(Run.ELITE_ODDS, rng):
+		for id in run._card_choices(Data.ACTS[0]["elite_odds"], rng):
 			check(Data.CARDS[id]["rarity"] != "Divine", "divine: never a card reward")
 	run.start_event("hall_of_the_forgotten_god")
 	run.gold = 100
@@ -1165,7 +1166,7 @@ func test_reward_rule() -> void:
 	for s in range(1, 201):
 		var run = Run.new()
 		run.setup(s, "myrmidon")
-		var picks: Array = run._card_choices(Run.NORMAL_ODDS, run.reward_rng)
+		var picks: Array = run._card_choices(Data.ACTS[0]["normal_odds"], run.reward_rng)
 		var factions: Array = picks.map(func(id): return Data.CARDS[id]["faction"])
 		check(picks.size() == 3, "reward: three choices")
 		check(factions.has("greek"), "reward: a card from the god power's pantheon (seed %d)" % s)
@@ -1211,7 +1212,7 @@ func test_curses() -> void:
 			var run = Run.new()
 			run.setup(1, "myrmidon")
 			for n in 50:
-				check(not run._card_choices(Run.ELITE_ODDS, run.reward_rng).has(id), "curse: %s never offered as a reward" % id)
+				check(not run._card_choices(Data.ACTS[0]["elite_odds"], run.reward_rng).has(id), "curse: %s never offered as a reward" % id)
 
 
 func test_status_cards() -> void:
@@ -1244,7 +1245,7 @@ func test_status_cards() -> void:
 		var run = Run.new()
 		run.setup(1, "myrmidon")
 		for n in 30:
-			check(not run._card_choices(Run.ELITE_ODDS, run.reward_rng).has(id), "status: %s never offered as a reward" % id)
+			check(not run._card_choices(Data.ACTS[0]["elite_odds"], run.reward_rng).has(id), "status: %s never offered as a reward" % id)
 
 
 func test_event_data() -> void:
@@ -1313,6 +1314,51 @@ func _play_shrine(run, rng: RandomNumberGenerator, tag: String) -> void:
 	check(run.shrine["done"], "%s: shrine resolved" % tag)
 
 
+## Beating an act boss heals half the missing HP, grants a free upgrade and opens a fresh map with
+## a different boss; the last act's boss ends the run.
+func test_acts() -> void:
+	for s in range(1, 21):
+		var run = Run.new()
+		run.setup(s, "shieldmaiden", "tyrs_oath")
+		check(run.act == 1 and run.boss_ids.size() == Data.ACTS.size(), "acts: one boss per act")
+		check(run.boss_ids.size() == Data.ACTS.size() and run.boss_ids[0] != run.boss_ids[1], "acts: no boss repeats")
+		check(run.boss_id == run.boss_ids[0], "acts: act 1 boss first")
+		var boss_node: int = run.floors[Run.FLOORS - 1][0]
+		run.current = boss_node
+		run.battle_id = run._pick_battle("boss", Run.FLOORS - 1)
+		run.state = "combat"
+		run.core_hp = 21
+		run.power_ready_floor = 99
+		var c = run.make_combat()
+		check(not c.battle.has("boss_bonus") or c.battle["boss_bonus"].is_empty(), "acts: act 1 boss has no bonus")
+		c.result = "win"
+		c.core_hp = 21
+		run.finish_combat(c)
+		check(run.state == "act_complete", "acts: act 1 boss leads to the act-complete screen")
+		check(run.core_hp == 21 + ceili((run.max_hp - 21) * Data.ACT_HEAL), "acts: heals half the missing HP")
+		check(run.pending_upgrades() == 1, "acts: a free upgrade is pending")
+		run.start_next_act()
+		check(run.act == 2 and run.state == "map" and run.current == -1 and run.path.is_empty(), "acts: act 2 starts fresh")
+		check(run.boss_id == run.boss_ids[1], "acts: act 2 boss")
+		check(run.power_charged(1), "acts: power recharged")
+		check(run.nodes.size() > 0 and run.floors.size() == Run.FLOORS, "acts: act 2 map generated")
+		run.enter_node(run.available_nodes()[0])
+		if run.state == "combat":
+			check(run.enemy_bonus()["count"] >= Data.ACTS[1]["empower_steps"], "acts: act 2 floor 1 is Empowered")
+			check(Data.BATTLE_POOLS[run.battle_id] == Data.ACTS[1]["pools"][run.battle_pool], "acts: act 2 draws from its pool")
+		run.current = run.floors[Run.FLOORS - 1][0]
+		run.battle_id = run._pick_battle("boss", Run.FLOORS - 1)
+		run.state = "combat"
+		c = run.make_combat()
+		var boss_unit = c.units(E).filter(func(u): return Data.unit_def(u.id).get("kind", "") == "boss")[0]
+		var base: Dictionary = Data.ENEMIES[boss_unit.id]
+		check(boss_unit.max_hp == base["hp"] + Data.ACTS[1]["boss_bonus"]["hp"], "acts: act 2 boss gains bonus HP")
+		check(c.units(E).filter(func(u): return Data.unit_def(u.id).get("kind", "") != "boss").all(func(u): return u.max_hp == Data.ENEMIES[u.id]["hp"]), "acts: boss minions get no bonus")
+		c.result = "win"
+		run.finish_combat(c)
+		check(run.state == "victory", "acts: the last act's boss wins the run")
+
+
 func fuzz_runs() -> void:
 	var outcomes := {"victory": 0, "defeat": 0}
 	for s in range(1, 61):
@@ -1363,6 +1409,10 @@ func fuzz_runs() -> void:
 						run.rest_heal()
 					else:
 						check(run.rest_remove(rng.randi_range(0, run.deck.size() - 1)) == "", "%s: rest remove" % tag)
+				"act_complete":
+					check(not run.is_final_act(), "%s: act complete only before the last act" % tag)
+					run.start_next_act()
+					check(run.state == "map" and run.current == -1, "%s: next act starts on a fresh map" % tag)
 			check(run.gold >= 0, "%s: gold went negative" % tag)
 			check(run.core_hp <= run.max_hp, "%s: HP above max" % tag)
 			check(run.deck.size() >= Run.MIN_DECK, "%s: deck below minimum" % tag)

@@ -359,6 +359,21 @@ const BATTLE_POOLS := {
 	"herald": "boss", "hel": "boss", "apep": "boss",
 }
 
+# A run is a series of acts, each a map ending in a boss. "pools" maps each encounter type to the
+# BATTLE_POOLS tag its battles come from (Act 2 borrows Act 1's fights until it has its own).
+# "empower_steps" adds that many floor-scaling steps on every floor of the act. "boss_bonus" goes to
+# the boss unit only, never to its summons. Reward odds are [Common, Uncommon, Rare] percentages.
+const ACTS := [
+	{"name": "The Dying Stars", "pools": {"early": "early", "late": "late", "elite": "elite", "boss": "boss"},
+		"empower_steps": 0, "boss_bonus": {}, "price_mult": 1.0, "map_tint": Color(1, 1, 1),
+		"normal_odds": [70, 25, 5], "elite_odds": [40, 45, 15], "shop_odds": [55, 35, 10]},
+	{"name": "The Drowned Underworld", "pools": {"early": "early", "late": "late", "elite": "elite", "boss": "boss"},
+		"empower_steps": 0, "boss_bonus": {"atk": 2, "hp": 15}, "price_mult": 1.15, "map_tint": Color(0.45, 0.85, 0.85),
+		"normal_odds": [55, 35, 10], "elite_odds": [30, 45, 25], "shop_odds": [45, 40, 15]},
+]
+## Share of missing Core HP healed when an act is completed.
+const ACT_HEAL := 0.75
+
 # Shrine events. "{pantheon}" is replaced with a random pantheon name.
 #
 # An option has a "label", an optional up-front "cost" ({"hp", "gold", "max_hp"}; the option is

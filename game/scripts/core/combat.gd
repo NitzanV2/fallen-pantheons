@@ -87,6 +87,14 @@ func setup(battle_def: Dictionary, deck_ids: Array, relic_ids: Array, seed_value
 	for e in battle_def["enemies"]:
 		_spawn(e[0], ENEMY, e[1], e[2])
 	_empower_random_enemy()
+	var boss_bonus: Dictionary = battle_def.get("boss_bonus", {})
+	if not boss_bonus.is_empty():
+		for u in units(ENEMY):
+			if Data.unit_def(u.id).get("kind", "") == "boss":
+				u.atk += boss_bonus.get("atk", 0)
+				u.max_hp += boss_bonus.get("hp", 0)
+				u.hp = u.max_hp
+				_log("%s grows stronger in the deeper dark (+%d ATK / +%d HP)." % [_unit_label(u), boss_bonus.get("atk", 0), boss_bonus.get("hp", 0)])
 	if has_relic("sacred_hive"):
 		var summoned := 0
 		for lane in [1, 2, 0, 3]:

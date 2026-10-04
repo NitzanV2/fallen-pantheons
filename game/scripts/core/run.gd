@@ -1,8 +1,8 @@
 extends RefCounted
-## One run through Act 1: map, economy, rewards, shops, shrines, and rests.
+## One run through the acts: map, economy, rewards, shops, shrines, and rests.
 ## No UI code lives here. The UI reads `state` and calls the matching actions.
 ##
-## States: map, combat, reward, shop, shrine, rest, victory, defeat.
+## States: map, combat, reward, shop, shrine, rest, act_complete, victory, defeat.
 
 const Data = preload("res://scripts/core/data.gd")
 const Combat = preload("res://scripts/core/combat.gd")
@@ -27,9 +27,6 @@ const HEAL_PRICE: int = Data.BALANCE["shop_heal_price"]
 const HEAL_AMOUNT: int = Data.BALANCE["shop_heal_amount"]
 const PANTHEONS := ["norse", "greek", "egypt"]
 const RARITIES := ["Common", "Uncommon", "Rare"]
-const NORMAL_ODDS := [70, 25, 5]
-const ELITE_ODDS := [40, 45, 15]
-const SHOP_ODDS := [55, 35, 10]
 const RARITY_ONLY := {"Common": [100, 0, 0], "Uncommon": [0, 100, 0], "Rare": [0, 0, 100]}
 const MIN_MAX_HP := 20
 
@@ -58,7 +55,17 @@ var shop := {}
 var shrine := {}
 var seen_events: Array = []
 var fights_won := 0
+## 1-based. Floors, the map and the power cooldown restart each act.
+var act := 1
+## The boss of the current act, and of every act (picked at setup so no boss repeats).
 var boss_id := ""
+var boss_ids: Array = []
+## The pool the current battle was drawn from ("early", "late", "elite" or "boss").
+var battle_pool := ""
+## Free god power upgrades from completed acts.
+var bonus_upgrades := 0
+## What the act-complete screen shows: {"act", "boss", "healed"}.
+var act_summary := {}
 ## The chosen god power and its owned upgrade nodes.
 var power := ""
 var power_nodes: Array = []
@@ -85,8 +92,36 @@ func setup(p_seed: int, p_patron: String, p_power := "") -> void:
 	core_hp = max_hp
 	power = p_power if p_power != "" else p["powers"][0]
 	_generate_map()
-	var bosses: Array = Data.BATTLE_POOLS.keys().filter(func(id): return Data.BATTLE_POOLS[id] == "boss")
-	boss_id = bosses[map_rng.randi_range(0, bosses.size() - 1)]
+	var boss_rng := RandomNumberGenerator.new()
+	boss_rng.seed = p_seed * 31 + 5
+	for a in Data.ACTS.size():
+		var bosses: Array = _pool_ids(Data.ACTS[a]["pools"]["boss"]).filter(func(id): return not boss_ids.has(id))
+		var rng: RandomNumberGenerator = map_rng if a == 0 else boss_rng
+		boss_ids.append(bosses[rng.randi_range(0, bosses.size() - 1)])
+	boss_id = boss_ids[0]
+
+
+func act_def() -> Dictionary:
+	return Data.ACTS[act - 1]
+
+
+func is_final_act() -> bool:
+	return act >= Data.ACTS.size()
+
+
+## Leaves the act-complete screen for the next act's map.
+func start_next_act() -> void:
+	if state != "act_complete":
+		return
+	act += 1
+	boss_id = boss_ids[act - 1]
+	map_rng.seed = seed_value * 31 + 10 + act
+	current = -1
+	path.clear()
+	last_battle_id = ""
+	power_ready_floor = 0
+	_generate_map()
+	state = "map"
 
 
 func has_relic(id: String) -> bool:
@@ -132,9 +167,9 @@ func upgrade_options() -> Array:
 	return out
 
 
-## Upgrades earned by devotion but not yet picked (0 when nothing can be picked).
+## Upgrades earned by devotion or completed acts but not yet picked (0 when nothing can be picked).
 func pending_upgrades() -> int:
-	var earned: int = Data.POWER_THRESHOLDS.filter(func(t): return devotion >= t).size()
+	var earned: int = Data.POWER_THRESHOLDS.filter(func(t): return devotion >= t).size() + bonus_upgrades
 	if upgrade_options().is_empty():
 		return 0
 	return maxi(0, earned - power_nodes.size())
@@ -363,22 +398,22 @@ func leave_node() -> void:
 # ---------------------------------------------------------------- combat
 
 func _pick_battle(type: String, floor_index: int) -> String:
+	battle_pool = type
+	if type == "fight":
+		battle_pool = "early" if floor_index < EARLY_FLOORS else "late"
 	if type == "boss":
 		return boss_id
-	var pool := type
-	if type == "fight":
-		pool = "early" if floor_index < EARLY_FLOORS else "late"
-	var candidates: Array = []
-	for id in Data.BATTLE_POOLS:
-		if Data.BATTLE_POOLS[id] == pool and id != last_battle_id:
-			candidates.append(id)
+	var all := _pool_ids(act_def()["pools"][battle_pool])
+	var candidates: Array = all.filter(func(id): return id != last_battle_id)
 	if candidates.is_empty():
-		for id in Data.BATTLE_POOLS:
-			if Data.BATTLE_POOLS[id] == pool:
-				candidates.append(id)
+		candidates = all
 	var pick: String = candidates[encounter_rng.randi_range(0, candidates.size() - 1)]
 	last_battle_id = pick
 	return pick
+
+
+static func _pool_ids(tag: String) -> Array:
+	return Data.BATTLE_POOLS.keys().filter(func(id): return Data.BATTLE_POOLS[id] == tag)
 
 
 func battle_def() -> Dictionary:
@@ -399,7 +434,7 @@ func enemy_bonus() -> Dictionary:
 	var every: int = Data.BALANCE["scaling_every_floors"]
 	if every <= 0 or current == -1 or nodes[current]["type"] == "boss":
 		return {"atk": 0, "hp": 0, "count": 0, "rounds": 0}
-	var steps: int = nodes[current]["floor"] / every
+	var steps: int = nodes[current]["floor"] / every + act_def()["empower_steps"]
 	if steps == 0:
 		return {"atk": 0, "hp": 0, "count": 0, "rounds": 0}
 	return {"atk": Data.BALANCE["empower_atk"], "hp": Data.BALANCE["empower_hp"],
@@ -411,6 +446,8 @@ func make_combat():
 	b["core"] = core_hp
 	b["core_max"] = max_hp
 	b["enemy_bonus"] = enemy_bonus()
+	if nodes[current]["type"] == "boss":
+		b["boss_bonus"] = act_def()["boss_bonus"]
 	b["god_power"] = power_state()
 	var c = Combat.new()
 	c.setup(b, deck, relics, seed_value * 1000 + current)
@@ -427,7 +464,13 @@ func finish_combat(c) -> void:
 		return
 	if type == "boss":
 		fights_won += 1
-		state = "victory"
+		if is_final_act():
+			state = "victory"
+			return
+		var healed := _heal(ceili((max_hp - core_hp) * Data.ACT_HEAL))
+		bonus_upgrades += 1
+		act_summary = {"act": act, "boss": boss_name(), "healed": healed}
+		state = "act_complete"
 		return
 	reward = {"result": c.result, "gold": 0, "cards": [], "relic": "", "notes": []}
 	if c.result == "win":
@@ -438,7 +481,7 @@ func finish_combat(c) -> void:
 			reward["notes"].append("Pilgrim's Pouch: +8 gold.")
 		if has_relic("healing_ampoule"):
 			reward["notes"].append("Healing Ampoule: healed %d." % _heal(3))
-		reward["cards"] = _card_choices(ELITE_ODDS if type == "elite" else NORMAL_ODDS, reward_rng)
+		reward["cards"] = _card_choices(act_def()["elite_odds" if type == "elite" else "normal_odds"], reward_rng)
 		if type == "elite":
 			var relic := _random_relic(reward_rng)
 			if relic != "":
@@ -526,7 +569,11 @@ func _relics_left() -> bool:
 
 
 func card_price(id: String) -> int:
-	return CARD_PRICES[Data.CARDS[id]["rarity"]]
+	return roundi(CARD_PRICES[Data.CARDS[id]["rarity"]] * act_def()["price_mult"])
+
+
+func relic_price() -> int:
+	return roundi(RELIC_PRICE * act_def()["price_mult"])
 
 
 # ---------------------------------------------------------------- shop
@@ -535,7 +582,7 @@ func _generate_shop() -> void:
 	shop = {"cards": [], "relics": [], "remove_used": false, "heal_used": false}
 	var picked: Array = []
 	for i in 3:
-		var id := _roll_card(SHOP_ODDS, [], picked, shop_rng)
+		var id := _roll_card(act_def()["shop_odds"], [], picked, shop_rng)
 		picked.append(id)
 		shop["cards"].append({"id": id, "price": card_price(id), "sold": false})
 	var listed: Array = []
@@ -543,7 +590,7 @@ func _generate_shop() -> void:
 		var relic := _random_relic(shop_rng, listed)
 		if relic != "":
 			listed.append(relic)
-			shop["relics"].append({"id": relic, "price": RELIC_PRICE, "sold": false})
+			shop["relics"].append({"id": relic, "price": relic_price(), "sold": false})
 
 
 func buy_card(i: int) -> String:
@@ -729,7 +776,7 @@ func _apply_fx(fx: Dictionary) -> Array:
 		if fx["card"] == "Divine":
 			id = _divine_cards(1)[0]
 		else:
-			var odds: Array = NORMAL_ODDS if fx["card"] == "any" else RARITY_ONLY[fx["card"]]
+			var odds: Array = act_def()["normal_odds"] if fx["card"] == "any" else RARITY_ONLY[fx["card"]]
 			id = _roll_card(odds, [], [], event_rng)
 		add_card(id)
 		notes.append("%s joins your deck." % Data.CARDS[id]["name"])
@@ -758,7 +805,7 @@ func _apply_fx(fx: Dictionary) -> Array:
 			cards = _divine_cards(2)
 		else:
 			var pantheon: bool = fx["choose"] == "pantheon"
-			var odds: Array = NORMAL_ODDS if pantheon else RARITY_ONLY[fx["choose"]]
+			var odds: Array = act_def()["normal_odds"] if pantheon else RARITY_ONLY[fx["choose"]]
 			var factions: Array = [shrine["pantheon"]] if pantheon else []
 			for n in 3:
 				cards.append(_roll_card(odds, factions, cards, event_rng))
