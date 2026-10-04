@@ -2,6 +2,27 @@
 
 Things to check later. Add to this list as new questions come up.
 
+## How we measure balance
+
+1. **Primary: Core HP lost per fight.** Read it by fight type (early / late / elite / boss), floor band, god power and encounter. Use the average, and check the median and 90th percentile for swingy fights. It is net of in-fight healing, and a defeat ends the fight, so losing fights understate the damage.
+2. **Secondary: matchups and outcomes.** God power vs each elite and boss (HP lost and win%), plus win / timeout / loss rates per encounter.
+3. **Last: run win rate.** With one act and an unfinished card pool, it depends on too many things at once. A small change in HP per fight can swing it a lot (Osiris loses 0.6 HP per fight less than average but wins 45% of runs vs 23-33%).
+
+### Current baseline (60 runs per power, bot)
+
+| Fight type | Avg HP lost (median / p90) |
+|---|---|
+| Early fights | 2.0 (2 / 6) |
+| Late fights | 7.4 (6 / 15) |
+| Elites | 8.1 (7 / 15) |
+| Bosses | 27.5 (25 / 41) |
+| Floors 1-6 / 7-12 / 13-14 | 3.6 / 8.1 / 12.5 |
+
+- **Powers are close by HP:** 6.9 (Osiris) to 7.7 (Thor, Zeus) per fight. The Norse powers aren't clearly weaker by this measure, despite lower run win rates.
+- **Encounter outliers:** Double Charge 13.2 and Ashen Tide 12.3 cost far more than other late fights (3.6-8.7); Fenrir 12.6 vs other elites 5.3-8.5; Swarm 5.9 vs other early fights 0.1-2.1. First Contact (0.1) and Hollow Procession (0.7) cost almost nothing.
+- **Bosses:** Herald 31.7, Hel 26.3, Apep 24.8. After today's buff the Herald costs the most HP, though its win rate matches Hel's.
+- Runs reach the boss having lost about 19 of 55 HP, and the boss costs about 27 more on average.
+
 ## Current difficulty setup
 
 - 15-floor map (was 8), with two guaranteed shops, two guaranteed elites and a mid-act rest site.
@@ -44,13 +65,15 @@ Things to check later. Add to this list as new questions come up.
 ## Tools
 
 - All run balance numbers live in the `BALANCE` table in `game/scripts/core/data.gd`. Starting HP and patron relics live in `PATRONS`.
-- `game/tests/balance_sim.gd` plays runs with a greedy bot and reports win rates, plus win, timeout and loss rates and average HP lost per win and per timeout for each encounter. From the `game` folder:
+- `game/tests/balance_sim.gd` plays runs with a greedy bot. It reports Core HP lost per fight (by fight type, floor band and god power), a table per encounter (HP lost average / median / p90 / max, then win, timeout and loss rates), god power vs elite and boss matchups, and finally run stats. From the `game` folder:
   `& "C:\Users\nitza\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path . --script res://tests/balance_sim.gd -- 300`
   The count is runs per god power. Add `no_powers` after the run count to measure a bot that never uses its power. Use at least 300 runs per power when comparing powers: at 100 runs the per-power numbers swing by several points.
 - `game/tests/trace_fight.gd` prints the full log of the bot playing one battle: `... --script res://tests/trace_fight.gd -- fenrir <seed> <scaling steps>`.
 - The bot ignores enemy intents, never looks ahead, never moves units, and skips Ragnarok and Transposition. Use it to compare settings, not to predict human win rates.
 
 ## Bot win rate history
+
+Kept for reference; compare future changes by HP lost per fight (above) first.
 
 | Setting | Win rate |
 |---|---|
@@ -68,4 +91,6 @@ Things to check later. Add to this list as new questions come up.
 | God powers v1 (no patron relics), no cooldown | 50% |
 | Same, 3-floor power cooldown | 41% |
 | Same, scaling every 5 floors with stacking Empowered count | 29% |
-| Same, scaling every 6 floors, current | 35% |
+| Same, scaling every 6 floors | 35% |
+| Same, upgrades at 4 / 8 / 12 cards | 34% |
+| Same, Herald summons Wisps, enemy Pierce stops before the Core, hidden siege lane, current | 30% |
