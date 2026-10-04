@@ -308,7 +308,7 @@ Act 1 only, so the trees are cut down from section 6. Sections 6-7 stay as the l
 
 - **Two branches** of the god's own pantheon, **two tiers** each. Tier 2 needs tier 1 of its branch.
 - **One generic Pact node:** needs 3 cards drafted from *any* other pantheon. Because it doesn't name a pantheon, adding a new pantheon changes no existing tree.
-- **Thresholds:** an upgrade at 2, 4 and 6 main-pantheon cards drafted, so 3 of the 5 nodes per run. Only cards added (rewards, shop, shrines) count; removing cards never loses progress.
+- **Thresholds:** an upgrade at 4, 8 and 12 main-pantheon cards drafted (was 2, 4, 6, which came too easily). In Act 1 that means 1-2 upgrades for a focused deck; the third is meant for longer runs. Only cards added (rewards, shop, shrines) count; removing cards never loses progress.
 - The pick happens on the map right after a threshold is reached. The sidebar shows the power, upgrades owned and progress, and opens the tree.
 
 ### Roster (v1)
@@ -324,7 +324,7 @@ Act 1 only, so the trees are cut down from section 6. Sections 6-7 stay as the l
 
 ### Growing it later
 
-- **New acts:** append tier 3 nodes and more thresholds (8, 10, ...); add capstones and boss-granted upgrades. Existing nodes keep their ids and effects.
+- **New acts:** append tier 3 nodes and more thresholds (16, 20, ...); add capstones and boss-granted upgrades. Existing nodes keep their ids and effects.
 - **New pantheons:** add a patron with two powers. The generic Pact needs no change; pantheon-specific pacts (section 6) can be added as extra nodes later.
 
 ### First balance numbers (bot, 60 runs per power)

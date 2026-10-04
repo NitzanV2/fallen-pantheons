@@ -905,6 +905,11 @@ func test_power_upgrades() -> void:
 	run.add_card("faith_surge")
 	run.add_card("hoplite")
 	check(run.devotion == 1 and run.foreign == 0, "upgrades: neutral cards don't count")
+	var first: int = Data.POWER_THRESHOLDS[0]
+	var second: int = Data.POWER_THRESHOLDS[1]
+	while run.devotion < first - 1:
+		run.add_card("hoplite")
+	check(run.pending_upgrades() == 0, "upgrades: nothing one card short of the first threshold")
 	run.add_card("hoplite")
 	check(run.pending_upgrades() == 1, "upgrades: first threshold reached")
 	var options: Array = run.upgrade_options()
@@ -915,9 +920,10 @@ func test_power_upgrades() -> void:
 	check(run.choose_upgrade("undertow_1") != "", "upgrades: nothing pending")
 	for n in 3:
 		run.add_card("einherjar")
-	run.add_card("hoplite")
-	run.add_card("hoplite")
-	check(run.foreign == 3 and run.devotion == 4, "upgrades: counts by pantheon")
+	check(run.pending_upgrades() == 0, "upgrades: other pantheons don't count toward devotion")
+	while run.devotion < second:
+		run.add_card("hoplite")
+	check(run.foreign == 3 and run.devotion == second and run.pending_upgrades() == 1, "upgrades: counts by pantheon")
 	options = run.upgrade_options()
 	options.sort()
 	check(options == ["pact", "undertow_1", "wave_2"], "upgrades: tier 2 and Pact open (%s)" % [options])

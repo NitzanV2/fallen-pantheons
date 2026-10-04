@@ -28,6 +28,7 @@ Things to check later. Add to this list as new questions come up.
 - **Early fights are trivial.** First Contact and Hollow Procession are won nearly 100% of the time with almost no HP lost. Check whether they should threaten a little more.
 - **God power spread.** With cooldown and the new scaling (60 runs each): Tyr 27%, Thor 30%, Zeus 30%, Poseidon 35%, Sekhmet 40%, Osiris 47%. The Norse powers trail and Osiris leads; the bot plays Tyr cautiously and Osiris's revive is easy for it to use well. Re-check with 300 runs before tuning individual powers.
 - **Cooldown dial.** Without a cooldown the bot won 50% (vs 28% never using a power); a 3-floor cooldown brought it to 41% before the scaling change. The bot uses its power on elites and the boss, and in normal fights only if it will recharge before the boss. Humans will likely save it better.
+- **Upgrade pace.** Thresholds are 4 / 8 / 12 main-pantheon cards. The bot now averages about 0.9 upgrades per run (was about 2.2 at 2 / 4 / 6), and its win rate barely moved (34%). The bot caps its deck at 22 cards and values main-pantheon cards only mildly, so a focused human should reach 1-2. Check that the first upgrade arrives early enough to feel part of the run.
 - **Scaling dial.** With powers and cooldown: scaling every 6 floors -> 35% (62% reach the boss); every 5 floors (two Empowered from floor 11) -> 29% (49% reach the boss). Every 5 is the next step if players find runs too easy.
 - **Herald phase 2 starts at half max HP** (21 of 42). Check that it still arrives at a sensible point in the fight.
 

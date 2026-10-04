@@ -3,6 +3,7 @@ extends ColorRect
 ## Keep the rules in sync with combat.gd.
 
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
+const Data = preload("res://scripts/core/data.gd")
 
 const GOLD := Color(0.95, 0.78, 0.35)
 const TEXT := Color(0.88, 0.87, 0.92)
@@ -16,6 +17,7 @@ const CHAPTERS := [
 	["Attacking", "atk"],
 	["Keywords", "ability"],
 	["Cards & moves", "opt_card"],
+	["God powers", "glyphs/zeus_lightning_bolt.svg"],
 	["Enemies", "map/elite.png"],
 	["Terrain", "battle/tile_ley_line.jpg"],
 ]
@@ -86,7 +88,7 @@ func _ready() -> void:
 	holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(holder)
 
-	var builders := [_basics, _attacking, _keywords, _cards, _enemies, _terrain]
+	var builders := [_basics, _attacking, _keywords, _cards, _powers, _enemies, _terrain]
 	for i in CHAPTERS.size():
 		var b := Button.new()
 		b.text = CHAPTERS[i][0]
@@ -208,7 +210,8 @@ func _keywords(page: VBoxContainer) -> void:
 		["exhaust", "Exhaust", "After you cast it, the card is gone for the rest of this fight."],
 		["immovable", "Immovable", "Can't be pushed or swapped and takes no collision damage."],
 		["hp", "Threat", "Damage the enemy deals to your Core if it survives until time runs out."],
-		["map/elite.png", "Empowered", "On deeper floors, one enemy per fight gets bonus ATK and HP. It is marked on the board."],
+		["map/elite.png", "Empowered", "Deeper floors Empower random enemies with +%d ATK / +%d HP: one per fight from floor %d, one more every %d floors after that (bosses excepted). They are marked on the board, and those fights get an extra round per step." % [
+			Data.BALANCE["empower_atk"], Data.BALANCE["empower_hp"], Data.BALANCE["scaling_every_floors"] + 1, Data.BALANCE["scaling_every_floors"]]],
 	])
 	_heading(page, "thorns", "Enemy keywords")
 	_grid(page, 2, [
@@ -234,11 +237,27 @@ func _cards(page: VBoxContainer) -> void:
 		["cards/divine_favor.jpg", "Spells", "Go to the discard pile after casting, unless they [b]Exhaust[/b]."],
 	], 64)
 	_tip(page, "Dimmed cards can't be played right now: not enough Faith, or no legal target.")
-	page.add_child(_rich("[b]God power:[/b] the power you chose for the run sits in the sidebar (or press [b]G[/b]). Use it during planning; it costs no Faith. After a fight where you used it, it [b]recharges for 3 floors[/b] - save it for fights that matter. Drafting cards of your patron's pantheon unlocks upgrades for it between fights."))
+	_tip(page, "Your god power isn't a card: it has its own button in the sidebar. See the God powers chapter.")
 	_heading(page, "push_right", "Moving units")
 	page.add_child(_rich("Once per round, click one of your units, then an empty slot on your grid, to move it (or drag it there). Some cards give extra moves (Loki, Longship). The status panel shows your moves left.\n\nUnits that entered the board this round - deployed, returned by Book of the Dead, or summoned by a spell - aren't locked in yet: until you end planning you can move them freely, as often as you like, without using a move (this doesn't count as moving for Raider, Ulfhednar, Loki or Longship). Other units on Quicksand can't move at all."))
 	_heading(page, "opt_curse", "Curses and statuses")
 	page.add_child(_rich("They can't be played and just take up space. They leave your hand at the start of the next round: curses go to the discard pile, statuses are exhausted. Some also cost Faith or Core HP - read the card.\nEnemies marked [color=#ff9a9a](+Void Web)[/color] or similar shuffle a status card into your draw pile each time they attack."))
+
+
+func _powers(page: VBoxContainer) -> void:
+	var thresholds: String = ", ".join(Data.POWER_THRESHOLDS.map(func(t): return str(t)))
+	_heading(page, "glyphs/zeus_lightning_bolt.svg", "Your god power")
+	page.add_child(_rich("At the start of a run you choose a [b]patron[/b] (Norse, Greek or Egyptian), then one of that patron's two [b]god powers[/b]. The patron sets your starting card and your [b]main pantheon[/b]; every card stays draftable."))
+	_grid(page, 2, [
+		["glyphs/thors_thunderclap.svg", "Using it", "Click the power in the battle sidebar (or press [b]G[/b]) during planning, then pick a target like a spell. It costs [b]no Faith[/b]. It isn't a spell: Spellward still blocks it, but it doesn't count for Hermes, Pythia or the Oracle's Tripod."],
+		["glyphs/osiris_return.svg", "Recharging", "Once per fight. After a fight where you used it, it [b]recharges for %d floors[/b] (used on floor 4, ready on floor %d). Fights where you don't use it cost nothing, so save it for elites and the boss. Undo round gives it back." % [Data.POWER_COOLDOWN_FLOORS, 4 + Data.POWER_COOLDOWN_FLOORS + 1]],
+	], 52)
+	_heading(page, "glyphs/poseidons_tide.svg", "Upgrades")
+	_grid(page, 2, [
+		["glyphs/sekhmets_plague.svg", "Devotion", "Every card of your main pantheon you [b]add[/b] to your deck (rewards, shop, events) counts. At [b]%s[/b] cards you choose an upgrade on the map. Removing cards never loses progress." % thresholds],
+		["glyphs/tyrs_oath.svg", "The tree", "Two branches of the god's own pantheon, two tiers each: tier 2 needs tier 1 of its branch. The [b]Pact[/b] node needs %d cards from [i]other[/i] pantheons, so mixing pays off too." % Data.PACT_CARDS],
+	], 52)
+	_tip(page, "Every set of three card rewards includes at least one card from your main pantheon. Click the power in the map sidebar to see your tree and progress.")
 
 
 func _enemies(page: VBoxContainer) -> void:
@@ -300,7 +319,7 @@ func _i(id: String) -> String:
 
 ## Icons are drawn as-is; enemy, card and tile art get a rounded frame.
 func _picture(id: String, px: float) -> Control:
-	if not "/" in id or id.begins_with("map/"):
+	if not "/" in id or id.begins_with("map/") or id.begins_with("glyphs/"):
 		var icon := TextureRect.new()
 		icon.texture = _tex(id)
 		icon.custom_minimum_size = Vector2(px, px)

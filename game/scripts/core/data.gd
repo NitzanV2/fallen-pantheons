@@ -292,7 +292,7 @@ const PATRONS := [
 # pantheon earns a pick at each POWER_THRESHOLDS count; a tier-2 node needs its tier-1 node.
 # The Pact node needs PACT_CARDS drafted cards from any other pantheon, so new pantheons never
 # change a tree. Later acts add thresholds and deeper tiers on top of these nodes.
-const POWER_THRESHOLDS := [2, 4, 6]
+const POWER_THRESHOLDS := [4, 8, 12]
 const PACT_CARDS := 3
 # After a fight where the power was used, it sits out the next POWER_COOLDOWN_FLOORS floors.
 const POWER_COOLDOWN_FLOORS := 3
