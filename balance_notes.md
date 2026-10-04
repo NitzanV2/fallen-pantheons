@@ -12,16 +12,23 @@ Things to check later. Add to this list as new questions come up.
 
 | Fight type | Avg HP lost (median / p90) |
 |---|---|
-| Early fights | 2.7 (2 / 6) |
-| Late fights | 7.3 (6 / 15) |
-| Elites | 7.9 (7 / 15) |
-| Bosses | 28.2 (26 / 41) |
-| Floors 1-6 / 7-12 / 13-14 | 3.9 / 8.1 / 12.0 |
+| Early fights | 2.0 (2 / 4) |
+| Late fights | 7.9 (7 / 15) |
+| Elites | 7.2 (7 / 12) |
+| Bosses | 27.4 (26 / 39) |
+| Floors 1-6 / 7-12 / 13-14 | 3.6 / 8.5 / 12.5 |
 
-- **First Contact removed** (0.1 HP per fight, 100% wins). The early pool is now Hollow Procession, Swarm, Tangled Ruins and Carrion Flock.
-- **Powers are close by HP:** 7.0 (Osiris) to 7.9 (Tyr, Zeus) per fight. The Norse powers aren't clearly weaker by this measure, despite lower run win rates.
-- **Encounter outliers:** Double Charge 13.3 and Ashen Tide 12.2 cost far more than other late fights (3.6-8.8); Fenrir 12.3 vs other elites 5.1-8.6; Swarm 6.2 vs other early fights 0.7-2.2. Hollow Procession (0.7) costs almost nothing.
-- **Bosses:** Herald 32.3, Hel 26.1, Apep 26.2. After today's buff the Herald costs the most HP, though its win rate matches Hel's.
+- **Outlier pass** (HP per fight, before -> after):
+  - First Contact removed (0.1 HP, 100% wins). The early pool is now Hollow Procession, Swarm, Tangled Ruins and Carrion Flock.
+  - Swarm 6.2 -> 2.5: one Void Spawn fewer (3 Spawn + 2 Wisps).
+  - Hollow Procession 0.7 -> 2.2: a second Hollow Archer behind the Bulwark.
+  - Double Charge, renamed Charge Line, 13.3 -> 9.6: one Charger replaced by a Zealot.
+  - Ashen Tide 12.2 -> 10.0: Ashen Wraith ATK 3 -> 2. Swapping the Weaver for an archer made it worse (13.0), so the Ashes damage was the issue, not the Webs.
+  - Fenrir 12.3 -> 9.4: base ATK 4 -> 3, still +1 per death.
+  - Shield Wall 3.6 -> 6.2: an added Void Spawn in lane 1. A Zealot there overshot (8.3, 22% wins).
+  - Plague Pit 4.1 -> 8.1 and Sieging Host 4.1 -> 10.0: an added Void Spawn in lane 4. Sieging Host is now the costliest late fight; if it stays there, drop the Spawn's lane or the Engine's HP.
+- **Late fights now span 5.1-10.0** and early fights 1.1-2.5.
+- **Bosses:** Herald 30.2, Hel ~25, Apep ~25. The Herald is still the costliest; Void Tide 5 -> 4 is the dial if it needs softening. After today's buff the Herald costs the most HP, though its win rate matches Hel's.
 - Runs reach the boss having lost about 19 of 55 HP, and the boss costs about 27 more on average.
 
 ## Current difficulty setup
@@ -32,12 +39,12 @@ Things to check later. Add to this list as new questions come up.
 - God powers: one per run, free, once per fight, then recharging for 3 floors (`POWER_COOLDOWN_FLOORS` in `data.gd`).
 - The Void Herald has fixed stats (10 ATK / 42 HP, Void Tide 5) and is never Empowered. In phase 1 it summons a Void Spawn every round and a Void Wisp in its back row every second round; phase 2 summons nothing.
 - Enemy Pierce stops at your back unit and never reaches the Core. The Siege Engine picks its lane (most units) as it fires, so the target is hidden.
-- Elites have Threat 3. Fenrir 4 ATK / 10 HP / +1 ATK per death, Set 3 ATK / 8 HP with a one-round Sandstorm, Medusa guarded by one Bulwark and a Void Spawn.
+- Elites have Threat 3. Fenrir 3 ATK / 10 HP / +1 ATK per death, Set 3 ATK / 8 HP with a one-round Sandstorm, Medusa guarded by one Bulwark and a Void Spawn.
 
 ## Balance to check in playtests
 
 - **Longer runs mean repeated encounters.** There are only 3 early fights, 3 late fights and 3 elites, and a 15-floor run visits roughly 9-10 fights and 2-3 elites. Late fights repeat about 4 times per run. New encounters are the next thing to add if runs start to feel samey.
-- **Attrition from Double Charge.** It costs the bot about 13 HP per fight and now shows up several times a run. It's the main source of runs dying before the boss.
+- **Attrition from Charge Line (was Double Charge).** It cost the bot about 13 HP per fight with two Chargers; now about 10 with one. Watch whether it still feels like the run killer.
 - **Difficulty spread.** About two thirds of bot runs reach the Herald and about half of those beat it. When scaling stepped every 5 floors, the +4 / +12 Empowered bonus hit normal fights on floors 11-13 and only 27% of runs reached the boss.
 - **Gold and deck size.** Twice the fights means about twice the gold and card rewards. Check whether shops stay interesting and whether decks get bloated.
 - **Void Tide is the boss's difficulty dial** (`void_tide` on the Herald in `ENEMIES`). On the old 8-floor map, with 40 HP: tide 5 -> 32% bot wins, tide 7 -> 12%. With 50 HP: tide 3 -> 65%, tide 5 -> 50%, tide 7 -> 32%. Extra ATK and HP on the Herald alone barely changed its win rate.
@@ -48,7 +55,7 @@ Things to check later. Add to this list as new questions come up.
 - **The economy changes barely matter.** No timeout gold, rest heal 10 and shop heal at 40 gold only cost about 4 Core HP by the boss. Check whether gold or healing should be tightened further, or whether the shop needs better things to spend on.
 - **Round scaling.** Fights get +1 round per scaling step. This cut timeouts sharply but barely changed win rates. Watch that longer late fights don't feel slow, and that Golden Fleece (now "+1 round") still feels worth taking.
 - **Timeouts give nothing now.** Check whether this makes elites feel punishing rather than interesting.
-- **Early fights are trivial.** Hollow Procession and Tangled Ruins are won nearly 100% of the time with almost no HP lost. Check whether they should threaten a little more.
+- **Early fights are gentle.** Tangled Ruins is still won 100% of the time for about 1 HP. Check whether they should threaten a little more.
 - **God power spread.** With cooldown and the new scaling (60 runs each): Tyr 27%, Thor 30%, Zeus 30%, Poseidon 35%, Sekhmet 40%, Osiris 47%. The Norse powers trail and Osiris leads; the bot plays Tyr cautiously and Osiris's revive is easy for it to use well. Re-check with 300 runs before tuning individual powers.
 - **Cooldown dial.** Without a cooldown the bot won 50% (vs 28% never using a power); a 3-floor cooldown brought it to 41% before the scaling change. The bot uses its power on elites and the boss, and in normal fights only if it will recharge before the boss. Humans will likely save it better.
 - **Herald summons dial** (bot win rate vs the Herald, 60 runs per power): old (one Spawn in phase 1) 61%; two Spawns in both phases plus Wisps 9%; two Spawns in phase 1 plus Wisps 19%; one Spawn plus Wisps in both phases 35%; one Spawn plus Wisps in phase 1 only (current) 43%, level with Hel (44%).
