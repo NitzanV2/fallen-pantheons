@@ -1,6 +1,6 @@
 # Pantheon Identity: Design Options
 
-Status: **discussion / not implemented**. Captures the options for making the starting choice matter, how they compare, and the direction currently favoured.
+Status: **direction chosen / not implemented**. Sections 1-4 capture the options that were considered and how they compare. Section 5 onward is the chosen design: one god power per run, upgraded through a tree, with an open card pool.
 
 ## 1. The problem
 
@@ -105,64 +105,200 @@ These reward commitment without touching combat.
 | Unique powers per pairing | 2-3 | +2-3 powers **per new pairing** | Very high | High, grows with pairings |
 | Per-pantheon now, pairing powers later | 4, then more | +2 now, extras later | Medium, then High | Starts low, grows |
 
-## 5. Favoured direction
+## 5. Chosen direction
 
-**G + H, with between-fight bonuses instead of devotion.**
+**H + I: one god power per run, upgraded through a tree. The card pool stays open.**
 
-1. **Pick two pantheons** at run start. Reward, shop and shrine pools become those two plus neutral.
-2. **Pick one god power** from the four gods of your pair (2 per pantheon). Once per fight, used during planning.
-3. **Starting deck:** the neutral starter plus one signature card from each chosen pantheon.
-4. **Patron relics** (Mead, Spartan Standard, Scarab Amulet) move into the normal relic pool or become god-power upgrades.
-5. **Commitment rewards happen outside battles:** hybrid signature cards per pairing, plus some mix of deck resonance, shrine favour and god-power upgrades at rest sites.
-6. **Reward rule** becomes: one card from each of your two pantheons, plus one neutral or random card from your pool. Both halves of the hybrid stay alive.
+1. **Pick one god power** at run start from the six (2 per pantheon). The power's pantheon is your **main pantheon** for the run.
+2. **All cards stay draftable.** There is no pantheon lock and no second patron.
+3. **Upgrade the power through its tree** as you draft cards of your main pantheon (section 6).
+4. **Mixing is rewarded, not punished:** each tree has a **pact branch** whose nodes need cards from a specific other pantheon.
+5. **Starting deck:** the neutral starter plus the main pantheon's signature card (today's patron cards: Shieldmaiden, Myrmidon, Mummy Guardian).
+6. **Starting HP:** a flat 55 for everyone.
+7. **Patron relics** (Mead of the Einherjar, Spartan Standard, Scarab Amulet) move into the normal relic pool.
+8. **Reward rule:** every set of three card offers contains at least one card from your main pantheon. The other two come from the full pool.
 
-### Example god powers (placeholders)
+### Why not two patrons (option G)
 
-| Pantheon | God | Power (once per fight, plan phase) |
+- **Double push toward one pantheon.** A pool lock plus card-count thresholds would both reward going mono, ending in Slay the Spire classes.
+- **Little gain with three pantheons.** Picking two only removes one, but every pairing still needs balancing.
+- **Longer runs need deeper pools.** With two more acts planned, a run drafts about 30 cards. Two pantheons plus neutral (about 32 cards) would repeat.
+- **The hybrid hook survives through pact branches.** Splashing a second pantheon unlocks some of the best upgrades.
+
+Revisit picking two pantheons once there are 5 or more. Pools will then be big enough that a lock keeps decks coherent instead of thin.
+
+## 6. God powers
+
+### Using a power
+
+- Once per fight, during the plan phase. Costs no Faith.
+- Uses spell targeting (a lane, a unit, or an empty tile, depending on the power).
+- Shown as a round button with the god's glyph, not a card frame, so it never looks like a drafted card.
+- Restart planning restores an unused power.
+
+### Naming
+
+Powers are named as abilities: **"Zeus's Lightning Bolt"**, not "Zeus". This lets the iconic gods be used even when they already exist as cards or bosses (as Hel's Bargain already sits alongside Hel, the Hollow Queen).
+
+- **Lead with the ability.** Where space is tight, show "Lightning Bolt" with "Zeus's" as a smaller prefix or in the tooltip.
+- **Echo the card, don't copy it.** If a god's card already does something, the power should do it differently (the Zeus card strikes; Lightning Bolt chains).
+- **Avoid names that collide with any item,** not only gods. "Athena's Aegis" would clash with the Aegis relics; "Odin's Ravens" with the Raven of Odin card.
+
+### Tree format
+
+- **Base power:** deliberately weak.
+- **Two main branches** of the god's own pantheon, three nodes each. A node needs the one before it in its branch.
+- **Pact branch:** one node per other pantheon. A pact node needs 3 cards of that pantheon.
+- **Capstone:** needs one completed main branch.
+- About 10 nodes per tree. A full three-act run earns about 6, so you fill roughly half and runs differ.
+
+### Earning upgrades
+
+- **Thresholds:** 3, 6, 9, 12 and 15 cards of your main pantheon.
+- **Act bosses:** each act boss grants one upgrade, so a deck spread across pantheons still progresses.
+- **Counting:** cards **added** to the deck count; removing a card never loses an upgrade, so trimming the deck stays a good move. Option to test: Rare cards count as 2.
+- **The pick:** reaching a threshold offers 2-3 nodes you're eligible for; choose one. Unused eligibility carries over.
+- **Pacing:** the starting deck is 10 cards. With only Act 1 today, expect 2-3 threshold upgrades plus the boss. With three acts, about 6.
+
+### Roster
+
+| Pantheon | Power | Role |
 |---|---|---|
-| Norse | Odin | +2 moves this round; each moved unit strikes the enemy front unit in its new lane |
-| Norse | Hel | Destroy one of your units; its On-Death triggers twice |
-| Greek | Athena | Your front row gains Shield 3 |
-| Greek | Zeus | Deal 3 damage to every enemy in one lane |
-| Egyptian | Osiris | Return the last dead ally at full HP |
-| Egyptian | Ra | One ally gains +3 ATK permanently |
+| Norse | Tyr's Oath | Sacrifice an ally for buffs |
+| Norse | Thor's Thunderclap | Burst damage to a lane, scaling with ally deaths |
+| Greek | Zeus's Lightning Bolt | Single-target strike that learns to chain |
+| Greek | Poseidon's Tide | Push and control, building on Rebuke's push |
+| Egyptian | Osiris's Return | Revive a fallen ally |
+| Egyptian | Sekhmet's Plague | Poison and attrition |
 
-Several of these names are also cards or bosses (Odin, Zeus, Ra, Hel). Final god powers need names that don't collide with the card and enemy lists.
+In reserve, for alternatives or a third power per pantheon later: Athena (shields), Freyja (card recursion), Ra (permanent buffs), Hephaestus (forging a unit), Heimdall.
 
-### Example hybrid signature cards (placeholders)
+All numbers below are first-pass placeholders for the balance sim.
 
-| Pairing | Card | Idea |
-|---|---|---|
-| Norse + Egyptian | Draugr Pharaoh | Revive; its On-Death triggers again when it returns |
-| Norse + Greek | Shield-Oath | Whenever an ally dies, its row neighbours gain Shield 2 |
-| Greek + Egyptian | Sunlit Phalanx | Front-row allies heal 1 at end of round while flanked |
+### Tyr's Oath (Norse)
+
+- **Base:** destroy one of your units. Allies in its lane gain +1 ATK this round.
+- **Blood:**
+  1. +2 ATK instead.
+  2. The buff lasts the whole fight.
+  3. The destroyed unit's On-Death triggers twice.
+- **Oath:**
+  1. Your Core heals by the unit's remaining HP.
+  2. Its row neighbours gain Shield 2.
+  3. Draw a card for each ATK the unit had.
+- **Pacts:**
+  - Greek: allies in its lane gain Taunt this round.
+  - Egyptian: the unit returns with Revive at the end of the round.
+- **Capstone:** usable twice per fight.
+
+### Thor's Thunderclap (Norse)
+
+- **Base:** deal 2 damage to the front enemy in one lane.
+- **Storm:**
+  1. +1 damage for each ally that died this fight (up to +4).
+  2. Hits every enemy in the lane.
+  3. Also hits the adjacent lanes for half damage.
+- **Hammer:**
+  1. The strike Cleaves (also hits the unit behind).
+  2. A killing blow refunds the power once per fight.
+  3. Your units in the lane gain Frenzy this round.
+- **Pacts:**
+  - Greek: allies in the lane gain Shield 2.
+  - Egyptian: enemies hit gain Poison 1.
+- **Capstone:** after 3 ally deaths, Thunderclap can be used again.
+
+### Zeus's Lightning Bolt (Greek)
+
+- **Base:** deal 3 damage to one enemy.
+- **Chain:**
+  1. Chains to one adjacent enemy for 1 damage.
+  2. Chains to two adjacent enemies.
+  3. Chains to every adjacent enemy, and chain damage equals the main damage.
+- **Sky:**
+  1. Ignores Shield.
+  2. +2 damage to Airborne and Ranged enemies.
+  3. A kill gives +1 Faith this round.
+- **Pacts:**
+  - Norse: a kill gives a random ally +1 ATK for the fight.
+  - Egyptian: the target gains Poison 2.
+- **Capstone:** usable twice per fight.
+
+### Poseidon's Tide (Greek)
+
+- **Base:** push one enemy one lane left or right.
+- **Wave:**
+  1. The push deals 2 damage.
+  2. An enemy pushed into another enemy damages both.
+  3. Push every enemy in a row.
+- **Depths:**
+  1. The target lane becomes Quicksand for the fight.
+  2. Enemies in it lose Immovable.
+  3. Enemies in it have -1 SPD.
+- **Pacts:**
+  - Norse: your front unit in the new lane immediately strikes the pushed enemy.
+  - Egyptian: pushed enemies gain Poison 2.
+- **Capstone:** also one free push every round, without using the power.
+
+### Osiris's Return (Egyptian)
+
+- **Base:** return your last dead ally with 1 HP.
+- **Life:**
+  1. Returns at half HP.
+  2. Returns at full HP with Shield 2.
+  3. Return your last two dead allies.
+- **Wings:**
+  1. Place it on any empty tile.
+  2. It gains Veil.
+  3. Its On-Play triggers again.
+- **Pacts:**
+  - Norse: its On-Death triggers as it returns.
+  - Greek: it returns with Taunt and +1 ATK per adjacent ally.
+- **Capstone:** the first ally to die each fight also returns automatically.
+
+### Sekhmet's Plague (Egyptian)
+
+- **Base:** Poison 1 to every enemy in one lane.
+- **Plague:**
+  1. Poison 2.
+  2. Also hits the adjacent lanes.
+  3. Poison from the power doesn't decay this fight.
+- **Hunt:**
+  1. Your units deal +1 damage to poisoned enemies.
+  2. A poisoned enemy that dies heals your Core by 2.
+  3. Scarabs you summon this fight apply Poison 1 on attack.
+- **Pacts:**
+  - Greek: front-row allies gain Shield equal to the Poison applied in their lane.
+  - Norse: when a poisoned enemy dies, a random ally gains Frenzy.
+- **Capstone:** at the start of every round, Poison 1 spreads to one random enemy.
 
 ### Scaling
 
-| Pantheons | Pairings | Pairing and god-power starts (4 gods per pair) |
+Each new pantheon costs about 16 cards, 2 trees, and one new pact node in every existing tree.
+
+| Pantheons | Powers | Pact nodes per tree |
 |---|---|---|
-| 3 | 3 | 12 |
-| 4 | 6 | 24 |
-| 5 | 10 | 40 |
+| 3 | 6 | 2 |
+| 4 | 8 | 3 |
+| 5 | 10 | 4 |
 
-A new pantheon costs about 16 cards and 2 gods, plus 2-3 hybrid cards for each new pairing.
+## 7. Risks and open questions
 
-## 6. Risks and open questions
-
-- **Pairing balance:** some pairings may be much stronger. The balance sim should report win rate per pairing and per god power, as it does per patron today.
-- **God-power strength:** once per fight has to be noticeable but not fight-deciding. Charge-based powers (e.g. every 3 rounds) are the fallback if once per fight feels too swingy or too weak in long boss fights.
-- **Pool size:** with 12 cards per pantheon, a pair gives 24 plus 8 neutral. That's fine now, and better once each pantheon reaches its planned ~16 cards.
-- **Neutral cards:** decide whether they keep their current share of rewards or shrink so the pairing identity is stronger.
-- **Shrines and Divine cards:** shrine events name a random pantheon; they should favour the chosen pair.
-- **Starting HP:** currently tied to the patron (55). Either a flat value, or a per-god trade-off.
+- **Power balance:** some trees may be much stronger. The balance sim should report win rate per power and per capstone, as it does per patron today.
+- **Strength curve:** the base must be noticeable but weak; a fully upgraded power must not decide fights alone.
+- **Long fights:** once per fight may feel thin in act 2-3 boss fights. Capstones add second uses; a recharge rule (every 4 rounds) is the fallback.
+- **Draft pressure:** watch whether players take weak main-pantheon cards just to hit thresholds. If so, lower the thresholds or count Rares as 2.
+- **Spellward:** decide whether powers count as spells (blocked by Spellward) or bypass it.
+- **Upgrade screen:** a new screen after the card pick, plus a tree view in the sidebar and the deck overlay.
+- **Shrines and Divine cards:** shrine events name a random pantheon; they could favour the main pantheon.
 - **Existing relics** that assume the patron model (patron relics, Seer's Lens) need new homes.
 
-## 7. Rough implementation plan (when ready)
+## 8. Rough implementation plan (when ready)
 
-1. **Data:** a gods table (id, pantheon, name, power text, art), and pairing definitions with signature card ids.
-2. **Run setup:** a two-step start screen (pick two pantheons, then pick a god); starting deck and HP from the choices.
-3. **Pools:** filter reward, shop and shrine card pools by the chosen pantheons plus neutral; new reward rule.
-4. **Combat:** a god-power button in the plan phase, implemented as a free, once-per-fight spell-like action (reuse spell targeting); state saved for Restart planning.
-5. **Between-fight bonuses:** hybrid cards gated on owned-card counts, and whichever of resonance, shrine favour and rest upgrades are chosen.
-6. **Tests and sim:** fuzz every pairing and god power; the sim reports win rate by pairing and by power.
-7. **Docs:** update the content list, rules text and print sheets.
+1. **Data:** a powers table (id, pantheon, name, base effect, glyph) and a tree table per power (nodes, branch, requirements, effects).
+2. **Run setup:** the start screen picks one of six powers; starting deck and HP from the choice. Track cards added per pantheon and owned tree nodes.
+3. **Pools:** the reward rule guarantees one main-pantheon card per set of three.
+4. **Combat:** a god-power button in the plan phase, a free once-per-fight action reusing spell targeting; node effects as modifiers on the base effect; state saved for Restart planning.
+5. **Upgrades:** threshold and boss checks after each card is added; the node-pick screen; the tree view.
+6. **Tests and sim:** fuzz every power with random node sets; the sim reports win rate by power and capstone.
+7. **Docs:** update the content list, rulebook panel and print sheets.
+
