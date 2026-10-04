@@ -17,8 +17,8 @@ func _initialize() -> void:
 		if b["id"] == battle_id:
 			battle = b.duplicate(true)
 	battle["core"] = 40
-	battle["enemy_bonus"] = {"atk": steps * Data.BALANCE["empower_atk"], "hp": steps * Data.BALANCE["empower_hp"],
-		"rounds": steps * Data.BALANCE["scaling_rounds"]}
+	battle["enemy_bonus"] = {"atk": Data.BALANCE["empower_atk"] if steps > 0 else 0, "hp": Data.BALANCE["empower_hp"] if steps > 0 else 0,
+		"count": steps * Data.BALANCE["empowered_per_step"], "rounds": steps * Data.BALANCE["scaling_rounds"]}
 	var deck: Array = Data.STARTER + ["shieldmaiden", "einherjar", "hoplite"]
 	var c = Combat.new()
 	c.setup(battle, deck, [], seed_value)

@@ -325,7 +325,7 @@ func _power_tile(patron: Dictionary, id: String) -> Button:
 	var title := CardWidget.heading(power["name"], 26, tint.lightened(0.45))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
-	var sub := CardWidget._label("Once per fight, free, during planning", 13, Color(0.62, 0.6, 0.7), false)
+	var sub := CardWidget._label("Free, during planning. Recharges for %d floors after use" % Data.POWER_COOLDOWN_FLOORS, 13, Color(0.62, 0.6, 0.7), false)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(sub)
 	var text := CardWidget._label(power["text"], 16, Color(0.92, 0.9, 0.86), false)

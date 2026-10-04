@@ -123,7 +123,7 @@ func _build() -> void:
 	sidebar.add_child(sidebar_label)
 
 	power_box = Button.new()
-	power_box.custom_minimum_size = Vector2(0, 78)
+	power_box.custom_minimum_size = Vector2(0, 94)
 	power_box.pressed.connect(_open_power_tree)
 	CardWidget.style_button(power_box)
 	sidebar.add_child(power_box)
@@ -236,19 +236,25 @@ func _fill_power_box() -> void:
 	for child in power_box.get_children():
 		child.queue_free()
 	var power: Dictionary = Data.GOD_POWERS[run.power]
-	power_box.tooltip_text = CardWidget.wrap_text("%s (once per fight)\n%s\n\nClick to see the upgrade tree." % [power["name"], Data.power_text(run.power, run.power_nodes)])
-	var disc := CardWidget.power_disc(run.power, 54)
-	disc.position = Vector2(10, 12)
+	power_box.tooltip_text = CardWidget.wrap_text("%s (once per fight; after use it recharges for %d floors)\n%s\n\nClick to see the upgrade tree." % [
+		power["name"], Data.POWER_COOLDOWN_FLOORS, Data.power_text(run.power, run.power_nodes)])
+	var charged: bool = run.power_charged(run.floor_number() + 1)
+	var disc := CardWidget.power_disc(run.power, 54, charged)
+	disc.position = Vector2(10, 20)
+	disc.modulate = Color(1, 1, 1, 1.0 if charged else 0.5)
 	power_box.add_child(disc)
 	var title := CardWidget.heading(power["name"], 16, Color(0.95, 0.92, 0.85))
-	CardWidget.place(power_box, title, 74, 12, -8, 36)
+	CardWidget.place(power_box, title, 74, 10, -8, 34)
+	var charge := CardWidget._label("Ready" if charged else "Recharging - ready on floor %d" % run.power_ready_floor, 12,
+		Color(0.55, 0.9, 0.6) if charged else Color(0.95, 0.7, 0.45), false)
+	CardWidget.place(power_box, charge, 74, 36, -8, 54)
 	var next: int = run.next_threshold()
 	var status := "%d/%d upgrades" % [run.power_nodes.size(), Data.POWER_THRESHOLDS.size()]
 	if next != -1:
 		status += "   %s cards %d/%d" % [Data.FACTION_NAMES[run.main_pantheon()], run.devotion, next]
 	var l := CardWidget._label(status, 12, Color(0.68, 0.66, 0.76), false)
-	CardWidget.place(power_box, l, 74, 40, -8, 62)
-	for c in [title, l]:
+	CardWidget.place(power_box, l, 74, 56, -8, 76)
+	for c in [title, charge, l]:
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -705,8 +711,9 @@ func _start_combat() -> void:
 	battle_view.abandon_requested.connect(_confirm_abandon)
 	var title := "%s - Floor %d" % [run.battle_def()["name"], run.floor_number()]
 	var bonus: Dictionary = run.enemy_bonus()
-	if bonus["atk"] > 0 or bonus["hp"] > 0:
-		title += "  (one enemy Empowered +%d ATK / +%d HP, +%d rounds)" % [bonus["atk"], bonus["hp"], bonus["rounds"]]
+	if bonus["count"] > 0:
+		title += "  (%s Empowered +%d ATK / +%d HP, +%d rounds)" % [
+			"one enemy" if bonus["count"] == 1 else "%d enemies" % bonus["count"], bonus["atk"], bonus["hp"], bonus["rounds"]]
 	battle_view.start_run_fight(c, title)
 
 

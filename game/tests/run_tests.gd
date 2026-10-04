@@ -42,6 +42,7 @@ func _initialize() -> void:
 	test_patron_relics()
 	test_god_powers()
 	test_power_upgrades()
+	test_power_cooldown()
 	test_round_scaling()
 	test_tooltip_wrap()
 	fuzz_all_battles()
@@ -859,6 +860,43 @@ func test_god_powers() -> void:
 	check(c.power_uses == 1 and c.unit_at(E, F, 1).hp == 5, "power: Undo round restores it")
 
 
+func test_power_cooldown() -> void:
+	var run = Run.new()
+	run.setup(5, "myrmidon", "zeus_lightning_bolt")
+	var by_floor := {}
+	for i in run.nodes.size():
+		if run.nodes[i]["type"] in ["fight", "elite"] and not by_floor.has(run.nodes[i]["floor"]):
+			by_floor[run.nodes[i]["floor"]] = i
+	var first: int = by_floor.keys().min()
+	run.current = by_floor[first]
+	run.battle_id = "swarm"
+	run.state = "combat"
+	var c = run.make_combat()
+	check(c.power_uses == 1, "cooldown: charged in the first fight")
+	c.power_invoked = true
+	c.result = "win"
+	run.finish_combat(c)
+	var used_on: int = first + 1
+	check(run.power_ready_floor == used_on + Data.POWER_COOLDOWN_FLOORS + 1, "cooldown: ready %d floors later" % Data.POWER_COOLDOWN_FLOORS)
+	for f in by_floor:
+		run.current = by_floor[f]
+		var fight = run.make_combat()
+		var floor_num: int = f + 1
+		if floor_num <= used_on:
+			continue
+		var expect_ready: bool = floor_num > used_on + Data.POWER_COOLDOWN_FLOORS
+		check((fight.power_uses == 1) == expect_ready, "cooldown: floor %d charged = %s" % [floor_num, expect_ready])
+		if not expect_ready:
+			check(fight.power_targets().is_empty() and fight.use_power([[E, F, 0]]).begins_with("Your god power is recharging"), "cooldown: can't use while recharging")
+	run.current = by_floor[first]
+	c = run.make_combat()
+	c.power_invoked = false
+	run.power_ready_floor = 0
+	c.result = "win"
+	run.finish_combat(c)
+	check(run.power_ready_floor == 0, "cooldown: an unused power stays charged")
+
+
 func test_power_upgrades() -> void:
 	var run = Run.new()
 	run.setup(1, "myrmidon", "poseidons_tide")
@@ -904,15 +942,26 @@ func test_round_scaling() -> void:
 	for u in c.units(E):
 		if not u.empowered:
 			check(u.atk == 2 and u.hp == 3, "empower: other enemies unchanged")
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 0, 0], ["void_spawn", 1, 0], ["void_spawn", 2, 0]], "terrain": [],
+		"enemy_bonus": {"atk": 2, "hp": 6, "count": 2, "rounds": 0}}, [], [], 7)
+	empowered = c.units(E).filter(func(u): return u.empowered)
+	check(empowered.size() == 2 and empowered.all(func(u): return u.atk == 4 and u.hp == 9), "empower: count 2 empowers two different enemies")
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 0, 0]], "terrain": [],
+		"enemy_bonus": {"atk": 2, "hp": 6, "count": 3, "rounds": 0}}, [], [], 7)
+	check(c.units(E)[0].atk == 4, "empower: count above the enemy count buffs each enemy once")
 	var run = Run.new()
 	run.setup(1, "shieldmaiden")
 	for id in run.nodes.size():
 		run.current = id
 		var expected: int = run.nodes[id]["floor"] / Data.BALANCE["scaling_every_floors"] * Data.BALANCE["scaling_rounds"]
 		if run.nodes[id]["type"] == "boss":
-			check(run.enemy_bonus() == {"atk": 0, "hp": 0, "rounds": 0}, "boss fight has no floor scaling")
+			check(run.enemy_bonus()["count"] == 0 and run.enemy_bonus()["rounds"] == 0, "boss fight has no floor scaling")
 		else:
+			var steps: int = run.nodes[id]["floor"] / Data.BALANCE["scaling_every_floors"]
 			check(run.enemy_bonus()["rounds"] == expected, "round scaling: floor %d bonus" % run.nodes[id]["floor"])
+			check(run.enemy_bonus()["count"] == steps * Data.BALANCE["empowered_per_step"], "empower count: floor %d" % run.nodes[id]["floor"])
 
 
 func test_tooltip_wrap() -> void:

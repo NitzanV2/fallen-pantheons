@@ -255,8 +255,8 @@ const BATTLES := [
 
 
 # Run-level balance knobs. scaling_every_floors = 0 turns floor scaling off.
-# Each scaling step Empowers one random enemy per fight (empower_atk / empower_hp,
-# multiplied by the number of steps) and adds scaling_rounds to the round limit.
+# Each scaling step Empowers empowered_per_step more random enemies per fight (each gains
+# empower_atk / empower_hp) and adds scaling_rounds to the round limit.
 const BALANCE := {
 	"core_hp": 50,
 	"win_gold": 15,
@@ -267,7 +267,8 @@ const BALANCE := {
 	"shop_heal_price": 40,
 	"remove_price": 50,
 	"relic_price": 70,
-	"scaling_every_floors": 7,
+	"scaling_every_floors": 6,
+	"empowered_per_step": 1,
 	"empower_atk": 2,
 	"empower_hp": 6,
 	"scaling_rounds": 1,
@@ -282,7 +283,8 @@ const PATRONS := [
 	{"card": "mummy_guardian", "powers": ["osiris_return", "sekhmets_plague"], "hp": 55, "label": "Mummy Guardian (Egyptian)"},
 ]
 
-# God powers: one is chosen at run start and used once per fight during planning, for free.
+# God powers: one is chosen at run start and used once per fight during planning, for free,
+# then recharges for POWER_COOLDOWN_FLOORS floors.
 # "target" uses the spell target values at the top of this file. Powers respect Spellward but
 # are not spells (they don't trigger Pythia, Hermes or Oracle's Tripod).
 #
@@ -292,6 +294,8 @@ const PATRONS := [
 # change a tree. Later acts add thresholds and deeper tiers on top of these nodes.
 const POWER_THRESHOLDS := [2, 4, 6]
 const PACT_CARDS := 3
+# After a fight where the power was used, it sits out the next POWER_COOLDOWN_FLOORS floors.
+const POWER_COOLDOWN_FLOORS := 3
 const GOD_POWERS := {
 	"tyrs_oath": {"name": "Tyr's Oath", "short": "Oath", "god": "Tyr", "pantheon": "norse", "target": "ally",
 		"text": "Sacrifice one of your units (On-Death and Revive still trigger). Your other units gain +1 ATK this round.",

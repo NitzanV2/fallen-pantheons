@@ -6,7 +6,8 @@ Things to check later. Add to this list as new questions come up.
 
 - 15-floor map (was 8), with two guaranteed shops, two guaranteed elites and a mid-act rest site.
 - Core HP 55 for every patron (set per patron in `PATRONS`, so classes can differ later). Rest sites heal 15.
-- Floor scaling every 7 floors: on floors 8-14 one random enemy per fight is Empowered (+2 ATK / +6 HP), and fights last 4 rounds.
+- Floor scaling every 6 floors: each step Empowers one more random enemy per fight (+2 ATK / +6 HP each) and adds a round. Floors 7-12 have one Empowered enemy and 4 rounds; floors 13-14 have two and 5 rounds.
+- God powers: one per run, free, once per fight, then recharging for 3 floors (`POWER_COOLDOWN_FLOORS` in `data.gd`).
 - The Void Herald has fixed stats (10 ATK / 42 HP, Void Tide 5) and is never Empowered.
 - Elites have Threat 3. Fenrir 4 ATK / 10 HP / +1 ATK per death, Set 3 ATK / 8 HP with a one-round Sandstorm, Medusa guarded by one Bulwark and a Void Spawn.
 
@@ -25,8 +26,9 @@ Things to check later. Add to this list as new questions come up.
 - **Round scaling.** Fights get +1 round per scaling step. This cut timeouts sharply but barely changed win rates. Watch that longer late fights don't feel slow, and that Golden Fleece (now "+1 round") still feels worth taking.
 - **Timeouts give nothing now.** Check whether this makes elites feel punishing rather than interesting.
 - **Early fights are trivial.** First Contact and Hollow Procession are won nearly 100% of the time with almost no HP lost. Check whether they should threaten a little more.
-- **Patron spread.** Currently even for the bot (30-34%). The bot doesn't deliberately build formations, so a human may get more out of Spartan Standard. Watch whether Greek pulls ahead in real play.
-- **Scarab Amulet is the quietest relic.** If Egyptian starts to feel weak, heal 2 instead of 1, or heal only the front row by 2.
+- **God power spread.** With cooldown and the new scaling (60 runs each): Tyr 27%, Thor 30%, Zeus 30%, Poseidon 35%, Sekhmet 40%, Osiris 47%. The Norse powers trail and Osiris leads; the bot plays Tyr cautiously and Osiris's revive is easy for it to use well. Re-check with 300 runs before tuning individual powers.
+- **Cooldown dial.** Without a cooldown the bot won 50% (vs 28% never using a power); a 3-floor cooldown brought it to 41% before the scaling change. The bot uses its power on elites and the boss, and in normal fights only if it will recharge before the boss. Humans will likely save it better.
+- **Scaling dial.** With powers and cooldown: scaling every 6 floors -> 35% (62% reach the boss); every 5 floors (two Empowered from floor 11) -> 29% (49% reach the boss). Every 5 is the next step if players find runs too easy.
 - **Herald phase 2 starts at half max HP** (21 of 42). Check that it still arrives at a sensible point in the fight.
 
 ## Side effects to watch
@@ -39,7 +41,7 @@ Things to check later. Add to this list as new questions come up.
 - All run balance numbers live in the `BALANCE` table in `game/scripts/core/data.gd`. Starting HP and patron relics live in `PATRONS`.
 - `game/tests/balance_sim.gd` plays runs with a greedy bot and reports win rates, plus win, timeout and loss rates and average HP lost per win and per timeout for each encounter. From the `game` folder:
   `& "C:\Users\nitza\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path . --script res://tests/balance_sim.gd -- 300`
-  Add `no_patron_relics` after the run count to measure without patron relics. Use at least 300 runs per patron when comparing patrons: at 100 runs the per-patron numbers swing by several points.
+  The count is runs per god power. Add `no_powers` after the run count to measure a bot that never uses its power. Use at least 300 runs per power when comparing powers: at 100 runs the per-power numbers swing by several points.
 - `game/tests/trace_fight.gd` prints the full log of the bot playing one battle: `... --script res://tests/trace_fight.gd -- fenrir <seed> <scaling steps>`.
 - The bot ignores enemy intents, never looks ahead, never moves units, and skips Ragnarok and Transposition. Use it to compare settings, not to predict human win rates.
 
@@ -57,4 +59,8 @@ Things to check later. Add to this list as new questions come up.
 | Same, 40 HP, tide 5 | 32% |
 | 15 floors, 40 HP, scaling every 5 floors | 8% |
 | 15 floors, 55 HP, scaling every 7 floors, rest heal 10 | 24% |
-| 15 floors, 55 HP, scaling every 7 floors, rest heal 15, current | 32% |
+| 15 floors, 55 HP, scaling every 7 floors, rest heal 15 | 32% |
+| God powers v1 (no patron relics), no cooldown | 50% |
+| Same, 3-floor power cooldown | 41% |
+| Same, scaling every 5 floors with stacking Empowered count | 29% |
+| Same, scaling every 6 floors, current | 35% |

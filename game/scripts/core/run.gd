@@ -65,6 +65,8 @@ var power_nodes: Array = []
 ## Cards gained during the run (not the starting deck): from the power's pantheon, and from the other pantheons.
 var devotion := 0
 var foreign := 0
+## The first floor on which the god power is charged again.
+var power_ready_floor := 0
 
 
 ## `p_power` defaults to the patron's first god power.
@@ -140,7 +142,11 @@ func pending_upgrades() -> int:
 
 ## What a fight needs to know about the god power.
 func power_state() -> Dictionary:
-	return {"id": power, "nodes": power_nodes.duplicate()}
+	return {"id": power, "nodes": power_nodes.duplicate(), "ready": power_charged(floor_number()), "ready_floor": power_ready_floor}
+
+
+func power_charged(floor_num: int) -> bool:
+	return floor_num >= power_ready_floor
 
 
 func choose_upgrade(node: String) -> String:
@@ -387,14 +393,17 @@ func boss_name() -> String:
 	return Data.ENEMIES[boss_def()["enemies"][0][0]]["name"]
 
 
-## Floor scaling: the Empowered enemy's bonus and extra fight rounds, {"atk", "hp", "rounds"}.
+## Floor scaling: how many enemies are Empowered, each one's bonus, and extra fight rounds,
+## {"atk", "hp", "count", "rounds"}.
 func enemy_bonus() -> Dictionary:
 	var every: int = Data.BALANCE["scaling_every_floors"]
 	if every <= 0 or current == -1 or nodes[current]["type"] == "boss":
-		return {"atk": 0, "hp": 0, "rounds": 0}
+		return {"atk": 0, "hp": 0, "count": 0, "rounds": 0}
 	var steps: int = nodes[current]["floor"] / every
-	return {"atk": steps * Data.BALANCE["empower_atk"], "hp": steps * Data.BALANCE["empower_hp"],
-		"rounds": steps * Data.BALANCE["scaling_rounds"]}
+	if steps == 0:
+		return {"atk": 0, "hp": 0, "count": 0, "rounds": 0}
+	return {"atk": Data.BALANCE["empower_atk"], "hp": Data.BALANCE["empower_hp"],
+		"count": steps * Data.BALANCE["empowered_per_step"], "rounds": steps * Data.BALANCE["scaling_rounds"]}
 
 
 func make_combat():
@@ -410,6 +419,8 @@ func make_combat():
 
 func finish_combat(c) -> void:
 	core_hp = clampi(c.core_hp, 0, max_hp)
+	if c.power_invoked:
+		power_ready_floor = floor_number() + Data.POWER_COOLDOWN_FLOORS + 1
 	var type: String = nodes[current]["type"]
 	if c.result == "defeat" or core_hp <= 0:
 		state = "defeat"

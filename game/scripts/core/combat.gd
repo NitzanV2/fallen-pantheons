@@ -55,6 +55,8 @@ var acted_this_plan := false
 var power := {}
 var power_uses := 0
 var power_refunded := false
+## Set once the power is used; the run then starts its floor cooldown.
+var power_invoked := false
 ## How many times one of your units fell this fight (deaths and Revives).
 var falls := 0
 var _unmaking := false
@@ -76,7 +78,7 @@ func setup(battle_def: Dictionary, deck_ids: Array, relic_ids: Array, seed_value
 	enemy_bonus = battle_def.get("enemy_bonus", enemy_bonus)
 	max_rounds = 3 + enemy_bonus.get("rounds", 0) + (1 if has_relic("golden_fleece") else 0)
 	power = battle_def.get("god_power", {})
-	power_uses = 1 if Data.GOD_POWERS.has(power.get("id", "")) else 0
+	power_uses = 1 if Data.GOD_POWERS.has(power.get("id", "")) and power.get("ready", true) else 0
 	for id in deck_ids:
 		deck.append(_new_card(id))
 	_shuffle(deck)
@@ -100,14 +102,15 @@ func _empower_random_enemy() -> void:
 	var bonus_atk: int = enemy_bonus.get("atk", 0)
 	var bonus_hp: int = enemy_bonus.get("hp", 0)
 	var enemies := units(ENEMY)
-	if enemies.is_empty() or (bonus_atk <= 0 and bonus_hp <= 0):
+	if bonus_atk <= 0 and bonus_hp <= 0:
 		return
-	var u = enemies[rng.randi_range(0, enemies.size() - 1)]
-	u.empowered = true
-	u.atk += bonus_atk
-	u.max_hp += bonus_hp
-	u.hp = u.max_hp
-	_log("%s is Empowered (+%d ATK / +%d HP)." % [_unit_label(u), bonus_atk, bonus_hp])
+	for i in mini(enemy_bonus.get("count", 1), enemies.size()):
+		var u = enemies.pop_at(rng.randi_range(0, enemies.size() - 1))
+		u.empowered = true
+		u.atk += bonus_atk
+		u.max_hp += bonus_hp
+		u.hp = u.max_hp
+		_log("%s is Empowered (+%d ATK / +%d HP)." % [_unit_label(u), bonus_atk, bonus_hp])
 
 
 func _empty_row() -> Array:
@@ -266,6 +269,8 @@ func snapshot() -> Dictionary:
 		"quicksand_targets": _quicksand_targets(),
 		"void_tide": _void_tide(),
 		"power_uses": power_uses,
+		"power_ready": power.get("ready", true),
+		"power_ready_floor": power.get("ready_floor", 0),
 	}
 
 
@@ -391,7 +396,7 @@ func _capture() -> Dictionary:
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
-		"power_uses": power_uses, "power_refunded": power_refunded, "falls": falls,
+		"power_uses": power_uses, "power_refunded": power_refunded, "power_invoked": power_invoked, "falls": falls,
 	}
 
 
@@ -429,6 +434,7 @@ func restart_plan() -> String:
 	transformed_uid = s["transformed_uid"]
 	power_uses = s["power_uses"]
 	power_refunded = s["power_refunded"]
+	power_invoked = s["power_invoked"]
 	falls = s["falls"]
 	acted_this_plan = false
 	_plan_start = _capture()
@@ -849,12 +855,15 @@ func use_power(targets: Array, direction := 0) -> String:
 	if phase != "plan":
 		return "Not in the plan phase."
 	if power_uses <= 0:
+		if not power.get("ready", true):
+			return "Your god power is recharging (ready on floor %d)." % power.get("ready_floor", 0)
 		return "Your god power is spent for this fight."
 	var def := power_def()
 	var err := _check_targets(def, targets, direction)
 	if err != "":
 		return err
 	power_uses -= 1
+	power_invoked = true
 	acted_this_plan = true
 	events.clear()
 	_log("Invoked %s." % def["name"])

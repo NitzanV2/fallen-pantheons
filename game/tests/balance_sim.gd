@@ -90,7 +90,8 @@ func _play_run(seed_value: int, patron: String, power: String) -> Dictionary:
 					boss_hp = run.core_hp
 				var before: int = run.core_hp
 				var c = run.make_combat()
-				_play_fight(c)
+				var type: String = run.nodes[run.current]["type"]
+				_play_fight(c, type != "fight" or run.floor_number() + Data.POWER_COOLDOWN_FLOORS + 1 <= Run.FLOORS)
 				run.finish_combat(c)
 				_record(run.battle_id, c.result, before - max(run.core_hp, 0))
 				if run.nodes[run.current]["type"] == "boss":
@@ -236,14 +237,14 @@ func _shrine(run) -> void:
 
 # ---------------------------------------------------------------- combat decisions
 
-func _play_fight(c) -> void:
+func _play_fight(c, power_allowed := true) -> void:
 	var guard := 0
 	while c.phase == "plan" and guard < 40:
 		guard += 1
 		for step in 10:
 			if c.phase != "plan" or not _play_best_card(c):
 				break
-		if c.phase == "plan" and not no_powers:
+		if c.phase == "plan" and power_allowed and not no_powers:
 			_use_power(c)
 		if c.phase == "plan":
 			c.end_plan()

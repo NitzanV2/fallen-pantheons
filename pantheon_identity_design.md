@@ -302,6 +302,7 @@ Act 1 only, so the trees are cut down from section 6. Sections 6-7 stay as the l
 2. **Choose a god power** from that patron's two. "Back to patrons" returns to step 1.
 3. No starting relic. Mead of the Einherjar, Spartan Standard and Scarab Amulet are Uncommon pool relics.
 4. **Rewards:** one card of the three is always from the main pantheon; the other two come from the full pool.
+5. **Cooldown:** after a fight where the power was used, it recharges for 3 floors (used on floor 4, ready again on floor 8). Fights without using it cost nothing.
 
 ### Tree format (v1)
 

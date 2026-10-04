@@ -594,7 +594,7 @@ func _build_power_button() -> void:
 	power_button.visible = not def.is_empty()
 	if def.is_empty():
 		return
-	power_button.tooltip_text = CardWidget.wrap_text("%s (once per fight, free; key G)\n%s" % [def["name"], Data.power_text(combat.power["id"], combat.power.get("nodes", []))])
+	power_button.tooltip_text = CardWidget.wrap_text("%s (free, key G; after use it recharges for %d floors)\n%s" % [def["name"], Data.POWER_COOLDOWN_FLOORS, Data.power_text(combat.power["id"], combat.power.get("nodes", []))])
 	var disc := CardWidget.power_disc(combat.power["id"], 48, true)
 	disc.position = Vector2(9, 9)
 	power_button.add_child(disc)
@@ -614,12 +614,14 @@ func _update_power_button(snap: Dictionary) -> void:
 	power_button.modulate = Color(1, 1, 1, 1.0 if uses > 0 else 0.45)
 	if sel_power:
 		power_status.text = "Choose a target (Esc to cancel)"
+	elif not snap.get("power_ready", true):
+		power_status.text = "Recharging - ready on floor %d" % snap.get("power_ready_floor", 0)
 	elif uses <= 0:
 		power_status.text = "Used this fight"
 	elif not usable and plan:
 		power_status.text = "No legal target right now"
 	else:
-		power_status.text = "Ready: free, once per fight" if uses == 1 else "Ready again (%d)" % uses
+		power_status.text = "Ready: free, then recharges %d floors" % Data.POWER_COOLDOWN_FLOORS if uses == 1 else "Ready again (%d)" % uses
 	var sb: StyleBoxFlat = power_button.get_theme_stylebox("normal")
 	sb.border_color = GOLD if sel_power else Color(1, 1, 1, 0.1)
 	sb.set_border_width_all(2 if sel_power else 1)
@@ -633,7 +635,10 @@ func _on_power_pressed() -> void:
 		return
 	_clear_selection()
 	if not combat.can_use_power():
-		_set_hint("Your god power has no legal target right now." if combat.power_uses > 0 else "Your god power is spent for this fight.")
+		var hint := "Your god power has no legal target right now."
+		if combat.power_uses <= 0:
+			hint = combat.use_power([])
+		_set_hint(hint)
 		_refresh()
 		return
 	sel_power = true
