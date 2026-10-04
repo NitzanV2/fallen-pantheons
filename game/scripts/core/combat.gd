@@ -265,7 +265,6 @@ func snapshot() -> Dictionary:
 		"phase": phase,
 		"moves_left": moves_left,
 		"free_spell": free_spell_active(),
-		"lane_warnings": _lane_warnings(),
 		"quicksand_targets": _quicksand_targets(),
 		"void_tide": _void_tide(),
 		"power_uses": power_uses,
@@ -280,19 +279,6 @@ func _void_tide() -> int:
 	for e in units(ENEMY):
 		total += int(e.def.get("void_tide", 0))
 	return total
-
-
-## Player lanes an enemy intent will hit as a whole, e.g. {2: "SIEGE: 6 damage!"}.
-func _lane_warnings() -> Dictionary:
-	var out := {}
-	for e in units(ENEMY):
-		var it: Dictionary = intents.get(e.uid, {})
-		match it.get("type", ""):
-			"aim":
-				out[it["lane"]] = "Siege aimed: fires next round"
-			"siege":
-				out[it["lane"]] = "SIEGE: %d damage!" % effective_atk(e)
-	return out
 
 
 ## Player slots Geomancers will turn into Quicksand this round, as "row:lane" keys.
@@ -504,10 +490,9 @@ func _declare_intents() -> void:
 				it = {"type": "attack", "text": "Attack lane %d (back first)" % (e.lane + 1)}
 			"siege_engine":
 				if round_num % 2 == 1:
-					e.siege_lane = _lane_with_most_player_units()
-					it = {"type": "aim", "lane": e.siege_lane, "text": "AIM at lane %d (fires next round)" % (e.siege_lane + 1)}
+					it = {"type": "aim", "text": "LOADING (fires next round)"}
 				else:
-					it = {"type": "siege", "lane": e.siege_lane, "text": "SIEGE lane %d" % (e.siege_lane + 1)}
+					it = {"type": "siege", "text": "SIEGE your most crowded lane"}
 			"null_idol":
 				it = {"type": "wait", "text": "Ward its neighbours"}
 			"hollow_geomancer":
@@ -1387,12 +1372,20 @@ func _end_of_round(u) -> void:
 				_log("The Geomancer turns your lane %d %s into Quicksand." % [slot[1] + 1, "front" if slot[0] == FRONT else "back"])
 
 
+## Phase 1 summons a Void Spawn every round and a Void Wisp in the back row every second round.
 func _herald_end_of_round(boss) -> void:
-	if boss.hp * 2 > boss.max_hp:
+	var phase_one: bool = boss.hp * 2 > boss.max_hp
+	if phase_one:
 		var slot := _first_empty_enemy_slot()
 		if slot.size() == 2:
 			var spawn = _spawn("void_spawn", ENEMY, slot[0], slot[1])
 			_log("The Herald summons %s." % _unit_label(spawn))
+	if phase_one and round_num % 2 == 0:
+		for lane in [0, 3, 1, 2]:
+			if unit_at(ENEMY, BACK, lane) == null:
+				var wisp = _spawn("void_wisp", ENEMY, lane, BACK)
+				_log("The Herald calls %s to the back row." % _unit_label(wisp))
+				break
 	_damage_core(boss.def["void_tide"], "The Void Tide", false, {"void_tide": boss.def["void_tide"]})
 
 
@@ -1436,7 +1429,7 @@ func _siege_act(u) -> void:
 	var it: Dictionary = intents.get(u.uid, {})
 	if it.get("type", "") != "siege":
 		return
-	var lane: int = it["lane"]
+	var lane := _lane_with_most_player_units()
 	_log("The Siege Engine bombards lane %d!" % (lane + 1))
 	for row in 2:
 		var t = unit_at(PLAYER, row, lane)
@@ -1509,12 +1502,8 @@ func _attack(u, target, atk: int) -> void:
 		target.poisoned = true
 		_log("%s is Poisoned." % _unit_label(target))
 
-	if u.has_kw("pierce") and excess > 0:
-		if behind != null and behind.alive:
-			excess = _deal_damage(behind, excess, "pierce")
-		if excess > 0 and u.side == ENEMY:
-			_log("Pierce carries through to the Core.")
-			_damage_core(excess, u.display_name(), true)
+	if u.has_kw("pierce") and excess > 0 and behind != null and behind.alive:
+		_deal_damage(behind, excess, "pierce")
 
 	if u.has_kw("cleave"):
 		for lane in [target.lane - 1, target.lane + target.width]:

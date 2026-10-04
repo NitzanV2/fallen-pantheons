@@ -8,7 +8,8 @@ Things to check later. Add to this list as new questions come up.
 - Core HP 55 for every patron (set per patron in `PATRONS`, so classes can differ later). Rest sites heal 15.
 - Floor scaling every 6 floors: each step Empowers one more random enemy per fight (+2 ATK / +6 HP each) and adds a round. Floors 7-12 have one Empowered enemy and 4 rounds; floors 13-14 have two and 5 rounds.
 - God powers: one per run, free, once per fight, then recharging for 3 floors (`POWER_COOLDOWN_FLOORS` in `data.gd`).
-- The Void Herald has fixed stats (10 ATK / 42 HP, Void Tide 5) and is never Empowered.
+- The Void Herald has fixed stats (10 ATK / 42 HP, Void Tide 5) and is never Empowered. In phase 1 it summons a Void Spawn every round and a Void Wisp in its back row every second round; phase 2 summons nothing.
+- Enemy Pierce stops at your back unit and never reaches the Core. The Siege Engine picks its lane (most units) as it fires, so the target is hidden.
 - Elites have Threat 3. Fenrir 4 ATK / 10 HP / +1 ATK per death, Set 3 ATK / 8 HP with a one-round Sandstorm, Medusa guarded by one Bulwark and a Void Spawn.
 
 ## Balance to check in playtests
@@ -28,6 +29,9 @@ Things to check later. Add to this list as new questions come up.
 - **Early fights are trivial.** First Contact and Hollow Procession are won nearly 100% of the time with almost no HP lost. Check whether they should threaten a little more.
 - **God power spread.** With cooldown and the new scaling (60 runs each): Tyr 27%, Thor 30%, Zeus 30%, Poseidon 35%, Sekhmet 40%, Osiris 47%. The Norse powers trail and Osiris leads; the bot plays Tyr cautiously and Osiris's revive is easy for it to use well. Re-check with 300 runs before tuning individual powers.
 - **Cooldown dial.** Without a cooldown the bot won 50% (vs 28% never using a power); a 3-floor cooldown brought it to 41% before the scaling change. The bot uses its power on elites and the boss, and in normal fights only if it will recharge before the boss. Humans will likely save it better.
+- **Herald summons dial** (bot win rate vs the Herald, 60 runs per power): old (one Spawn in phase 1) 61%; two Spawns in both phases plus Wisps 9%; two Spawns in phase 1 plus Wisps 19%; one Spawn plus Wisps in both phases 35%; one Spawn plus Wisps in phase 1 only (current) 43%, level with Hel (44%).
+- **Pierce nerf.** Double Charge went from 14.9 to 12.9 HP lost per fight. It is still the costliest normal fight, mostly from the Chargers running into empty lanes. Next step if needed: Charger ATK 4 -> 3.
+- **Hidden siege lane.** The bot never moves units, so its Sieging Host numbers barely move (about 4 HP per fight). Watch how humans handle it: the counterplay is to spread out or kill the Engine during its loading round.
 - **Upgrade pace.** Thresholds are 4 / 8 / 12 main-pantheon cards. The bot now averages about 0.9 upgrades per run (was about 2.2 at 2 / 4 / 6), and its win rate barely moved (34%). The bot caps its deck at 22 cards and values main-pantheon cards only mildly, so a focused human should reach 1-2. Check that the first upgrade arrives early enough to feel part of the run.
 - **Scaling dial.** With powers and cooldown: scaling every 6 floors -> 35% (62% reach the boss); every 5 floors (two Empowered from floor 11) -> 29% (49% reach the boss). Every 5 is the next step if players find runs too easy.
 - **Herald phase 2 starts at half max HP** (21 of 42). Check that it still arrives at a sensible point in the fight.

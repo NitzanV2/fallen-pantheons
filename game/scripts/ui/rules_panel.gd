@@ -199,7 +199,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["taunt", "Taunt", "Enemies attacking from its lane or an adjacent lane must target it."],
 		["ranged", "Ranged", "Can attack from the back row. Can't target units on Ruins."],
 		["cleave", "Cleave", "Also hits the units in the lanes on both sides of the target, in the same row, for full damage."],
-		["pierce", "Pierce", "Damage beyond what kills the target carries to the unit behind it. An enemy's Pierce continues into your Core."],
+		["pierce", "Pierce", "Damage beyond what kills a front unit carries to the unit behind it. It never reaches the Core."],
 		["rally", "Rally X", "Start of round: its row neighbours gain +X ATK for the rest of the fight. Stacks every round."],
 		["support", "Support", "Start of round: helps the ally directly in front of it (same lane). Works from the back row."],
 		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot."],
@@ -269,7 +269,7 @@ func _enemies(page: VBoxContainer) -> void:
 		["enemies/void_charger.jpg", "CHARGE lane X", "Moves into that front slot (swapping with any enemy there), then attacks."],
 		["enemies/echo_of_medusa.jpg", "PETRIFY lane X", "Your units in that lane skip their action this round."],
 		["enemies/echo_of_set.jpg", "SANDSTORM", "Your units in that row have -1 ATK this round."],
-		["enemies/siege_engine.jpg", "AIM / SIEGE lane X", "Aims one round, then hits both of your slots in that lane for its ATK the next. The lane is marked on your side - move out before it fires."],
+		["enemies/siege_engine.jpg", "LOADING / SIEGE", "Loads one round, then hits both of your slots in your [b]most crowded lane[/b] for its ATK. It picks the lane as it fires, so the target isn't shown - spread your units out or destroy it first."],
 		["enemies/hollow_geomancer.jpg", "QUICKSAND", "Turns that slot of yours into Quicksand at the end of the round."],
 		["enemies/echo_of_circe.jpg", "TRANSFORM", "Circe turns that unit into a Swine for the round: it can't attack or use start-of-round effects."],
 		["enemies/void_herald.jpg", "TARGET / STRIKE", "The Void Herald's attacks. STRIKE deals 5 to both slots of a lane and to the front units beside it."],
@@ -280,7 +280,7 @@ func _enemies(page: VBoxContainer) -> void:
 	_heading(page, "map/void.png", "Bosses")
 	page.add_child(_rich("Each run faces one of three bosses, shown on the map from the start (hover the boss node). Boss fights have no round limit, and each boss favours some strategies and punishes others."))
 	_grid(page, 3, [
-		["enemies/void_herald.jpg", "Void Herald", "Fills lanes 2-3. Its Void Tide deals 5 to your Core every round, so slow decks suffer."],
+		["enemies/void_herald.jpg", "Void Herald", "Fills lanes 2-3. Its Void Tide deals 5 to your Core every round, so slow decks suffer. Until it drops to half HP it summons a Void Spawn every round and a Void Wisp in its back row every second round."],
 		["enemies/hel.jpg", "Hel", "Hides behind Draugr that rise again each round. HARVEST hits your lowest-HP unit, and every unit you lose for good heals her 2 and costs the Core 2. She grows stronger each round - keep your units alive."],
 		["enemies/apep.jpg", "Apep", "Coils across the whole back row. Shield is useless while it lives, units it kills can't Revive, and CONSTRICT crushes whole lanes - move out of them."],
 	], 92)

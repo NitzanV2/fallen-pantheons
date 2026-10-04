@@ -187,12 +187,25 @@ func test_siege_quicksand_circe() -> void:
 	var front = c.debug_place("ark_sentinel", P, 2, F)
 	var back = c.debug_place("ark_sentinel", P, 2, B)
 	c._declare_intents()
-	check(c.snapshot()["lane_warnings"].has(2), "siege: aimed lane is marked")
+	check(not c.intents.values()[0].has("lane"), "siege: the target lane is hidden while loading")
 	c.end_plan()
-	check(front.hp == 4 and back.hp == 4, "siege: nothing fires in the aim round")
-	check(c.move_unit(2, F, 0, F) == "", "siege: dodge by moving")
+	check(front.hp == 4 and back.hp == 4, "siege: nothing fires in the loading round")
+	check(c.move_unit(2, F, 1, F) == "", "siege: move a unit away")
+	check(not c.intents.values()[0].has("lane"), "siege: the target lane is hidden when firing")
 	c.end_plan()
-	check(front.hp == 4 and not back.alive, "siege: the unit left in the lane takes 6")
+	check(not front.alive and back.hp == 4, "siege: picks the most crowded lane as it fires, so moving doesn't dodge it")
+
+	c = fresh()
+	var engine = c.debug_place("siege_engine", E, 1, B)
+	engine.max_hp = 50
+	engine.hp = 50
+	var pair_front = c.debug_place("ark_sentinel", P, 3, F)
+	var pair_back = c.debug_place("ark_sentinel", P, 3, B)
+	var lone = c.debug_place("ark_sentinel", P, 0, F)
+	c._declare_intents()
+	c.end_plan()
+	c.end_plan()
+	check(not pair_front.alive and not pair_back.alive and lone.hp == 4, "siege: hits both slots of the lane with the most units")
 
 	c = fresh()
 	c.debug_place("hollow_geomancer", E, 0, B)
@@ -234,6 +247,13 @@ func test_pierce() -> void:
 	check(back.hp == 2, "pierce: 2 excess damage reaches the back unit")
 	check(back.atk == 4, "pierce: einherjar's on-death buffs its lane")
 	check(c.core_hp == 50, "pierce: Core untouched")
+
+	c = fresh()
+	var lone = c.debug_place("echo_archer", P, 0, F)
+	c.debug_place("void_charger", E, 0, F)
+	c._declare_intents()
+	c.end_plan()
+	check(not lone.alive and c.core_hp == 50, "pierce: an enemy's excess damage stops at your last unit, not the Core")
 
 
 func test_valkyrie_reinforce() -> void:
@@ -331,6 +351,19 @@ func test_herald_round() -> void:
 	check(c.core_hp == 15, "herald: 10 attack + 5 Void Tide")
 	check(c.units(E).size() == 2, "herald: summons a Void Spawn")
 	check(c.phase == "plan" and c.round_num == 2, "herald: no round limit")
+
+	c = fresh(100, true)
+	var herald = c.debug_place("void_herald", E, 1, F)
+	c.end_plan()
+	c.end_plan()
+	var ids: Array = c.units(E).map(func(u): return u.id)
+	check(ids.count("void_spawn") == 2 and ids.count("void_wisp") == 1, "herald: a Spawn every round, a Wisp every second round (%s)" % [ids])
+	check(c.units(E).filter(func(u): return u.id == "void_wisp")[0].row == B, "herald: the Wisp joins the back row")
+	herald.hp = herald.max_hp / 2
+	var before: int = c.units(E).size()
+	c.end_plan()
+	c.end_plan()
+	check(c.units(E).size() <= before, "herald: no summons in phase 2")
 
 
 func test_hel() -> void:

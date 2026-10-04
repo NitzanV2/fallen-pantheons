@@ -557,8 +557,6 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["", "Petrified", "Units in this lane skip their action this round.", Color(0.75, 0.9, 0.65)])
 		if snap["sandstorm_row"] == row:
 			out.append(["", "Sandstorm", "Units in this row get -1 ATK this round.", Color(0.98, 0.78, 0.42)])
-		if snap.get("lane_warnings", {}).has(lane):
-			out.append(["", "Danger", snap["lane_warnings"][lane], Color(1.0, 0.5, 0.4)])
 		if "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
 			out.append(["", "Quicksand incoming", "At the end of the round this slot sinks into Quicksand.", TERRAIN_COLORS["quicksand"]])
 	return out

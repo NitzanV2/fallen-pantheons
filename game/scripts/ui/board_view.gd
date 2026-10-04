@@ -189,8 +189,6 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 			draw_colored_polygon(quad, Color(0.55, 0.68, 0.5, 0.38))
 		if snap["sandstorm_row"] == row:
 			draw_colored_polygon(quad, Color(0.95, 0.72, 0.35, 0.22))
-		if snap.get("lane_warnings", {}).has(lane):
-			draw_colored_polygon(quad, Color(1.0, 0.25, 0.15, 0.2 + 0.08 * sin(pulse * 4.0)))
 		if "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
 			draw_colored_polygon(quad, Color(0.95, 0.7, 0.3, 0.3))
 
@@ -230,12 +228,9 @@ func _draw_labels() -> void:
 	var bottom: float = ROW_Y[3][1] + SLAB + 20
 	for lane in LANES:
 		var text := ""
-		var color := Color(1.0, 0.55, 0.45)
-		if snap.get("lane_warnings", {}).has(lane):
-			text = snap["lane_warnings"][lane]
-		elif snap["petrified_lane"] == lane:
+		var color := Color(0.75, 0.9, 0.65)
+		if snap["petrified_lane"] == lane:
 			text = "PETRIFIED"
-			color = Color(0.75, 0.9, 0.65)
 		if text != "":
 			var quad := tile_quad(P, 1, lane, 0)
 			var cx: float = (quad[2].x + quad[3].x) / 2.0
