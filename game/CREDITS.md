@@ -12,3 +12,4 @@ Map node glyphs in `art/glyphs/` are from [game-icons.net](https://game-icons.ne
 
 ## Fonts
 - Cinzel (`fonts/Cinzel.ttf`) by Natanael Gama, [SIL Open Font License 1.1](https://openfontlicense.org)
+- Fira Sans Bold (`fonts/FiraSans-Bold.ttf`) by The Mozilla Foundation and Telefonica S.A., [SIL Open Font License 1.1](https://openfontlicense.org) (`fonts/OFL_FiraSans.txt`)

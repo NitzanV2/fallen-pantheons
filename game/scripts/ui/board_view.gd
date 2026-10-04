@@ -217,7 +217,7 @@ func _draw_divider() -> void:
 		var c := Vector2(CENTER_X + ((lane + 0.5) / LANES * 2.0 - 1.0) * hw, DIVIDER_Y)
 		draw_circle(c, 11, Color(0.08, 0.06, 0.1))
 		draw_arc(c, 11, 0, TAU, 24, GOLD, 2.0, true)
-		draw_string(font, c + Vector2(-11, 5), str(lane + 1), HORIZONTAL_ALIGNMENT_CENTER, 22, 10, GOLD)
+		draw_string(font, c + Vector2(-11, 5), str(lane + 1), HORIZONTAL_ALIGNMENT_CENTER, 22, 14, GOLD)
 
 
 ## Lane and row effects are labelled outside the tiles, where tokens can't hide them.

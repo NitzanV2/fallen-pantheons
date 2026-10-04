@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://upnparpngktp"
-path="res://.godot/imported/PressStart2P.ttf-5efcbd428e9d940ffb80085ffe21a152.fontdata"
+uid="uid://rnp50pt2aq5l"
+path="res://.godot/imported/FiraSans-Bold.ttf-e4ba29dceab80e7df7ac958981ad5143.fontdata"
 
 [deps]
 
-source_file="res://fonts/PressStart2P.ttf"
-dest_files=["res://.godot/imported/PressStart2P.ttf-5efcbd428e9d940ffb80085ffe21a152.fontdata"]
+source_file="res://fonts/FiraSans-Bold.ttf"
+dest_files=["res://.godot/imported/FiraSans-Bold.ttf-e4ba29dceab80e7df7ac958981ad5143.fontdata"]
 
 [params]
 

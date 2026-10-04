@@ -17,7 +17,7 @@ const FACTION_COLORS := {
 	"divine": Color(0.95, 0.92, 0.75),
 }
 const TITLE_FONT = preload("res://fonts/title_font.tres")
-const NUMBER_FONT = preload("res://fonts/PressStart2P.ttf")
+const NUMBER_FONT = preload("res://fonts/FiraSans-Bold.ttf")
 ## Headings and buttons outside the cards use a modern display font; cards keep the pixel one.
 const UI_FONT = preload("res://fonts/ui_font.tres")
 const RARITY_STYLES := {
@@ -575,9 +575,9 @@ static func _stat_chip(id: String, value: int, px: float) -> HBoxContainer:
 	return chip
 
 
-## Numbers use a blockier pixel font whose digits stay distinct at small sizes.
+## Numbers use a bold sans whose digits stay distinct at small sizes.
 static func number_label(text: String, px: float, color: Color) -> Label:
-	var l := _label(text, int(px), color, true)
+	var l := _label(text, int(px * 1.3), color, true)
 	l.add_theme_font_override("font", NUMBER_FONT)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	return l

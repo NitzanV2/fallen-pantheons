@@ -607,7 +607,7 @@ class BoardDiagram extends Control:
 			var c := Vector2(LEFT + (lane + 0.5) * LANE_W, mid)
 			draw_circle(c, 11, Color(0.1, 0.08, 0.05))
 			draw_arc(c, 11, 0, TAU, 24, GOLD, 2.0)
-			draw_string(CW.NUMBER_FONT, c + Vector2(-12, 5), str(lane + 1), HORIZONTAL_ALIGNMENT_CENTER, 24, 11, GOLD)
+			draw_string(CW.NUMBER_FONT, c + Vector2(-12, 5), str(lane + 1), HORIZONTAL_ALIGNMENT_CENTER, 24, 14, GOLD)
 		var grid_h := 4 * ROW_H + GAP
 		draw_rect(Rect2(LEFT, 0, LANE_W, grid_h), Color(GOLD, 0.9), false, 2.0)
 		var core := Rect2(LEFT, grid_h + 12, LANE_W * 4, CORE_H)
