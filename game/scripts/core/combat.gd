@@ -42,6 +42,7 @@ var core_max := 0
 var moves_left := 0
 var longship_active := false
 var spells_this_round := 0
+var armaments_this_round := 0
 var intents := {}
 var petrified_lane := -1
 var sandstorm_row := -1
@@ -214,6 +215,8 @@ func effective_atk(u) -> int:
 		a += 1
 	if u.has_kw("pack"):
 		a += mini(PACK_MAX, _wolf_count(u.side) - (1 if is_wolf(u) else 0))
+	for card in u.armaments:
+		a += Data.CARDS[card["id"]]["arm"].get("atk", 0) + (1 if u.id == "talos" else 0)
 	if u.side == PLAYER and has_relic("dragon_prow") and u.moved_round == round_num:
 		a += 2
 	if terrain_at(u.side, u.row, u.lane) == "ley_line":
@@ -285,6 +288,7 @@ func snapshot() -> Dictionary:
 		"deck": deck.size(),
 		"discard": discard.size(),
 		"hand": hand.duplicate(true),
+		"hand_costs": hand.map(card_cost),
 		"petrified_lane": petrified_lane,
 		"sandstorm_row": sandstorm_row,
 		"result": result,
@@ -330,6 +334,7 @@ func _unit_snapshot(u) -> Dictionary:
 		"poisoned": u.poisoned, "swine": u.uid == transformed_uid,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
 		"spellward": u.side == ENEMY and is_spellwarded(u),
+		"armaments": u.armaments.map(func(card): return card["id"]),
 	}
 
 
@@ -341,6 +346,7 @@ func _start_round() -> void:
 	moves_left = 1 + _count_living(PLAYER, "loki")
 	longship_active = false
 	spells_this_round = 0
+	armaments_this_round = 0
 	for u in units(PLAYER) + units(ENEMY):
 		u.temp_atk = 0
 	faith = 3
@@ -403,7 +409,7 @@ func _capture() -> Dictionary:
 	return {
 		"grid": g, "deck": deck.duplicate(), "hand": hand.duplicate(), "discard": discard.duplicate(),
 		"exhausted": exhausted.duplicate(), "core_hp": core_hp, "faith": faith, "result": result,
-		"moves_left": moves_left, "longship_active": longship_active, "spells_this_round": spells_this_round,
+		"moves_left": moves_left, "longship_active": longship_active, "spells_this_round": spells_this_round, "armaments_this_round": armaments_this_round,
 		"intents": intents.duplicate(true), "petrified_lane": petrified_lane, "sandstorm_row": sandstorm_row,
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
@@ -432,6 +438,7 @@ func restart_plan() -> String:
 	moves_left = s["moves_left"]
 	longship_active = s["longship_active"]
 	spells_this_round = s["spells_this_round"]
+	armaments_this_round = s["armaments_this_round"]
 	intents = s["intents"]
 	petrified_lane = s["petrified_lane"]
 	sandstorm_row = s["sandstorm_row"]
@@ -643,8 +650,12 @@ func free_spell_active() -> bool:
 
 func card_cost(card: Dictionary) -> int:
 	var def := card_def(card)
+	if card.get("free_round", -1) == round_num:
+		return 0
 	if def["type"] == "spell" and free_spell_active():
 		return 0
+	if def["type"] == "armament" and armaments_this_round == 0 and _has_living(PLAYER, "forge_apprentice"):
+		return maxi(0, def["cost"] - 1)
 	return def["cost"]
 
 
@@ -746,6 +757,17 @@ func play_unit(hand_index: int, lane: int, row: int) -> String:
 	if u.id == "loki":
 		moves_left += 1
 		_log("Loki grants an extra move this round.")
+	if u.id == "cyclops_smith":
+		var commons: Array = Data.CARDS.keys().filter(func(id): return Data.CARDS[id]["type"] == "armament" and Data.CARDS[id]["rarity"] == "Common")
+		var forged := _new_card(commons[rng.randi_range(0, commons.size() - 1)])
+		forged["free_round"] = round_num
+		forged["forged"] = true
+		if hand.size() < MAX_HAND:
+			hand.append(forged)
+			_log("The Cyclops forges a %s (free this round)." % Data.CARDS[forged["id"]]["name"])
+		else:
+			discard.append(forged)
+			_log("The Cyclops forges a %s, but your hand is full." % Data.CARDS[forged["id"]]["name"])
 	return ""
 
 
@@ -756,7 +778,7 @@ func play_spell(hand_index: int, targets: Array, direction := 0) -> String:
 	var def := card_def(card)
 	if def["type"] in UNPLAYABLE:
 		return "%s can't be played." % def["name"]
-	if def["type"] != "spell":
+	if def["type"] != "spell" and def["type"] != "armament":
 		return "That card is a unit."
 	var cost := card_cost(card)
 	if cost > faith:
@@ -766,6 +788,12 @@ func play_spell(hand_index: int, targets: Array, direction := 0) -> String:
 		return err
 	faith -= cost
 	hand.remove_at(hand_index)
+	if def["type"] == "armament":
+		armaments_this_round += 1
+		acted_this_plan = true
+		events.clear()
+		_attach(_at(targets[0]), card)
+		return ""
 	spells_this_round += 1
 	acted_this_plan = true
 	events.clear()
@@ -1114,12 +1142,43 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 			_remove(u)
 			u.alive = false
 			hand.append(u.card)
+			discard.append_array(u.armaments)
+			u.armaments.clear()
 			_log("The Thread of Fate returns %s to your hand." % u.display_name())
 
 
 func _summon_scarab(side: int, row: int, lane: int, source: String) -> void:
 	var s = _spawn("scarab", side, lane, row)
 	_log("%s summons a Scarab (%s)." % [source, _unit_label(s)])
+
+
+## A unit holds one Armament (Talos any number); a new one sends the old card to the discard pile.
+func _attach(u, card: Dictionary) -> void:
+	var arm: Dictionary = Data.CARDS[card["id"]]["arm"]
+	if u.id != "talos" and not u.armaments.is_empty():
+		var old: Dictionary = u.armaments.pop_back()
+		_detach_stats(u, old)
+		discard.append(old)
+		_log("%s sets aside its %s." % [u.display_name(), Data.CARDS[old["id"]]["name"]])
+	u.armaments.append(card)
+	var hp: int = arm.get("hp", 0)
+	u.max_hp += hp
+	u.hp += hp
+	_log("%s takes up the %s." % [_unit_label(u), Data.CARDS[card["id"]]["name"]])
+
+
+func _detach_stats(u, card: Dictionary) -> void:
+	var hp: int = Data.CARDS[card["id"]]["arm"].get("hp", 0)
+	u.max_hp -= hp
+	u.hp = clampi(u.hp, 1, u.max_hp)
+
+
+## When an armed unit dies for good, its Armaments shuffle into the draw pile.
+func _return_armaments(u) -> void:
+	for card in u.armaments:
+		deck.insert(rng.randi_range(0, deck.size()), card)
+		_log("The %s falls from %s and returns to your draw pile." % [Data.CARDS[card["id"]]["name"], u.display_name()])
+	u.armaments.clear()
 
 
 func _summon_wolf(side: int, row: int, lane: int, source: String) -> void:
@@ -1385,6 +1444,11 @@ func _start_of_round(u) -> void:
 			if unit_at(u.side, u.row, lane) == null:
 				_summon_scarab(u.side, u.row, lane, "Scarab Queen")
 				break
+	for card in u.armaments:
+		var shield: int = Data.CARDS[card["id"]]["arm"].get("shield_round", 0)
+		if shield > 0:
+			u.shield += shield
+			_log("%s's %s grants Shield %d." % [_unit_label(u), Data.CARDS[card["id"]]["name"], shield])
 	if u.id == "skoll_and_hati" and _wolf_count(u.side) < SKOLL_WOLVES:
 		_summon_wolf_near(u, "Skoll and Hati")
 	if u.id == "myrmidon":
@@ -1803,6 +1867,7 @@ func _kill(u) -> void:
 	u.alive = false
 	_remove(u)
 	_log("%s dies." % _unit_label(u))
+	_return_armaments(u)
 	if u.side == ENEMY and u.poisoned and _up("hunt_2"):
 		_heal_core(2, "Feast")
 

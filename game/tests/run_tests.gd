@@ -37,6 +37,7 @@ func _initialize() -> void:
 	test_oracle()
 	test_swarm()
 	test_pack()
+	test_forge()
 	test_divine()
 	test_terrain_cards()
 	test_restart_plan()
@@ -732,6 +733,81 @@ func test_pack() -> void:
 	c.hand = [c._new_card("book_of_the_dead")]
 	c.faith = 3
 	check(c.valid_targets(0).is_empty(), "book of the dead: still needs a fallen ally")
+
+
+func test_forge() -> void:
+	var c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var hop = c.debug_place("ark_sentinel", P, 0, F)
+	c.hand = [c._new_card("bronze_spear"), c._new_card("golden_cuirass"), c._new_card("harpe"), c._new_card("pythia")]
+	c.faith = 10
+	check(c.valid_targets(0) == [[P, F, 0]], "armament: targets your units")
+	check(c.play_spell(0, [[P, F, 0]]) == "", "armament: attach Bronze Spear")
+	check(c.effective_atk(hop) == 4 and c.spells_this_round == 0, "bronze spear: +2 ATK, and an Armament is not a spell")
+	check(c.play_spell(0, [[P, F, 0]]) == "", "armament: attach Golden Cuirass")
+	check(hop.armaments.size() == 1 and c.effective_atk(hop) == 2, "armament: a new one replaces the old")
+	check(c.discard.size() == 1 and c.discard[0]["id"] == "bronze_spear", "armament: the replaced card goes to the discard pile")
+	check(hop.max_hp == 8 and hop.hp == 8 and hop.has_kw("taunt"), "golden cuirass: +4 HP and Taunt")
+	check(c.play_spell(0, [[P, F, 0]]) == "", "armament: attach Harpe")
+	check(hop.max_hp == 4 and hop.hp == 4 and not hop.has_kw("taunt"), "armament: removing the Cuirass takes its HP and Taunt")
+	check(hop.has_kw("cleave") and c.effective_atk(hop) == 3, "harpe: +1 ATK and Cleave")
+	var deck_before: int = c.deck.size()
+	c._deal_damage(hop, 99, "effect")
+	check(c.deck.size() == deck_before + 1 and c.deck.any(func(card): return card["id"] == "harpe"), "armament: shuffles into the draw pile when its unit dies")
+
+	# Revive keeps the Armament; Thread of Fate sends it to the discard pile.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var mummy = c.debug_place("mummy_guardian", P, 1, F)
+	c._attach(mummy, c._new_card("hoplon"))
+	c._deal_damage(mummy, 99, "effect")
+	check(mummy.alive and mummy.armaments.size() == 1, "armament: stays on a unit that Revives")
+	c.hand = [c._new_card("thread_of_fate")]
+	c.faith = 3
+	c.play_spell(0, [[P, F, 1]])
+	check(c.discard.any(func(card): return card["id"] == "hoplon"), "armament: Thread of Fate discards it")
+
+	# Hoplon shields at start of round; Talos holds several, each +1 ATK more.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var talos = c.debug_place("talos", P, 2, F)
+	c._attach(talos, c._new_card("hoplon"))
+	c._attach(talos, c._new_card("bronze_spear"))
+	check(talos.armaments.size() == 2 and c.effective_atk(talos) == 3 + 2 + 2, "talos: holds any number, +1 ATK each")
+	c.end_plan()
+	check(talos.shield == 2, "hoplon: Shield 2 at start of round")
+	deck_before = c.deck.size()
+	c._deal_damage(talos, 99, "effect")
+	check(c.deck.size() == deck_before + 2, "talos: all his Armaments shuffle back")
+
+	# Forge Apprentice discounts the first Armament each round; Cyclops forges a free Common one.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.debug_place("forge_apprentice", P, 0, F)
+	c.hand = [c._new_card("golden_cuirass"), c._new_card("golden_cuirass"), c._new_card("cyclops_smith")]
+	c.faith = 10
+	check(c.card_cost(c.hand[0]) == 1, "forge apprentice: first Armament costs 1 less")
+	c.play_spell(0, [[P, F, 0]])
+	check(c.card_cost(c.hand[0]) == 2, "forge apprentice: only the first each round")
+	check(c.play_unit(1, 1, F) == "", "cyclops: deploy")
+	var forged: Dictionary = c.hand[c.hand.size() - 1]
+	check(Data.CARDS[forged["id"]]["type"] == "armament" and Data.CARDS[forged["id"]]["rarity"] == "Common", "cyclops: adds a Common Armament")
+	check(c.card_cost(forged) == 0, "cyclops: it costs 0 this round")
+	c._deal_damage(c.unit_at(P, F, 0), 99, "effect")
+	c.end_plan()
+	check(c.card_cost(forged) > 0 or not c.hand.has(forged), "cyclops: the discount lasts only this round")
+
+	# Undo restores Armaments.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.debug_place("ark_sentinel", P, 0, F)
+	c.hand = [c._new_card("golden_cuirass")]
+	c.faith = 5
+	c._plan_start = c._capture()
+	c.play_spell(0, [[P, F, 0]])
+	c.restart_plan()
+	var restored = c.unit_at(P, F, 0)
+	check(restored.armaments.is_empty() and restored.max_hp == 4 and c.hand.size() == 1, "armament: undo takes it back")
 
 
 func test_divine() -> void:
@@ -1606,12 +1682,19 @@ func _check_invariants(c, total_cards: int, tag: String) -> void:
 				check(lane >= u.lane and lane < u.lane + u.width, "%s: unit lane mismatch (%s)" % [tag, u.id])
 				if side == P and u.card != null and u.lane == lane:
 					cids[u.card["cid"]] = true
+				if side == P and u.lane == lane:
+					check(u.id == "talos" or u.armaments.size() <= 1, "%s: %s holds %d Armaments" % [tag, u.id, u.armaments.size()])
 	var statuses := 0
-	for pile in [c.hand, c.deck, c.discard, c.exhausted]:
+	var armed: Array = []
+	for u in c.units(P):
+		armed.append_array(u.armaments)
+	for pile in [c.hand, c.deck, c.discard, c.exhausted, armed]:
 		for card in pile:
 			check(not cids.has(card["cid"]), "%s: card %s is in two places" % [tag, card["id"]])
 			cids[card["cid"]] = true
-			if Data.CARDS[card["id"]]["type"] == "status":
+			if card.get("forged", false):
+				statuses += 1
+			elif Data.CARDS[card["id"]]["type"] == "status":
 				statuses += 1
 				check(not c.discard.has(card), "%s: a status card reached the discard pile" % tag)
 	check(cids.size() - statuses == total_cards, "%s: card count %d != %d" % [tag, cids.size() - statuses, total_cards])

@@ -137,11 +137,11 @@ New relic idea: **Gleipnir Fragment** (Uncommon): your Wolves have +1 HP.
 |---|---|---|---|---|
 | Bronze Spear | Common | 1 | armament | +2 ATK. |
 | Hoplon | Common | 1 | armament | Start of round: Shield 2. |
-| Forge Apprentice | Common | 1 | 1 / 4 / SPD 2 | Your first Armament each round costs 1 less. |
+| Forge Apprentice | Common | 1 | 1 / 4 / SPD 2 | Rally 1. Your first Armament each round costs 1 less. |
 | Cyclops Smith | Uncommon | 2 | 3 / 5 / SPD 2 | On deploy: add a random Common Armament to your hand. It costs 0 this round. |
 | Harpe | Uncommon | 1 | armament | +1 ATK and Cleave. |
 | Golden Cuirass | Uncommon | 2 | armament | +4 HP and Taunt. |
-| Talos, the Bronze Giant | Rare | 3 | 3 / 8 / SPD 1 | Immovable. Can hold any number of Armaments. Each Armament on Talos also gives +1 ATK. When he dies, all of them shuffle into your draw pile. |
+| Talos | Rare | 3 | 3 / 8 / SPD 1 | Immovable. Can hold any number of Armaments. Each Armament on Talos also gives +1 ATK. When he dies, all of them shuffle into your draw pile. |
 
 It pairs with Olympians (armour on a front wall) and Oracle (Armaments are not spells, so this is deliberately a separate engine; Hermes doesn't discount them). Ammit is a deliberate counter-boss for it.
 
@@ -192,7 +192,7 @@ Each phase ends with tests, the balance sim, rulebook entries and a push.
 
 1. **Act infrastructure (done).** `Data.ACTS` (name, pools, extra scaling steps, boss bonus, reward odds, price multiplier, map tint), act index on the run, a boss per act with no repeats, the act-complete screen (heal and free upgrade), Act 2 map tint, per-act sim reporting. Act 2 is a placeholder: Act 1's battle pools at Act 1 difficulty, with the boss at +2 ATK / +15 HP, better reward odds and 15% higher prices. An extra scaling step plus late fights as the early pool cost about 8 HP per fight, so almost no bot run reached the Act 2 boss.
 2. **The Pack (Norse) (done).** Wolf tribe tag, Pack, Flank (back-row follow-up attack; if the front Wolf's target died, it takes that Wolf's next target), 6 cards plus the Wolf token, bot heuristics (Flank Wolves go behind front Wolves, Call of the Pack fills an empty lane, Blood Scent goes for kills), tests, rulebook entries, portraits and Pack/Flank icons. The sim gained `archetype=<key>` (drafts that archetype first, its pantheon's patrons only). Act 1 HP per fight with Norse patrons, 150 runs per power: Pack 7.4, Doomed 7.5, Raiders 7.7, inside the ±1 target. Gleipnir Fragment waits for phase 8.
-3. **The Forge (Greek).** The Armament card type: targeting, attach and replace, shuffle into the draw pile on death, badge on the token, hover listing. Then 7 cards, bot heuristic, tests and rulebook chapter. This is the biggest system change of the three. **Requirement:** at least one Forge card must have Rally, so Laurel Wreath has a second Rally target besides Hoplite (for example, Forge Apprentice gains Rally 1).
+3. **The Forge (Greek) (done).** The Armament card type (targets an ally, attaches, replaces the old one into the discard pile, shuffles into the draw pile when the unit dies, isn't a spell), an anvil badge per Armament on the token, "Armed:" lines in the hover, 7 cards, bot heuristic (attack gear on front attackers, defensive gear on front units under threat, Talos preferred, never replaces), tests and fuzz invariants (Armaments count as a card pile, one per unit except Talos), rulebook entries, portraits and the anvil icon. Forge Apprentice has Rally 1, as required. Act 1 HP per fight with Greek patrons, 150 runs per power: Forge 7.4, Olympians 7.2, Oracle 7.45, inside the ±1 target.
 4. **The Sun (Egyptian).** Sunlit terrain and Burn status: tick order relative to Poison, UI badge, rulebook. Then 7 cards and tests.
 5. **Act 2 enemy mechanics and early and late battles.** Reinforcement waves (data, boat marker, arrival), Flooded terrain, Incorporeal, Drown, Drag, Devour, Toll, Judgement, the Drowned status; 9 enemies and 12 battles; replace the placeholder pools from phase 1; art and background.
 6. **Act 2 elites.** Charon, Cerberus (linked units), Hraesvelgr (board-wide push), Erinyes (damage tracking per unit), Keeper of the Twelfth Gate (lane seals, returning guards).

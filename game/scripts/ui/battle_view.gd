@@ -546,6 +546,8 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["veil", "Veil up", "Ignores the next damage it takes this round."])
 		if u.get("spellward", false):
 			out.append(["spellward", "Spellwarded", "Your spells can't target it."])
+		for arm_id in u.get("armaments", []):
+			out.append(["armament", "Armed: %s" % Data.CARDS[arm_id]["name"], Data.CARDS[arm_id]["text"].trim_prefix("Armament. ")])
 		if u.get("swine", false):
 			out.append(["", "Swine", "Transformed: can't attack or use start-of-round effects this round.", Color(1.0, 0.6, 0.8)])
 		if u.get("move_block", "") != "":
@@ -702,7 +704,7 @@ func _render_hand(snap: Dictionary) -> void:
 	var cards: Array = snap["hand"]
 	for i in cards.size():
 		var def: Dictionary = Data.CARDS[cards[i]["id"]]
-		var cost: int = 0 if def["type"] == "spell" and snap["free_spell"] else def["cost"]
+		var cost: int = snap["hand_costs"][i] if snap.has("hand_costs") else def["cost"]
 		var button := CardWidget.card_button(cards[i]["id"], i == sel_hand, cost)
 		button.pressed.connect(_on_hand_pressed.bind(i))
 		button.set_drag_forwarding(_hand_drag.bind(i), Callable(), Callable())
@@ -848,6 +850,8 @@ func _on_hand_pressed(i: int) -> void:
 		_set_hint("%s has no legal target right now." % def["name"])
 	elif def["type"] == "unit":
 		_set_hint("Deploy %s: choose an empty tile on your side." % def["name"])
+	elif def["type"] == "armament":
+		_set_hint("Arm one of your units with the %s. A unit holds one Armament (Talos any number); a new one replaces the old." % def["name"])
 	else:
 		_set_hint({
 			"ally": "Choose one of your units.",

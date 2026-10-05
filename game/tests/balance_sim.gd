@@ -36,6 +36,7 @@ const ARCHETYPES := {
 	"pack": ["ulfr_hunter", "call_of_the_pack", "geri", "freki", "blood_scent", "skoll_and_hati"],
 	"olympians": ["hoplite", "peltast", "myrmidon", "athena", "apollo", "phalanx_formation", "achilles", "zeus"],
 	"oracle": ["divine_favor", "pythia", "olympian_ichor", "hermes"],
+	"forge": ["bronze_spear", "hoplon", "forge_apprentice", "cyclops_smith", "harpe", "golden_cuirass", "talos"],
 	"eternal": ["mummy_guardian", "priest_of_ra", "sphinx", "anubis", "book_of_the_dead", "ra", "osiris"],
 	"swarm": ["scarab_swarm", "sandswarm", "scarab_queen", "plague_of_locusts", "khepri"],
 }
@@ -429,6 +430,8 @@ func _evaluate(c, i: int) -> Dictionary:
 		if slot.is_empty():
 			return none
 		return {"score": 10.0 + def["cost"] * 3 + slot[2] * 0.1, "action": func(): c.play_unit(i, slot[0], slot[1])}
+	if def["type"] == "armament":
+		return _evaluate_armament(c, i, def)
 	match card["id"]:
 		"faith_surge":
 			return {"score": 100.0, "action": func(): c.play_spell(i, [])}
@@ -537,6 +540,32 @@ func _evaluate(c, i: int) -> Dictionary:
 				return none
 			return {"score": 5.0 + (5.0 if target.hp + target.shield <= dmg else 0.0), "action": func(): c.play_spell(i, [[E, target.row, target.lane]])}
 	return none
+
+
+## Arms an unarmed unit (or Talos): attack items on front units facing enemies, defensive ones on
+## the front unit taking hits. Never replaces an Armament.
+func _evaluate_armament(c, i: int, def: Dictionary) -> Dictionary:
+	var arm: Dictionary = def["arm"]
+	var best = null
+	var best_value := 0.0
+	for u in c.units(P):
+		if not u.armaments.is_empty() and u.id != "talos":
+			continue
+		var facing: bool = c.unit_at(E, FRONT, u.lane) != null or c.unit_at(E, BACK, u.lane) != null
+		var attacks: bool = u.row == FRONT or u.has_kw("ranged")
+		var value := 1.0
+		if arm.get("atk", 0) > 0 or arm.get("kw", []).has("cleave"):
+			value += (4.0 if attacks else 0.0) + (2.0 if facing else 0.0) + u.hp * 0.3
+		if arm.get("hp", 0) > 0 or arm.get("shield_round", 0) > 0:
+			value += (4.0 if u.row == FRONT else 0.0) + (2.0 if facing else 0.0) + c.effective_atk(u) * 0.3
+		if u.id == "talos":
+			value += 3.0
+		if value > best_value:
+			best_value = value
+			best = u
+	if best == null or best_value < 5.0:
+		return {"score": 0.0, "action": Callable()}
+	return {"score": 4.0 + best_value * 0.5, "action": func(): c.play_spell(i, [[P, best.row, best.lane]])}
 
 
 ## Returns [lane, row, score] for the best empty slot, or [] if none is useful.

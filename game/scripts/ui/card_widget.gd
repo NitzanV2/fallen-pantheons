@@ -45,6 +45,7 @@ const KEYWORD_INFO := {
 	"immovable": ["Immovable", "Can't be pushed or swapped and takes no collision damage."],
 	"airborne": ["Airborne", "Melee attacks can't target it."],
 	"pack": ["Pack", "Wolf. Gains +1 ATK for each of your other Wolves (max +3)."],
+	"armament": ["Armament", "Play it on one of your units: it stays attached for the fight. A unit holds one (a new one replaces the old). When the unit dies, the Armament shuffles into your draw pile."],
 	"flank": ["Flank", "In the back row, attacks right after the Wolf in front of it, hitting the same target."],
 	"veil": ["Veil", "Ignores the first damage it takes each round."],
 	"frenzy": ["Frenzy", "Gains +1 ATK each time it takes damage and survives."],
@@ -65,7 +66,7 @@ const KEYWORD_INFO := {
 }
 ## [icon id, phrases that mark it in card text]. Checked in order after the card's keywords.
 const TRIGGERS := [
-	["shield", ["Shield"]], ["on_death", ["On-Death"]], ["growth", ["Growth"]], ["support", ["Support"]],
+	["armament", ["Armament"]], ["shield", ["Shield"]], ["on_death", ["On-Death"]], ["growth", ["Growth"]], ["support", ["Support"]],
 	["rally", ["Rally"]], ["summon", ["Summon"]], ["exhaust", ["Exhaust"]], ["split", ["Split:"]], ["thorns", ["Thorns"]],
 	["start_round", ["Start of round", "Start of each round"]], ["end_round", ["End of round", "End of each round"]],
 ]
@@ -469,7 +470,7 @@ static func _face(def: Dictionary, card_id: String, art_kind: String, size: Vect
 			row.add_child(icon(id, 22 * s))
 		place(root, row, 6 * s, size.y - 32 * s, -6 * s, size.y - 8 * s)
 
-	if def["type"] in ["unit", "spell"]:
+	if def["type"] in ["unit", "spell", "armament"]:
 		var gem := Panel.new()
 		var gsb := StyleBoxFlat.new()
 		gsb.bg_color = Color(0.1, 0.13, 0.3)

@@ -64,6 +64,14 @@ const CARDS := {
 	"divine_favor": {"name": "Divine Favor", "faction": "greek", "rarity": "Common", "type": "spell", "cost": 0, "target": "ally", "text": "An ally gains +2 ATK this round."},
 	"pythia": {"name": "Pythia", "faction": "greek", "rarity": "Common", "type": "unit", "cost": 1, "atk": 1, "hp": 3, "spd": 3, "keywords": ["ranged"], "text": "Ranged. Whenever you cast a spell, deal 1 damage to the first enemy in her lane."},
 	"olympian_ichor": {"name": "Olympian Ichor", "faction": "greek", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "ally", "text": "Heal an ally by 4. It gains +1 ATK."},
+	# Greek Forge - armaments. "arm" holds what an attached Armament grants: atk, hp, kw (keywords), shield_round.
+	"bronze_spear": {"name": "Bronze Spear", "faction": "greek", "rarity": "Common", "type": "armament", "cost": 1, "target": "ally", "arm": {"atk": 2}, "text": "Armament. +2 ATK."},
+	"hoplon": {"name": "Hoplon", "faction": "greek", "rarity": "Common", "type": "armament", "cost": 1, "target": "ally", "arm": {"shield_round": 2}, "text": "Armament. Start of round: Shield 2."},
+	"forge_apprentice": {"name": "Forge Apprentice", "faction": "greek", "rarity": "Common", "type": "unit", "cost": 1, "atk": 1, "hp": 4, "spd": 2, "keywords": [], "rally": 1, "text": "Rally 1. Your first Armament each round costs 1 less."},
+	"cyclops_smith": {"name": "Cyclops Smith", "faction": "greek", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 3, "hp": 5, "spd": 2, "keywords": [], "text": "On deploy: add a random Common Armament to your hand. It costs 0 this round."},
+	"harpe": {"name": "Harpe", "faction": "greek", "rarity": "Uncommon", "type": "armament", "cost": 1, "target": "ally", "arm": {"atk": 1, "kw": ["cleave"]}, "text": "Armament. +1 ATK and Cleave."},
+	"golden_cuirass": {"name": "Golden Cuirass", "faction": "greek", "rarity": "Uncommon", "type": "armament", "cost": 2, "target": "ally", "arm": {"hp": 4, "kw": ["taunt"]}, "text": "Armament. +4 HP and Taunt."},
+	"talos": {"name": "Talos", "faction": "greek", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 8, "spd": 1, "keywords": ["immovable"], "text": "Immovable. Can hold any number of Armaments, and each one also gives him +1 ATK. When he dies, they all shuffle into your draw pile."},
 	"hermes": {"name": "Hermes", "faction": "greek", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 4, "spd": 5, "keywords": ["ranged"], "text": "Ranged. Your first spell each round costs 0. Whenever you cast a spell, Hermes gains Shield 1."},
 
 	# Egyptian - The Eternal
@@ -104,7 +112,8 @@ const CARD_SHORT := {
 	"thread_of_fate": "Return a unit to hand", "ragnarok": "Sacrifice: blast its lane", "longship": "+2 moves, Shield 2",
 	"phalanx_formation": "Front row +1 ATK, Shield 2", "divine_favor": "+2 ATK this round", "olympian_ichor": "Heal 4, +1 ATK",
 	"book_of_the_dead": "Return the last fallen ally", "sandswarm": "Scarabs fill the front row",
-	"plague_of_locusts": "Damage = your unit count", "call_of_the_pack": "Summon two Wolves", "blood_scent": "Each Wolf hits for its ATK", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
+	"plague_of_locusts": "Damage = your unit count", "call_of_the_pack": "Summon two Wolves", "bronze_spear": "+2 ATK", "hoplon": "Shield 2 each round",
+	"harpe": "+1 ATK and Cleave", "golden_cuirass": "+4 HP and Taunt", "blood_scent": "Each Wolf hits for its ATK", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
 	"void_web": "Unplayable", "hex": "Unplayable, Faith -1", "ashes": "Unplayable, Core -1",
 }
 

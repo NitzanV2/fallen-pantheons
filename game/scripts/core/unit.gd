@@ -1,6 +1,8 @@
 extends RefCounted
 ## Runtime state of one unit on the battlefield (player or enemy).
 
+const Data = preload("res://scripts/core/data.gd")
+
 var uid: int
 var id: String
 var def: Dictionary
@@ -28,6 +30,8 @@ var attacked_round := 0
 var poisoned := false
 ## Keywords granted during the fight, on top of the card's own.
 var bonus_kw: Array = []
+## Armament cards attached to this unit (card dictionaries).
+var armaments: Array = []
 
 
 func setup(p_uid: int, p_id: String, p_def: Dictionary, p_side: int) -> void:
@@ -52,11 +56,17 @@ func copy():
 			"veil_round", "poisoned", "attacked_round"]:
 		u.set(prop, get(prop))
 	u.bonus_kw = bonus_kw.duplicate()
+	u.armaments = armaments.duplicate()
 	return u
 
 
 func has_kw(keyword: String) -> bool:
-	return keyword in def.get("keywords", []) or keyword in bonus_kw
+	if keyword in def.get("keywords", []) or keyword in bonus_kw:
+		return true
+	for card in armaments:
+		if keyword in Data.CARDS[card["id"]]["arm"].get("kw", []):
+			return true
+	return false
 
 
 func display_name() -> String:

@@ -219,6 +219,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["growth", "Growth", "End of round: gains the listed stats."],
 		["summon", "Summon", "Creates a token (like a 1/1 Scarab or a 1/2 Wolf) in an empty slot. Tokens never join your deck."],
 		["pack", "Wolf and Pack", "Wolves are a Norse tribe (the card text starts with \"Wolf\"). Pack: gains +1 ATK for each of your other Wolves, up to +%d. Wolf tokens count." % Combat.PACK_MAX],
+		["armament", "Armament", "Play it on one of your units to attach it for the fight. A unit holds one (a new one replaces the old); Talos holds any number. When the unit dies, its Armaments shuffle into your draw pile. Forge Apprentice makes your first Armament each round cost 1 less."],
 		["flank", "Flank", "A Wolf with Flank in the back row attacks right after the Wolf in front of it, hitting the same target (or that Wolf's next target if the first one fell). With no Wolf in front, it doesn't attack. Skoll and Hati give all your Wolves Flank."],
 		["exhaust", "Exhaust", "After you cast it, the card is gone for the rest of this fight."],
 		["immovable", "Immovable", "Can't be pushed or swapped and takes no collision damage."],
@@ -248,6 +249,7 @@ func _cards(page: VBoxContainer) -> void:
 	_grid(page, 2, [
 		["cards/ark_sentinel.jpg", "Units", "Deploy into any empty slot on your grid. When a unit dies, its card goes to the discard pile and can be drawn again this fight."],
 		["cards/divine_favor.jpg", "Spells", "Go to the discard pile after casting, unless they [b]Exhaust[/b]."],
+		["cards/bronze_spear.jpg", "Armaments", "Greek Forge gear. Play one on one of your units: it stays attached for the fight and its bonus is shown on the unit. A unit holds one Armament - a new one replaces the old (which goes to the discard pile). Talos can hold any number. When the unit dies, its Armaments shuffle into your draw pile. Armaments aren't spells (no Hermes, Pythia or Tripod)."],
 	], 64)
 	_tip(page, "Dimmed cards can't be played right now: not enough Faith, or no legal target.")
 	_tip(page, "Your god power isn't a card: it has its own button in the sidebar. See the God powers chapter.")

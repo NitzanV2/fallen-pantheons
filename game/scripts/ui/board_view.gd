@@ -373,6 +373,8 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 			["spellward", u.get("spellward", false)], ["frenzy", u["empowered"]]]:
 		if pair[1]:
 			status.add_child(CardWidget.icon(pair[0], 20 * sc))
+	for i in u.get("armaments", []).size():
+		status.add_child(CardWidget.icon("armament", 20 * sc))
 	status.position = Vector2(size.x - 25 * sc, 5 * sc)
 	root.add_child(status)
 	return root
