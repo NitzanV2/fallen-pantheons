@@ -48,8 +48,8 @@ const CARDS := {
 	"call_of_the_pack": {"name": "Call of the Pack", "faction": "norse", "rarity": "Common", "type": "spell", "cost": 1, "target": "empty_ally_slot", "text": "Summon a Wolf in an empty slot, and another in the other slot of that lane if it's empty."},
 	"geri": {"name": "Geri", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. Whenever another of your Wolves dies, Geri gains +1 ATK / +1 HP."},
 	"freki": {"name": "Freki", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 4, "spd": 4, "keywords": ["pack", "flank"], "tribe": "wolf", "text": "Wolf. Pack. Flank. End of round: if Freki attacked this round, summon a Wolf in the nearest empty slot."},
-	"blood_scent": {"name": "Blood Scent", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "enemy", "text": "Each of your Wolves deals 1 damage to an enemy."},
-	"skoll_and_hati": {"name": "Skoll and Hati", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 4, "hp": 5, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. Your Wolves have Flank. Start of round: summon a Wolf if you have fewer than 3 Wolves."},
+	"blood_scent": {"name": "Blood Scent", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "enemy", "text": "Each of your Wolves deals damage equal to its ATK to an enemy."},
+	"skoll_and_hati": {"name": "Skoll and Hati", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 4, "hp": 5, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. Your Wolves have Flank. Start of round: summon a Wolf if you have fewer than 4 Wolves."},
 
 	# Greek - The Olympians
 	"hoplite": {"name": "Hoplite", "faction": "greek", "rarity": "Common", "type": "unit", "cost": 1, "atk": 2, "hp": 4, "spd": 2, "keywords": [], "rally": 1, "text": "Rally 1."},
@@ -104,7 +104,7 @@ const CARD_SHORT := {
 	"thread_of_fate": "Return a unit to hand", "ragnarok": "Sacrifice: blast its lane", "longship": "+2 moves, Shield 2",
 	"phalanx_formation": "Front row +1 ATK, Shield 2", "divine_favor": "+2 ATK this round", "olympian_ichor": "Heal 4, +1 ATK",
 	"book_of_the_dead": "Return the last fallen ally", "sandswarm": "Scarabs fill the front row",
-	"plague_of_locusts": "Damage = your unit count", "call_of_the_pack": "Summon two Wolves", "blood_scent": "1 damage per Wolf", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
+	"plague_of_locusts": "Damage = your unit count", "call_of_the_pack": "Summon two Wolves", "blood_scent": "Each Wolf hits for its ATK", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
 	"void_web": "Unplayable", "hex": "Unplayable, Faith -1", "ashes": "Unplayable, Core -1",
 }
 

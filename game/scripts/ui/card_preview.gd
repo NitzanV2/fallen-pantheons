@@ -25,7 +25,7 @@ func _ready() -> void:
 
 func show_card(card_id: String, from: Control, cost := -1) -> void:
 	var face := CardWidget.card_face(card_id, BIG_SIZE, true, false, cost)
-	_show(face, _keyword_entries(CardWidget.card_icons(card_id)), from.get_global_rect(), from)
+	_show(face, _keyword_entries(CardWidget.glossary_icons(Data.CARDS[card_id], card_id)), from.get_global_rect(), from)
 
 
 ## A unit on the board (a combat snapshot entry, or {} for an empty slot) plus extra glossary
@@ -37,12 +37,12 @@ func show_unit(u: Dictionary, rect: Rect2, from: Control, extras: Array) -> void
 	if not u.is_empty():
 		if u["side"] == 0:
 			face = CardWidget.card_face(u["id"], BIG_SIZE, true)
-			entries = _keyword_entries(CardWidget.card_icons(u["id"]))
+			entries = _keyword_entries(CardWidget.glossary_icons(Data.CARDS[u["id"]], u["id"]))
 		else:
 			if Data.ENEMIES[u["id"]]["kind"] == "boss":
 				size = BOSS_SIZE
 			face = CardWidget.enemy_face(u["id"], size)
-			entries = _keyword_entries(CardWidget.def_icons(CardWidget.enemy_def(u["id"]), u["id"]))
+			entries = _keyword_entries(CardWidget.glossary_icons(CardWidget.enemy_def(u["id"]), u["id"]))
 	entries = extras + entries
 	if face == null and entries.is_empty():
 		hide_card(from)

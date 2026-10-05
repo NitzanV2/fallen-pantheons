@@ -631,9 +631,10 @@ func test_pack() -> void:
 	check(c.effective_atk(hunter) == 4, "pack: +1 ATK per other Wolf")
 	c.debug_place("wolf", P, 3, F)
 	c.debug_place("wolf", P, 1, B)
-	check(c.effective_atk(hunter) == 5, "pack: capped at +3")
+	c.debug_place("wolf", P, 0, B)
+	check(c.effective_atk(hunter) == 2 + c.PACK_MAX, "pack: capped at PACK_MAX")
 	c.debug_place("ark_sentinel", P, 2, B)
-	check(c.effective_atk(hunter) == 5, "pack: non-Wolves don't count")
+	check(c.effective_atk(hunter) == 2 + c.PACK_MAX, "pack: non-Wolves don't count")
 
 	# Flank: Freki behind a front Wolf hits the same target right after it.
 	c = fresh()
@@ -673,14 +674,16 @@ func test_pack() -> void:
 	check(back_wolf.attacked_round == 1, "skoll and hati: granted Flank attacks")
 
 	# Skoll and Hati summon while you have fewer than 3 Wolves.
-	c = fresh()
-	c.debug_place("hollowed_bulwark", E, 3, B)
+	c = fresh(50, true)
+	var wall = c.debug_place("hollowed_bulwark", E, 3, B)
+	wall.hp = 999
+	wall.max_hp = 999
 	c.debug_place("skoll_and_hati", P, 0, F)
 	c.end_plan()
 	check(c._wolf_count(P) == 2, "skoll and hati: summons a Wolf at start of round")
-	c.debug_place("wolf", P, 3, B)
-	c.end_plan()
-	check(c._wolf_count(P) == 3, "skoll and hati: stops at 3 Wolves")
+	for i in 4:
+		c.end_plan()
+	check(c._wolf_count(P) == c.SKOLL_WOLVES, "skoll and hati: stops at SKOLL_WOLVES Wolves")
 
 	# Geri grows when another Wolf dies.
 	c = fresh()
@@ -701,7 +704,11 @@ func test_pack() -> void:
 	check(c.play_spell(0, [[P, B, 2]]) == "", "call of the pack: cast")
 	check(c.unit_at(P, B, 2) != null and c.unit_at(P, F, 2) != null, "call of the pack: Wolves in both slots of the lane")
 	check(c.play_spell(0, [[E, B, 3]]) == "", "blood scent: cast")
-	check(target.hp == 6, "blood scent: 1 damage per Wolf")
+	check(target.hp == 4, "blood scent: each Wolf deals its ATK (1 + Pack 1)")
+	check("flank" in CardWidget.glossary_icons(Data.CARDS["skoll_and_hati"], "skoll_and_hati"), "glossary: Skoll and Hati explain Flank")
+	check("pack" in CardWidget.glossary_icons(Data.CARDS["blood_scent"], "blood_scent"), "glossary: Wolf cards explain Wolves")
+	check("revive" in CardWidget.glossary_icons(Data.CARDS["osiris"], "osiris"), "glossary: mentioned keywords are explained")
+	check(not "taunt" in CardWidget.glossary_icons(Data.CARDS["thor"], "thor"), "glossary: unmentioned keywords stay out")
 	c = fresh()
 	c.debug_place("ark_sentinel", P, 0, F)
 	c.hand = [c._new_card("book_of_the_dead")]

@@ -18,7 +18,9 @@ const MAX_HAND := 7
 const CORE := "core"
 const UNPLAYABLE := ["curse", "status"]
 ## Pack: +1 ATK per other Wolf you control, up to this much.
-const PACK_MAX := 3
+const PACK_MAX := 4
+## Skoll and Hati summon at start of round while you have fewer Wolves than this.
+const SKOLL_WOLVES := 4
 
 var rng := RandomNumberGenerator.new()
 var battle: Dictionary
@@ -1086,7 +1088,7 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 			_log("Your Wolves catch the scent of %s." % _unit_label(t))
 			for w in wolves:
 				if t.alive:
-					_deal_damage(t, 1, "effect")
+					_deal_damage(t, effective_atk(w), "effect")
 		"sandswarm":
 			for lane in LANES:
 				if unit_at(PLAYER, FRONT, lane) == null:
@@ -1383,7 +1385,7 @@ func _start_of_round(u) -> void:
 			if unit_at(u.side, u.row, lane) == null:
 				_summon_scarab(u.side, u.row, lane, "Scarab Queen")
 				break
-	if u.id == "skoll_and_hati" and _wolf_count(u.side) < 3:
+	if u.id == "skoll_and_hati" and _wolf_count(u.side) < SKOLL_WOLVES:
 		_summon_wolf_near(u, "Skoll and Hati")
 	if u.id == "myrmidon":
 		var count := _row_neighbors(u).size()

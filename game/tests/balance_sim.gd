@@ -508,17 +508,19 @@ func _evaluate(c, i: int) -> Dictionary:
 				return none
 			return {"score": 9.0 + c._wolf_count(P), "action": func(): c.play_spell(i, [[P, FRONT, best_lane]])}
 		"blood_scent":
-			var wolves: int = c._wolf_count(P)
-			if wolves < 2:
+			var dmg := 0
+			for w in c.units(P).filter(c.is_wolf):
+				dmg += c.effective_atk(w)
+			if dmg < 5:
 				return none
 			var target = null
 			for t in c.units(E):
-				if c.valid_targets(i).has([E, t.row, t.lane]) and (target == null or (t.hp + t.shield <= wolves and t.atk + t.threat > target.atk + target.threat)):
+				if c.valid_targets(i).has([E, t.row, t.lane]) and (target == null or (t.hp + t.shield <= dmg and t.atk + t.threat > target.atk + target.threat)):
 					target = t
 			if target == null:
 				return none
-			var kills: bool = target.hp + target.shield <= wolves
-			return {"score": 3.0 + wolves + (5.0 if kills else 0.0), "action": func(): c.play_spell(i, [[E, target.row, target.lane]])}
+			var kills: bool = target.hp + target.shield <= dmg
+			return {"score": 2.0 + dmg * 0.5 + (6.0 if kills else 0.0), "action": func(): c.play_spell(i, [[E, target.row, target.lane]])}
 		"sandswarm":
 			var empty := 0
 			for lane in 4:

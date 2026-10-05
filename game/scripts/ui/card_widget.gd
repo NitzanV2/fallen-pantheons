@@ -549,6 +549,23 @@ static func def_icons(def: Dictionary, card_id: String) -> Array:
 	return out
 
 
+## Hover glossary: the card's icons, then every other keyword its text names
+## ("Your Wolves have Flank", "Allies that Revive", ...).
+static func glossary_icons(def: Dictionary, card_id: String) -> Array:
+	var out: Array = def_icons(def, card_id)
+	var text: String = def["text"]
+	for id in KEYWORD_INFO:
+		if id in out or id == "ability":
+			continue
+		var word: String = KEYWORD_INFO[id][0]
+		var re := RegEx.create_from_string("\\b%s\\b" % word.replace("-", "\\-"))
+		if re.search(text) != null:
+			out.append(id)
+	if not "pack" in out and (text.contains("Wolf") or text.contains("Wolves")):
+		out.append("pack")
+	return out
+
+
 static func bold_keywords(text: String) -> String:
 	for id in KEYWORD_INFO:
 		var word: String = KEYWORD_INFO[id][0]
