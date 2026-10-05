@@ -38,6 +38,7 @@ func _initialize() -> void:
 	test_swarm()
 	test_pack()
 	test_forge()
+	test_sun()
 	test_divine()
 	test_terrain_cards()
 	test_restart_plan()
@@ -736,6 +737,90 @@ func test_pack() -> void:
 	c.hand = [c._new_card("book_of_the_dead")]
 	c.faith = 3
 	check(c.valid_targets(0).is_empty(), "book of the dead: still needs a fallen ally")
+
+
+func test_sun() -> void:
+	var c = fresh()
+	var bulwark = c.debug_place("hollowed_bulwark", E, 1, F)
+	bulwark.max_hp = 30
+	bulwark.hp = 30
+	var archer = c.debug_place("echo_archer", P, 1, B)
+	var base_atk: int = c.effective_atk(archer)
+	c.hand = [c._new_card("dawn_ritual"), c._new_card("eye_of_ra"), c._new_card("noon_blaze")]
+	c.faith = 10
+	check(c.valid_targets(0).size() == 8, "dawn ritual: any of your slots without terrain, either row")
+	check(c.valid_targets(1).is_empty(), "eye of ra: needs a Burning enemy")
+	check(c.play_spell(0, [[P, B, 1]]) == "", "dawn ritual: cast")
+	check(c.terrain_at(P, B, 1) == "sunlit" and c.exhausted.size() == 1, "dawn ritual: Sunlit for the fight, Exhaust")
+	check(c.effective_atk(archer) == base_atk + 1, "sunlit: +1 ATK")
+	c._attack(archer, bulwark, c.effective_atk(archer))
+	check(bulwark.burn == 1, "sunlit: attacks apply Burn 1")
+	check(c.play_spell(0, [[E, F, 1]]) == "" and bulwark.burn == 2, "eye of ra: doubles Burn")
+	check(c.play_spell(0, []) == "" and bulwark.burn == 5, "noon blaze: Burn 3 in a lane with a Sunlit slot")
+	var hp: int = bulwark.hp
+	c._tick_burn()
+	check(bulwark.hp == hp - 5 and bulwark.burn == 4, "burn: deals X, then drops by 1")
+	var far = c.debug_place("hollowed_bulwark", E, 3, F)
+	c.hand = [c._new_card("noon_blaze")]
+	c.play_spell(0, [])
+	check(far.burn == 0, "noon blaze: lanes without a Sunlit slot are spared")
+	check(not c.is_sunlit(E, F, 1), "sunlit: your side only")
+
+	# Priestess of Aten adds her own Burn to the Sunlit one.
+	var priestess = c.debug_place("priestess_of_aten", P, 1, F)
+	c.terrain[c._key(P, F, 1)] = "sunlit"
+	c._attack(priestess, far, 1)
+	check(far.burn == 3, "priestess of aten: Burn 2, +1 on a Sunlit slot")
+
+	# Benben Stone lights its row neighbours, never attacks; Solar Barque shields when Sunlit.
+	c = fresh()
+	var target = c.debug_place("hollowed_bulwark", E, 1, F)
+	var stone = c.debug_place("benben_stone", P, 1, F)
+	var barque = c.debug_place("solar_barque", P, 2, F)
+	var left = c.debug_place("ark_sentinel", P, 3, F)
+	check(c.is_sunlit(P, F, 0) and c.is_sunlit(P, F, 2) and not c.is_sunlit(P, F, 3) and not c.is_sunlit(P, B, 1),
+		"benben stone: its slot and the slots left and right are Sunlit")
+	check(c.snapshot()["sunlit"].size() == 3, "benben stone: the snapshot lists Sunlit slots")
+	var hp_before: int = target.hp
+	c._act(stone)
+	check(target.hp == hp_before, "benben stone: doesn't attack")
+	c._start_of_round(barque)
+	check(stone.shield == 2 and left.shield == 2, "solar barque: Sunlit, so its neighbours gain Shield 2")
+	c._deal_damage(stone, 99, "effect")
+	check(not c.is_sunlit(P, F, 2), "benben stone: the light ends when it dies")
+	var shield_before: int = left.shield
+	c._start_of_round(barque)
+	check(left.shield == shield_before, "solar barque: nothing when not Sunlit")
+
+	# Horus: +2 against Burning enemies, and Faith next round when one dies.
+	c = fresh()
+	var horus = c.debug_place("horus", P, 0, B)
+	var a = c.debug_place("hollowed_bulwark", E, 0, F)
+	var b = c.debug_place("hollowed_bulwark", E, 2, F)
+	check(horus.has_kw("airborne") and horus.has_kw("ranged"), "horus: Ranged and Airborne")
+	c._attack(horus, a, 3)
+	check(a.hp == 5, "horus: normal damage without Burn")
+	a.burn = 1
+	c._attack(horus, a, 3)
+	check(a.hp == 0 or not a.alive, "horus: +2 damage against a Burning enemy")
+	check(c.faith_next == 1, "horus: a Burning enemy died, +1 Faith next round")
+	b.burn = 2
+	c._deal_damage(b, 99, "effect")
+	check(c.faith_next == 1, "horus: once per round")
+	c.debug_place("hollowed_bulwark", E, 3, F)
+	var faith_before: int = 3
+	c._start_round()
+	check(c.faith == faith_before + 1 and c.faith_next == 0, "horus: the Faith arrives at the start of the next round")
+
+	# Revive clears Burn.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, F)
+	var mummy = c.debug_place("mummy_guardian", P, 0, F)
+	mummy.burn = 4
+	c._deal_damage(mummy, 99, "effect")
+	check(mummy.alive and mummy.burn == 0, "burn: Revive clears it")
+	check("burn" in CardWidget.glossary_icons(Data.CARDS["horus"], "horus"), "glossary: Burning explains Burn")
+	check("sunlit" in CardWidget.glossary_icons(Data.CARDS["solar_barque"], "solar_barque"), "glossary: Sunlit is explained")
 
 
 func test_forge() -> void:
@@ -1629,7 +1714,7 @@ func _random_play(c, i: int, rng: RandomNumberGenerator) -> void:
 	match def["target"]:
 		"none":
 			_expect_ok(c.play_spell(i, []), def["name"])
-		"ally", "ally_card", "ally_slot", "enemy", "empty_ally_slot":
+		"ally", "ally_card", "ally_slot", "enemy", "enemy_burning", "empty_ally_slot":
 			if not targets.is_empty():
 				_expect_ok(c.play_spell(i, [targets[rng.randi_range(0, targets.size() - 1)]]), def["name"])
 		"enemy_front":

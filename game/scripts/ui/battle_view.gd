@@ -25,7 +25,7 @@ const VOID_COLOR := Color(0.78, 0.55, 1.0)
 const BOARD_RECT := Rect2(0, 0, 1250, 640)
 const SIDEBAR_RECT := Rect2(1262, 10, 328, 880)
 const GOLD := Color(0.95, 0.78, 0.35)
-const TERRAIN_COLORS := {"ley_line": Color(0.95, 0.75, 0.2), "ruins": Color(0.75, 0.6, 0.45), "quicksand": Color(0.9, 0.72, 0.4)}
+const TERRAIN_COLORS := {"ley_line": Color(0.95, 0.75, 0.2), "ruins": Color(0.75, 0.6, 0.45), "quicksand": Color(0.9, 0.72, 0.4), "sunlit": Color(1.0, 0.85, 0.35)}
 
 var combat
 var params := {}
@@ -542,6 +542,8 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["frenzy", "Empowered", "Boosted with extra ATK and HP for this fight."])
 		if u.get("poisoned", false):
 			out.append(["poison", "Poisoned", "Takes 1 damage at the end of every round until healed."])
+		if u.get("burn", 0) > 0:
+			out.append(["burn", "Burn %d" % u["burn"], "At the end of the round it takes %d damage, then Burn drops by 1." % u["burn"]])
 		if u.get("veil", false):
 			out.append(["veil", "Veil up", "Ignores the next damage it takes this round."])
 		if u.get("spellward", false):
@@ -557,6 +559,8 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 	var terrain: String = combat.terrain_at(side, row, lane)
 	if terrain != "":
 		out.append(["", Data.TERRAIN[terrain]["name"], Data.TERRAIN[terrain]["text"], TERRAIN_COLORS[terrain]])
+	if terrain != "sunlit" and "%d:%d" % [row, lane] in snap.get("sunlit", []) and side == P:
+		out.append(["", "Sunlit (Benben Stone)", Data.TERRAIN["sunlit"]["text"], TERRAIN_COLORS["sunlit"]])
 	if side == P:
 		if snap["petrified_lane"] == lane:
 			out.append(["", "Petrified", "Units in this lane skip their action this round.", Color(0.75, 0.9, 0.65)])
@@ -856,8 +860,9 @@ func _on_hand_pressed(i: int) -> void:
 		_set_hint({
 			"ally": "Choose one of your units.",
 			"ally_card": "Choose one of your units to return to your hand.",
-			"ally_slot": "Choose a %s tile on your side without terrain (a unit may stand there)." % ("front" if def.get("row", 0) == 0 else "back"),
+			"ally_slot": "Choose a %stile on your side without terrain (a unit may stand there)." % ["", "front ", "back "][def.get("row", 0) + 1],
 			"enemy": "Choose an enemy unit.",
+			"enemy_burning": "Choose a Burning enemy.",
 			"enemy_front": "Choose an enemy front unit to push.",
 			"enemy_pair": "Choose the first enemy to swap.",
 			"empty_ally_slot": "Choose an empty tile for the returning ally." if def.get("needs_fallen", false) else "Choose an empty tile.",
@@ -910,7 +915,7 @@ func _target_with_card(slot: Array) -> void:
 		_apply(combat.play_unit(sel_hand, slot[2], slot[1]))
 		return
 	match def["target"]:
-		"ally", "ally_card", "ally_slot", "enemy", "empty_ally_slot":
+		"ally", "ally_card", "ally_slot", "enemy", "enemy_burning", "empty_ally_slot":
 			_apply(combat.play_spell(sel_hand, [slot]))
 		"enemy_front":
 			push_target = slot

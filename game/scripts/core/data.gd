@@ -88,6 +88,14 @@ const CARDS := {
 	"scarab_queen": {"name": "Scarab Queen", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 1, "hp": 5, "spd": 2, "keywords": [], "text": "Start of round: summon a 1/1 Scarab in the nearest empty slot in her row."},
 	"plague_of_locusts": {"name": "Plague of Locusts", "faction": "egypt", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "enemy", "text": "Deal damage to an enemy equal to the number of units you have."},
 	"khepri": {"name": "Khepri", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 5, "spd": 2, "keywords": [], "text": "Your Scarabs have +1 ATK. Whenever one of your Scarabs dies, heal the Core by 1."},
+	# Egyptian Sun - Sunlit and Burn
+	"dawn_ritual": {"name": "Dawn Ritual", "faction": "egypt", "rarity": "Common", "type": "spell", "cost": 1, "target": "ally_slot", "terrain": "sunlit", "row": -1, "exhaust": true, "text": "Turn one of your slots without terrain into Sunlit for this fight. Exhaust."},
+	"priestess_of_aten": {"name": "Priestess of Aten", "faction": "egypt", "rarity": "Common", "type": "unit", "cost": 1, "atk": 1, "hp": 3, "spd": 3, "keywords": ["ranged"], "burn": 2, "text": "Ranged. Her attacks apply Burn 2."},
+	"solar_barque": {"name": "Solar Barque", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 6, "spd": 2, "keywords": [], "text": "Start of round: if it is Sunlit, the allies left and right of it gain Shield 2."},
+	"noon_blaze": {"name": "Noon Blaze", "faction": "egypt", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "none", "text": "Burn 3 every enemy in a lane where you have a Sunlit slot."},
+	"benben_stone": {"name": "Benben Stone", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 1, "atk": 0, "hp": 6, "spd": 1, "keywords": ["immovable"], "text": "Immovable. Doesn't attack. Its slot and the slots left and right of it are Sunlit while it lives."},
+	"eye_of_ra": {"name": "Eye of Ra", "faction": "egypt", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "enemy_burning", "text": "Double the Burn on an enemy."},
+	"horus": {"name": "Horus", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 5, "spd": 4, "keywords": ["ranged", "airborne"], "text": "Ranged. Airborne. Deals +2 damage to Burning enemies. Once per round, when a Burning enemy dies, gain 1 Faith next round."},
 
 	# Tokens
 	"scarab": {"name": "Scarab", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 1, "spd": 4, "keywords": [], "token": true, "text": "Summoned token."},
@@ -113,6 +121,7 @@ const CARD_SHORT := {
 	"phalanx_formation": "Front row +1 ATK, Shield 2", "divine_favor": "+2 ATK this round", "olympian_ichor": "Heal 4, +1 ATK",
 	"book_of_the_dead": "Return the last fallen ally", "sandswarm": "Scarabs fill the front row",
 	"plague_of_locusts": "Damage = your unit count", "call_of_the_pack": "Summon two Wolves", "bronze_spear": "+2 ATK", "hoplon": "Shield 2 each round",
+	"dawn_ritual": "Create a Sunlit slot", "noon_blaze": "Burn 3 in Sunlit lanes", "eye_of_ra": "Double an enemy's Burn",
 	"harpe": "+1 ATK and Cleave", "golden_cuirass": "+4 HP and Taunt", "blood_scent": "Each Wolf hits for its ATK", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
 	"void_web": "Unplayable", "hex": "Unplayable, Faith -1", "ashes": "Unplayable, Core -1",
 }
@@ -178,6 +187,7 @@ const TERRAIN := {
 	"ley_line": {"name": "Ley Line", "text": "The unit in this slot has +2 ATK."},
 	"ruins": {"name": "Ruins", "text": "Cover: Ranged attacks cannot target the unit in this slot."},
 	"quicksand": {"name": "Quicksand", "text": "The unit in this slot can't be moved and has -1 SPD."},
+	"sunlit": {"name": "Sunlit", "text": "The unit in this slot has +1 ATK, and its attacks apply Burn 1."},
 }
 
 const STARTER := ["ark_sentinel", "ark_sentinel", "ark_sentinel", "ark_sentinel", "echo_archer", "echo_archer", "echo_archer", "rebuke", "warding"]

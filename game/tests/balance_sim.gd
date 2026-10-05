@@ -36,6 +36,7 @@ const ARCHETYPES := {
 	"pack": ["ulfr_hunter", "call_of_the_pack", "geri", "freki", "blood_scent", "skoll_and_hati"],
 	"olympians": ["hoplite", "peltast", "myrmidon", "athena", "apollo", "phalanx_formation", "achilles", "zeus"],
 	"oracle": ["divine_favor", "pythia", "olympian_ichor", "hermes"],
+	"sun": ["dawn_ritual", "priestess_of_aten", "solar_barque", "noon_blaze", "benben_stone", "eye_of_ra", "horus"],
 	"forge": ["bronze_spear", "hoplon", "forge_apprentice", "cyclops_smith", "harpe", "golden_cuirass", "talos"],
 	"eternal": ["mummy_guardian", "priest_of_ra", "sphinx", "anubis", "book_of_the_dead", "ra", "osiris"],
 	"swarm": ["scarab_swarm", "sandswarm", "scarab_queen", "plague_of_locusts", "khepri"],
@@ -455,6 +456,31 @@ func _evaluate(c, i: int) -> Dictionary:
 					slot = s
 					break
 			return {"score": 22.0, "action": func(): c.play_spell(i, [slot])}
+		"dawn_ritual":
+			var strongest = null
+			for u in c.units(P):
+				var attacks: bool = u.row == FRONT or u.has_kw("ranged")
+				if attacks and c.effective_atk(u) > 0 and c.valid_targets(i).has([P, u.row, u.lane]) and not c.is_sunlit(P, u.row, u.lane) \
+						and (strongest == null or c.effective_atk(u) > c.effective_atk(strongest)):
+					strongest = u
+			if strongest == null:
+				return none
+			return {"score": 5.0 + c.effective_atk(strongest), "action": func(): c.play_spell(i, [[P, strongest.row, strongest.lane]])}
+		"noon_blaze":
+			var count := 0
+			for e in c.units(E):
+				if c._lane_sunlit(e.lane, e.width):
+					count += 1
+			return {"score": 2.0 + 3.0 * count if count > 0 else 0.0, "action": func(): c.play_spell(i, [])}
+		"eye_of_ra":
+			var hottest = null
+			for t in c.valid_targets(i):
+				var e = c.unit_at(E, t[1], t[2])
+				if hottest == null or e.burn > hottest.burn:
+					hottest = e
+			if hottest == null or hottest.burn < 2:
+				return none
+			return {"score": 2.0 + hottest.burn * 1.5, "action": func(): c.play_spell(i, [[E, hottest.row, hottest.lane]])}
 		"warding":
 			var t = _most_threatened_ally(c)
 			if t == null:
@@ -604,7 +630,16 @@ func _best_slot(c, id: String) -> Array:
 					score += 4.0
 				elif row == BACK and flanker and id != "skoll_and_hati" and ally_front != null and c.is_wolf(ally_front):
 					score = 18.0 + (4.0 if enemy_here else 0.0)
+			if id == "benben_stone":
+				score = 0.0
+				if row == FRONT:
+					score = 7.0 + (1.0 if lane in [1, 2] else 0.0)
+					for l in [lane - 1, lane + 1]:
+						if c.unit_at(P, FRONT, l) != null:
+							score += 2.0
 			var terrain: String = c.terrain_at(P, row, lane)
+			if c.is_sunlit(P, row, lane) and score > 0 and id != "benben_stone":
+				score += 4.0 if id == "solar_barque" else 2.0
 			if terrain == "ley_line" and score > 0:
 				score += 3.0
 			if terrain == "ruins" and row == BACK and score > 0:

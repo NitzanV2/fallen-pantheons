@@ -39,7 +39,7 @@ var labels: Control
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	for id in ["player", "enemy", "ley_line", "ruins", "quicksand"]:
+	for id in ["player", "enemy", "ley_line", "ruins", "quicksand", "sunlit"]:
 		textures[id] = load("res://art/battle/tile_%s.jpg" % id)
 	labels = Control.new()
 	labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -171,6 +171,9 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 	var slot := [side, row, lane]
 	var quad := tile_quad(side, row, lane)
 	var t: String = terrain.get(key(side, row, lane), "")
+	var sunlit: bool = side == P and not snap.is_empty() and "%d:%d" % [row, lane] in snap.get("sunlit", [])
+	if t == "" and sunlit:
+		t = "sunlit"
 	var depth: float = ROW_SCALE[i]
 	var slab := PackedVector2Array([quad[3], quad[2], quad[2] + Vector2(0, SLAB * depth), quad[3] + Vector2(0, SLAB * depth)])
 	draw_colored_polygon(slab, Color(0.09, 0.06, 0.12) if side == E else Color(0.2, 0.14, 0.09))
@@ -191,6 +194,8 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 			draw_colored_polygon(quad, Color(0.95, 0.72, 0.35, 0.22))
 		if "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
 			draw_colored_polygon(quad, Color(0.95, 0.7, 0.3, 0.3))
+		if sunlit and t != "sunlit":
+			draw_colored_polygon(quad, Color(1.0, 0.85, 0.35, 0.25))
 
 	var closed := quad.duplicate()
 	closed.append(quad[0])
@@ -373,9 +378,13 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 			["spellward", u.get("spellward", false)], ["frenzy", u["empowered"]]]:
 		if pair[1]:
 			status.add_child(CardWidget.icon(pair[0], 20 * sc))
+	if u.get("burn", 0) > 0:
+		status.add_child(_chip("burn", u["burn"], sc, Color(1.0, 0.75, 0.35)))
 	for i in u.get("armaments", []).size():
 		status.add_child(CardWidget.icon("armament", 20 * sc))
-	status.position = Vector2(size.x - 25 * sc, 5 * sc)
+	for child in status.get_children():
+		child.size_flags_horizontal = Control.SIZE_SHRINK_END
+	status.position = Vector2(size.x - 5 * sc - status.get_combined_minimum_size().x, 5 * sc)
 	root.add_child(status)
 	return root
 

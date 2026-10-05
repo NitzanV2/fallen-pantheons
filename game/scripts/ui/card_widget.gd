@@ -44,12 +44,14 @@ const KEYWORD_INFO := {
 	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot."],
 	"immovable": ["Immovable", "Can't be pushed or swapped and takes no collision damage."],
 	"airborne": ["Airborne", "Melee attacks can't target it."],
-	"pack": ["Pack", "Wolf. Gains +1 ATK for each of your other Wolves (max +3)."],
+	"pack": ["Pack", "Wolf. Gains +1 ATK for each of your other Wolves (max +4)."],
 	"armament": ["Armament", "Play it on one of your units: it stays attached for the fight. A unit holds one (a new one replaces the old). When the unit dies, the Armament shuffles into your draw pile."],
 	"flank": ["Flank", "In the back row, attacks right after the Wolf in front of it, hitting the same target."],
 	"veil": ["Veil", "Ignores the first damage it takes each round."],
 	"frenzy": ["Frenzy", "Gains +1 ATK each time it takes damage and survives."],
 	"poison": ["Poison", "Units it hits take 1 damage at the end of every round until healed."],
+	"burn": ["Burn", "Burn X: at the end of the round the unit takes X damage, then Burn drops by 1. Stacks by adding."],
+	"sunlit": ["Sunlit", "Terrain on your side: the unit there has +1 ATK, and its attacks apply Burn 1."],
 	"spellward": ["Spellward", "Your spells can't target it or the enemies next to it."],
 	"thorns": ["Thorns", "Melee units that attack it take damage."],
 	"split": ["Split", "When it dies, two smaller copies appear."],
@@ -559,7 +561,7 @@ static func glossary_icons(def: Dictionary, card_id: String) -> Array:
 		if id in out or id == "ability":
 			continue
 		var word: String = KEYWORD_INFO[id][0]
-		var re := RegEx.create_from_string("\\b%s\\b" % word.replace("-", "\\-"))
+		var re := RegEx.create_from_string("\\b%s(?:ing|s)?\\b" % word.replace("-", "\\-"))
 		if re.search(text) != null:
 			out.append(id)
 	if not "pack" in out and (text.contains("Wolf") or text.contains("Wolves")):

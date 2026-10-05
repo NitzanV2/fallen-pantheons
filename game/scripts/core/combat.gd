@@ -43,6 +43,9 @@ var moves_left := 0
 var longship_active := false
 var spells_this_round := 0
 var armaments_this_round := 0
+## Faith added at the start of the next round (on top of the usual 3).
+var faith_next := 0
+var horus_round := 0
 var intents := {}
 var petrified_lane := -1
 var sandstorm_row := -1
@@ -221,6 +224,8 @@ func effective_atk(u) -> int:
 		a += 2
 	if terrain_at(u.side, u.row, u.lane) == "ley_line":
 		a += 2
+	if is_sunlit(u.side, u.row, u.lane):
+		a += 1
 	if u.id == "peltast" and unit_at(u.side, u.row, u.lane - 1) != null and unit_at(u.side, u.row, u.lane + 1) != null:
 		a += 1
 	if u.side == PLAYER and has_relic("flanking_banner") and (u.lane == 0 or u.lane == LANES - 1):
@@ -228,6 +233,44 @@ func effective_atk(u) -> int:
 	if u.side == PLAYER and u.row == sandstorm_row:
 		a -= 1
 	return max(a, 0)
+
+
+## Sunlit: the terrain, or a slot in a living Benben Stone's row, at most one lane from it. Player side only.
+func is_sunlit(side: int, row: int, lane: int) -> bool:
+	if side != PLAYER:
+		return false
+	if terrain_at(side, row, lane) == "sunlit":
+		return true
+	for l in [lane - 1, lane, lane + 1]:
+		var b = unit_at(side, row, l)
+		if b != null and b.id == "benben_stone":
+			return true
+	return false
+
+
+## True if any of your slots in the lanes this (possibly wide) unit spans is Sunlit.
+func _lane_sunlit(lane: int, width := 1) -> bool:
+	for l in range(lane, lane + width):
+		for row in 2:
+			if is_sunlit(PLAYER, row, l):
+				return true
+	return false
+
+
+func _sunlit_slots() -> Array:
+	var out: Array = []
+	for row in 2:
+		for lane in LANES:
+			if is_sunlit(PLAYER, row, lane):
+				out.append("%d:%d" % [row, lane])
+	return out
+
+
+func _add_burn(t, amount: int) -> void:
+	if not t.alive or amount <= 0:
+		return
+	t.burn += amount
+	_log("%s Burns (%d)." % [_unit_label(t), t.burn])
 
 
 func is_wolf(u) -> bool:
@@ -296,6 +339,7 @@ func snapshot() -> Dictionary:
 		"moves_left": moves_left,
 		"free_spell": free_spell_active(),
 		"quicksand_targets": _quicksand_targets(),
+		"sunlit": _sunlit_slots(),
 		"void_tide": _void_tide(),
 		"power_uses": power_uses,
 		"power_ready": power.get("ready", true),
@@ -331,7 +375,7 @@ func _unit_snapshot(u) -> Dictionary:
 		"text": u.def["text"], "intent": intent.get("text", ""), "intent_type": intent.get("type", ""), "width": u.width,
 		"move_block": move_block(u) if phase == "plan" and u.side == PLAYER else "",
 		"fresh": is_fresh(u),
-		"poisoned": u.poisoned, "swine": u.uid == transformed_uid,
+		"poisoned": u.poisoned, "burn": u.burn, "swine": u.uid == transformed_uid,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
 		"spellward": u.side == ENEMY and is_spellwarded(u),
 		"armaments": u.armaments.map(func(card): return card["id"]),
@@ -354,6 +398,10 @@ func _start_round() -> void:
 		faith += 1
 	if has_relic("void_touched_heart"):
 		faith += 1
+	if faith_next > 0:
+		faith += faith_next
+		_log("+%d Faith this round." % faith_next)
+		faith_next = 0
 	_clear_unplayable()
 	_draw(5 if round_num == 1 else 2)
 	_declare_intents()
@@ -410,6 +458,7 @@ func _capture() -> Dictionary:
 		"grid": g, "deck": deck.duplicate(), "hand": hand.duplicate(), "discard": discard.duplicate(),
 		"exhausted": exhausted.duplicate(), "core_hp": core_hp, "faith": faith, "result": result,
 		"moves_left": moves_left, "longship_active": longship_active, "spells_this_round": spells_this_round, "armaments_this_round": armaments_this_round,
+		"faith_next": faith_next, "horus_round": horus_round,
 		"intents": intents.duplicate(true), "petrified_lane": petrified_lane, "sandstorm_row": sandstorm_row,
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
@@ -439,6 +488,8 @@ func restart_plan() -> String:
 	longship_active = s["longship_active"]
 	spells_this_round = s["spells_this_round"]
 	armaments_this_round = s["armaments_this_round"]
+	faith_next = s["faith_next"]
+	horus_round = s["horus_round"]
 	intents = s["intents"]
 	petrified_lane = s["petrified_lane"]
 	sandstorm_row = s["sandstorm_row"]
@@ -688,9 +739,10 @@ func _targets_for(def: Dictionary, kind: String) -> Array:
 			for u in units(PLAYER):
 				out.append([PLAYER, u.row, u.lane])
 		"ally_slot":
-			for lane in LANES:
-				if _terrain_slot_ok(def, def["row"], lane):
-					out.append([PLAYER, def["row"], lane])
+			for row in 2:
+				for lane in LANES:
+					if _terrain_slot_ok(def, row, lane):
+						out.append([PLAYER, row, lane])
 		"ally_card":
 			for u in units(PLAYER):
 				if u.card != null:
@@ -698,6 +750,10 @@ func _targets_for(def: Dictionary, kind: String) -> Array:
 		"enemy":
 			for u in units(ENEMY):
 				if not is_spellwarded(u):
+					out.append([ENEMY, u.row, u.lane])
+		"enemy_burning":
+			for u in units(ENEMY):
+				if u.burn > 0 and not is_spellwarded(u):
 					out.append([ENEMY, u.row, u.lane])
 		"enemy_front":
 			for u in units(ENEMY):
@@ -727,8 +783,9 @@ func _adjacent(a, b) -> bool:
 	return a.lane + a.width == b.lane or b.lane + b.width == a.lane
 
 
+## Row -1 means either row.
 func _terrain_slot_ok(def: Dictionary, row: int, lane: int) -> bool:
-	return row == def["row"] and terrain_at(PLAYER, row, lane) == ""
+	return (def["row"] < 0 or row == def["row"]) and terrain_at(PLAYER, row, lane) == ""
 
 
 func _book_target_available() -> bool:
@@ -820,8 +877,8 @@ func _check_targets(def: Dictionary, targets: Array, direction: int) -> String:
 			if targets.size() != 1 or targets[0][0] != PLAYER or _at(targets[0]) == null:
 				return "Choose one of your units."
 		"ally_slot":
-			if targets.size() != 1 or targets[0][0] != PLAYER or targets[0][1] != def["row"]:
-				return "Choose a %s slot on your grid." % ("front" if def["row"] == FRONT else "back")
+			if targets.size() != 1 or targets[0][0] != PLAYER or (def["row"] >= 0 and targets[0][1] != def["row"]):
+				return "Choose a %sslot on your grid." % ["", "front ", "back "][def["row"] + 1]
 			if not _terrain_slot_ok(def, targets[0][1], targets[0][2]):
 				return "That slot already has terrain."
 		"ally_card":
@@ -832,6 +889,11 @@ func _check_targets(def: Dictionary, targets: Array, direction: int) -> String:
 		"enemy":
 			if targets.size() != 1 or targets[0][0] != ENEMY or _at(targets[0]) == null:
 				return "Choose an enemy unit."
+			if is_spellwarded(_at(targets[0])):
+				return "That enemy is Spellward."
+		"enemy_burning":
+			if targets.size() != 1 or targets[0][0] != ENEMY or _at(targets[0]) == null or _at(targets[0]).burn <= 0:
+				return "Choose a Burning enemy."
 			if is_spellwarded(_at(targets[0])):
 				return "That enemy is Spellward."
 		"enemy_front":
@@ -1053,7 +1115,7 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 		"faith_surge":
 			faith += 2
 			_log("Gained 2 Faith.")
-		"channel_ley_line", "raise_ruins":
+		"channel_ley_line", "raise_ruins", "dawn_ritual":
 			var slot: Array = targets[0]
 			var terrain_id: String = Data.CARDS[card["id"]]["terrain"]
 			terrain[_key(PLAYER, slot[1], slot[2])] = terrain_id
@@ -1122,6 +1184,15 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 			for lane in LANES:
 				if unit_at(PLAYER, FRONT, lane) == null:
 					_summon_scarab(PLAYER, FRONT, lane, "Sandswarm")
+		"noon_blaze":
+			_log("Noon Blaze scorches the Sunlit lanes.")
+			for e in units(ENEMY):
+				if _lane_sunlit(e.lane, e.width):
+					_add_burn(e, 3)
+		"eye_of_ra":
+			var t = _at(targets[0])
+			_log("The Eye of Ra fixes on %s." % _unit_label(t))
+			_add_burn(t, t.burn)
 		"plague_of_locusts":
 			var dmg := units(PLAYER).size()
 			var t = _at(targets[0])
@@ -1395,6 +1466,9 @@ func end_plan() -> Array:
 				_log("Poison eats at %s." % _unit_label(u))
 				_deal_damage(u, 2 if u.side == ENEMY and _up("plague_2") else 1, "poison")
 
+	if result == "":
+		_tick_burn()
+
 	if result == "" and has_relic("scarab_amulet"):
 		for u in units(PLAYER):
 			_heal(u, 1, "Scarab Amulet")
@@ -1411,6 +1485,17 @@ func end_plan() -> Array:
 
 	_end_round_checks()
 	return events.duplicate()
+
+
+## Burn deals its value, then drops by 1 (a death or Revive ends it).
+func _tick_burn() -> void:
+	for u in units(PLAYER) + units(ENEMY):
+		if u.burn > 0 and u.alive and result == "":
+			var amount: int = u.burn
+			_log("%s burns for %d." % [_unit_label(u), amount])
+			_deal_damage(u, amount, "burn")
+			if u.alive and u.burn == amount:
+				u.burn -= 1
 
 
 func _initiative_order() -> Array:
@@ -1456,6 +1541,10 @@ func _start_of_round(u) -> void:
 		if shield > 0:
 			u.shield += shield
 			_log("%s's %s grants Shield %d." % [_unit_label(u), Data.CARDS[card["id"]]["name"], shield])
+	if u.id == "solar_barque" and is_sunlit(u.side, u.row, u.lane):
+		for n in _row_neighbors(u):
+			n.shield += 2
+		_log("The Solar Barque shields its neighbors (Shield 2).")
 	if u.id == "skoll_and_hati" and _wolf_count(u.side) < SKOLL_WOLVES:
 		_summon_wolf_near(u, "Skoll and Hati")
 	if u.id == "myrmidon":
@@ -1593,6 +1682,8 @@ func _act(u) -> void:
 		return
 	if u.row == BACK and not u.has_kw("ranged"):
 		return
+	if u.id == "benben_stone":
+		return
 	if u.id == "void_charger":
 		var it: Dictionary = intents.get(u.uid, {})
 		if it.get("type", "") == "charge":
@@ -1638,6 +1729,8 @@ func _attack(u, target, atk: int) -> void:
 	var dmg := atk
 	if ranged and u.side == PLAYER and has_relic("eye_of_horus") and target.row == BACK:
 		dmg += 1
+	if u.id == "horus" and target.burn > 0:
+		dmg += 2
 	var extra := {"target": [target.side, target.row, target.lane], "ranged": ranged}
 	if u.has_kw("cleave"):
 		extra["cleave"] = _cleave_preview(u, target)
@@ -1652,6 +1745,8 @@ func _attack(u, target, atk: int) -> void:
 	if u.has_kw("poison") and target.alive and target.side != u.side and not target.poisoned:
 		target.poisoned = true
 		_log("%s is Poisoned." % _unit_label(target))
+	if target.side != u.side:
+		_add_burn(target, u.def.get("burn", 0) + (1 if is_sunlit(u.side, u.row, u.lane) else 0))
 
 	if u.has_kw("pierce") and excess > 0 and behind != null and behind.alive:
 		_deal_damage(behind, excess, "pierce")
@@ -1857,6 +1952,7 @@ func _kill(u) -> void:
 		u.revive_used = true
 		u.shield = 0
 		u.poisoned = false
+		u.burn = 0
 		_log("%s falls..." % _unit_label(u))
 		_on_death(u)
 		_death_triggers(u)
@@ -1877,6 +1973,10 @@ func _kill(u) -> void:
 	_return_armaments(u)
 	if u.side == ENEMY and u.poisoned and _up("hunt_2"):
 		_heal_core(2, "Feast")
+	if u.side == ENEMY and u.burn > 0 and horus_round != round_num and _has_living(PLAYER, "horus"):
+		horus_round = round_num
+		faith_next += 1
+		_log("Horus claims the burning soul: +1 Faith next round.")
 
 	if u.side == PLAYER and not u.is_token:
 		last_dead_ally = u.card

@@ -30,6 +30,7 @@ var from_hand := false
 var veil_round := 0
 var attacked_round := 0
 var poisoned := false
+var burn := 0
 ## Keywords granted during the fight, on top of the card's own.
 var bonus_kw: Array = []
 ## Armament cards attached to this unit (card dictionaries).
@@ -55,7 +56,7 @@ func copy():
 	var u = get_script().new()
 	for prop in ["uid", "id", "def", "side", "lane", "row", "atk", "max_hp", "hp", "spd", "threat",
 			"shield", "alive", "revive_used", "is_token", "wide", "width", "empowered", "card", "temp_atk", "moved_round", "deployed_round",
-			"veil_round", "poisoned", "attacked_round", "from_hand"]:
+			"veil_round", "poisoned", "attacked_round", "from_hand", "burn"]:
 		u.set(prop, get(prop))
 	u.bonus_kw = bonus_kw.duplicate()
 	u.armaments = armaments.duplicate()

@@ -235,6 +235,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["split", "Split", "When it dies, two smaller copies appear in its slot and the nearest empty slot in its row (left first)."],
 		["frenzy", "Frenzy", "Gains +1 ATK each time it takes damage and survives. Kill it in one burst."],
 		["poison", "Poison", "Units it hits are Poisoned: they take 1 damage at the end of every round. Any heal cures it, even at full HP."],
+		["burn", "Burn", "Burn X: at the end of the round (after Poison) the unit takes X damage, then Burn drops by 1. More Burn adds to it. Heals don't cure it; Revive clears it. Sunlit slots, Priestess of Aten and Noon Blaze apply it, Eye of Ra doubles it, and Horus hits Burning enemies for +2."],
 		["spellward", "Spellward", "Your spells can't target it or the enemies next to it (left, right, in front, behind). It gains Shield 2 whenever you cast a spell."],
 	])
 
@@ -308,8 +309,9 @@ func _terrain(page: VBoxContainer) -> void:
 		["battle/tile_ley_line.jpg", "Ley Line", "Gold border. The unit in this slot has [b]+2 ATK[/b]."],
 		["battle/tile_ruins.jpg", "Ruins", "Brown border. Cover: Ranged attacks can't target the unit in this slot."],
 		["battle/tile_quicksand.jpg", "Quicksand", "Sand border. The unit in this slot can't be moved and has [b]-1 SPD[/b]. Only enemy Geomancers create it."],
+		["battle/tile_sunlit.jpg", "Sunlit", "Your side only. The unit in this slot has [b]+1 ATK[/b], and its attacks apply [b]Burn 1[/b]. Dawn Ritual creates it; a living Benben Stone makes its own slot and the slots left and right of it Sunlit (shown with a golden glow)."],
 	], 72)
-	page.add_child(_rich("Terrain can appear on either side of the board - enemy archers sometimes shelter in Ruins, and enemies on a Ley Line hit harder.\n\nTerrain belongs to the [b]slot[/b], not the unit: moving a unit off it loses the effect. A slot holds one terrain at a time. [b]Channel Ley Line[/b] creates a Ley Line on a front slot and [b]Raise Ruins[/b] creates Ruins on a back slot, for the rest of the fight - only on slots without terrain, but a unit may already stand there."))
+	page.add_child(_rich("Terrain can appear on either side of the board - enemy archers sometimes shelter in Ruins, and enemies on a Ley Line hit harder.\n\nTerrain belongs to the [b]slot[/b], not the unit: moving a unit off it loses the effect. A slot holds one terrain at a time. [b]Channel Ley Line[/b] creates a Ley Line on a front slot and [b]Raise Ruins[/b] creates Ruins on a back slot and [b]Dawn Ritual[/b] creates a Sunlit slot in either row, for the rest of the fight - only on slots without terrain, but a unit may already stand there."))
 
 	_heading(page, "push_left", "Pushing and collisions")
 	page.add_child(_rich("[b]Rebuke[/b] pushes an enemy front unit one lane. You pick the direction, and the prompt shows what will happen."))
