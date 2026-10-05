@@ -74,8 +74,9 @@ var animating := false
 var skip_animation := false
 
 
-func start(battle: Dictionary, deck_key: String, relics: Array, seed_value: int) -> void:
-	params = {"battle": battle, "deck": deck_key, "relics": relics, "seed": seed_value}
+## `deck` is a Data.DECKS key or an explicit Array of card ids.
+func start(battle: Dictionary, deck: Variant, relics: Array, seed_value: int) -> void:
+	params = {"battle": battle, "deck": deck, "relics": relics, "seed": seed_value}
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build()
 	_new_combat(seed_value)
@@ -110,8 +111,10 @@ func _exit_tree() -> void:
 func _new_combat(seed_value: int) -> void:
 	params["seed"] = seed_value
 	combat = Combat.new()
-	combat.setup(params["battle"], Data.deck_cards(params["deck"]), params["relics"], seed_value)
-	_begin("[b]%s[/b] - deck: %s - seed %d" % [params["battle"]["name"], Data.DECKS[params["deck"]]["name"], seed_value])
+	var cards: Array = params["deck"].duplicate() if params["deck"] is Array else Data.deck_cards(params["deck"])
+	combat.setup(params["battle"], cards, params["relics"], seed_value)
+	var deck_name: String = "custom (%d cards)" % cards.size() if params["deck"] is Array else Data.DECKS[params["deck"]]["name"]
+	_begin("[b]%s[/b] - deck: %s - seed %d" % [params["battle"]["name"], deck_name, seed_value])
 
 
 func _begin(header: String) -> void:

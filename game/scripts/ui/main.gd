@@ -38,6 +38,17 @@ var power_option: OptionButton
 var power_upgraded: CheckBox
 var relic_checks := {}
 var deck_keys: Array = []
+var custom_deck: Array = []
+var deck_builder: Control = null
+var builder_deck_box: VBoxContainer
+var builder_title: Label
+var act_option: OptionButton
+var floor_box: SpinBox
+var core_box: SpinBox
+var core_max_box: SpinBox
+var scaling_label: Label
+
+const CUSTOM_DECK_FILE := "user://sandbox_deck.json"
 
 
 func _ready() -> void:
@@ -541,7 +552,38 @@ func _build_sandbox() -> void:
 	for key in Data.DECKS:
 		deck_keys.append(key)
 		deck_option.add_item(Data.DECKS[key]["name"])
+	_load_custom_deck()
+	deck_option.add_item("")
+	_refresh_custom_deck_item()
 	options.add_child(deck_option)
+	var edit_deck := Button.new()
+	edit_deck.text = "Build custom deck"
+	edit_deck.custom_minimum_size = Vector2(0, 38)
+	edit_deck.pressed.connect(_open_deck_builder)
+	CardWidget.style_button(edit_deck, false, 15)
+	options.add_child(edit_deck)
+
+	options.add_child(_heading("Run conditions"))
+	var act_row := HBoxContainer.new()
+	act_row.add_theme_constant_override("separation", 8)
+	options.add_child(act_row)
+	act_option = OptionButton.new()
+	for i in Data.ACTS.size():
+		act_option.add_item("Act %d: %s" % [i + 1, Data.ACTS[i]["name"]])
+	act_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	act_option.item_selected.connect(func(_i): _update_scaling_label())
+	act_row.add_child(act_option)
+	floor_box = _labeled_spin(options, "Floor (0 = no floor scaling)", 0, 15, 0)
+	floor_box.value_changed.connect(func(_v): _update_scaling_label())
+	scaling_label = Label.new()
+	scaling_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	scaling_label.add_theme_font_size_override("font_size", 14)
+	scaling_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	scaling_label.custom_minimum_size = Vector2(320, 0)
+	options.add_child(scaling_label)
+	core_box = _labeled_spin(options, "Core HP (0 = battle default)", 0, 999, 0)
+	core_max_box = _labeled_spin(options, "Max Core HP (0 = same as Core HP)", 0, 999, 0)
+	_update_scaling_label()
 
 	options.add_child(_heading("Seed (0 = random, also for runs)"))
 	seed_box = SpinBox.new()
@@ -739,9 +781,15 @@ func _hide_menus() -> void:
 
 
 func _start_battle(battle: Dictionary) -> void:
-	var deck_key: String = battle["deck"]
-	if deck_option.selected > 0:
-		deck_key = deck_keys[deck_option.selected - 1]
+	var deck: Variant = battle["deck"]
+	if deck_option.selected > deck_keys.size():
+		if custom_deck.is_empty():
+			_open_deck_builder()
+			return
+		deck = custom_deck
+	elif deck_option.selected > 0:
+		deck = deck_keys[deck_option.selected - 1]
+	battle = _apply_run_conditions(battle)
 	var relics: Array = battle["relics"].duplicate()
 	for id in relic_checks:
 		if relic_checks[id].button_pressed and not relics.has(id):
@@ -752,14 +800,236 @@ func _start_battle(battle: Dictionary) -> void:
 
 	if power_option.selected > 0:
 		var power_id: String = Data.GOD_POWERS.keys()[power_option.selected - 1]
-		battle = battle.duplicate()
 		battle["god_power"] = {"id": power_id, "nodes": Data.GOD_POWERS[power_id]["nodes"].keys() if power_upgraded.button_pressed else []}
 
 	_hide_menus()
 	battle_view = BattleView.new()
 	add_child(battle_view)
 	battle_view.exit_requested.connect(_back_to_menu)
-	battle_view.start(battle, deck_key, relics, seed_value)
+	battle_view.start(battle, deck, relics, seed_value)
+
+
+## Same Empowered enemies, extra rounds, act boss bonus and Core HP a run would give this
+## battle at the chosen act and floor. Bosses skip floor scaling, as in a run.
+static func _run_conditions(battle: Dictionary, act: int, floor_number: int, core: int, core_max: int) -> Dictionary:
+	var b := battle.duplicate(true)
+	var act_def: Dictionary = Data.ACTS[act]
+	var every: int = Data.BALANCE["scaling_every_floors"]
+	if not b.get("boss", false) and every > 0 and floor_number > 0:
+		var steps: int = (floor_number - 1) / every + act_def["empower_steps"]
+		if steps > 0:
+			b["enemy_bonus"] = {"atk": Data.BALANCE["empower_atk"], "hp": Data.BALANCE["empower_hp"],
+				"count": steps * Data.BALANCE["empowered_per_step"], "rounds": steps * Data.BALANCE["scaling_rounds"]}
+	if b.get("boss", false) and not act_def["boss_bonus"].is_empty():
+		b["boss_bonus"] = act_def["boss_bonus"]
+	if core > 0:
+		b["core"] = core
+	b["core_max"] = maxi(core_max, b["core"])
+	return b
+
+
+func _apply_run_conditions(battle: Dictionary) -> Dictionary:
+	return _run_conditions(battle, act_option.selected, int(floor_box.value), int(core_box.value), int(core_max_box.value))
+
+
+func _update_scaling_label() -> void:
+	var b := _run_conditions({"core": 0}, act_option.selected, int(floor_box.value), 0, 0)
+	var parts: Array = []
+	if b.has("enemy_bonus"):
+		var eb: Dictionary = b["enemy_bonus"]
+		parts.append("Normal and elite fights: %d Empowered %s (+%d ATK, +%d HP), +%d %s." % [eb["count"],
+			"enemy" if eb["count"] == 1 else "enemies", eb["atk"], eb["hp"], eb["rounds"], "round" if eb["rounds"] == 1 else "rounds"])
+	else:
+		parts.append("No floor scaling.")
+	var boss_bonus: Dictionary = Data.ACTS[act_option.selected]["boss_bonus"]
+	if not boss_bonus.is_empty():
+		parts.append("Bosses: +%d ATK, +%d HP." % [boss_bonus.get("atk", 0), boss_bonus.get("hp", 0)])
+	scaling_label.text = " ".join(parts)
+
+
+func _labeled_spin(parent: Control, text: String, lo: int, hi: int, value: int) -> SpinBox:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	parent.add_child(label)
+	var box := SpinBox.new()
+	box.min_value = lo
+	box.max_value = hi
+	box.value = value
+	parent.add_child(box)
+	return box
+
+
+func _refresh_custom_deck_item() -> void:
+	deck_option.set_item_text(deck_keys.size() + 1, "Custom deck (%d cards)" % custom_deck.size())
+
+
+func _load_custom_deck() -> void:
+	if not FileAccess.file_exists(CUSTOM_DECK_FILE):
+		return
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(CUSTOM_DECK_FILE))
+	if parsed is Array:
+		custom_deck = parsed.filter(func(id): return id is String and Data.CARDS.has(id))
+
+
+func _save_custom_deck() -> void:
+	var f := FileAccess.open(CUSTOM_DECK_FILE, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(custom_deck))
+
+
+## Full card grid on the left (click to add a copy), the deck on the right (click to remove one).
+func _open_deck_builder(filter := "all") -> void:
+	_close_deck_builder()
+	deck_builder = PanelContainer.new()
+	deck_builder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.05, 0.08)
+	sb.set_content_margin_all(30)
+	deck_builder.add_theme_stylebox_override("panel", sb)
+	add_child(deck_builder)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	deck_builder.add_child(box)
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	box.add_child(header)
+	builder_title = CardWidget._label("", 32, GOLD, true)
+	builder_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(builder_title)
+	for key in ["all"] + LIST_GROUPS.keys():
+		var b := Button.new()
+		b.text = "All" if key == "all" else LIST_GROUPS[key]
+		b.custom_minimum_size = Vector2(0, 40)
+		b.disabled = key == filter
+		b.pressed.connect(_open_deck_builder.bind(key))
+		CardWidget.style_button(b, false, 15)
+		header.add_child(b)
+	var done := Button.new()
+	done.text = "Done"
+	done.custom_minimum_size = Vector2(120, 40)
+	done.pressed.connect(_close_deck_builder)
+	CardWidget.style_button(done, true, 20)
+	header.add_child(done)
+
+	var columns := HBoxContainer.new()
+	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columns.add_theme_constant_override("separation", 20)
+	box.add_child(columns)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	columns.add_child(scroll)
+	var sections := VBoxContainer.new()
+	sections.add_theme_constant_override("separation", 10)
+	scroll.add_child(sections)
+	for group in LIST_GROUPS:
+		if filter != "all" and filter != group:
+			continue
+		var ids: Array = Data.CARDS.keys().filter(func(id): return _list_group(id) == group)
+		ids.sort_custom(_card_before)
+		sections.add_child(_heading("%s - %d" % [LIST_GROUPS[group], ids.size()]))
+		var grid := GridContainer.new()
+		grid.columns = 6
+		grid.add_theme_constant_override("h_separation", 10)
+		grid.add_theme_constant_override("v_separation", 10)
+		for id in ids:
+			var b := CardWidget.card_button(id)
+			b.pressed.connect(_builder_add.bind(id))
+			grid.add_child(b)
+		sections.add_child(grid)
+
+	var side := VBoxContainer.new()
+	side.custom_minimum_size = Vector2(340, 0)
+	side.add_theme_constant_override("separation", 8)
+	columns.add_child(side)
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 8)
+	side.add_child(tools)
+	var preset := OptionButton.new()
+	preset.add_item("Start from...")
+	for key in deck_keys:
+		preset.add_item(Data.DECKS[key]["name"])
+	preset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preset.item_selected.connect(func(i):
+		if i > 0:
+			custom_deck = Data.deck_cards(deck_keys[i - 1]).duplicate()
+			_builder_changed()
+		preset.select(0))
+	tools.add_child(preset)
+	var clear := Button.new()
+	clear.text = "Clear"
+	clear.custom_minimum_size = Vector2(90, 36)
+	clear.pressed.connect(func():
+		custom_deck.clear()
+		_builder_changed())
+	CardWidget.style_button(clear, false, 15)
+	tools.add_child(clear)
+	var hint := Label.new()
+	hint.text = "Click a card on the left to add a copy. Click a card here to remove one."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	side.add_child(hint)
+	var deck_scroll := ScrollContainer.new()
+	deck_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	deck_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	side.add_child(deck_scroll)
+	builder_deck_box = VBoxContainer.new()
+	builder_deck_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	builder_deck_box.add_theme_constant_override("separation", 4)
+	deck_scroll.add_child(builder_deck_box)
+	_refresh_builder_deck()
+
+
+func _close_deck_builder() -> void:
+	if deck_builder != null:
+		deck_builder.queue_free()
+		deck_builder = null
+
+
+func _builder_add(id: String) -> void:
+	custom_deck.append(id)
+	_builder_changed()
+
+
+func _builder_remove(id: String) -> void:
+	custom_deck.erase(id)
+	_builder_changed()
+
+
+func _builder_changed() -> void:
+	_save_custom_deck()
+	_refresh_custom_deck_item()
+	deck_option.select(deck_keys.size() + 1)
+	_refresh_builder_deck()
+
+
+func _refresh_builder_deck() -> void:
+	builder_title.text = "Custom deck - %d cards" % custom_deck.size()
+	for child in builder_deck_box.get_children():
+		child.queue_free()
+	var counts := {}
+	for id in custom_deck:
+		counts[id] = counts.get(id, 0) + 1
+	var ids: Array = counts.keys()
+	ids.sort_custom(_card_before)
+	for id in ids:
+		var def: Dictionary = Data.CARDS[id]
+		var b := Button.new()
+		b.text = "%d  %s   x%d" % [def["cost"], def["name"], counts[id]]
+		b.tooltip_text = CardWidget.wrap_text(def.get("text", ""))
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.custom_minimum_size = Vector2(0, 34)
+		b.pressed.connect(_builder_remove.bind(id))
+		CardWidget.style_button(b, false, 15)
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		builder_deck_box.add_child(b)
+	if ids.is_empty():
+		var empty := Label.new()
+		empty.text = "Empty. A custom deck needs at least one card."
+		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65))
+		builder_deck_box.add_child(empty)
 
 
 func _start_run(patron: String, power := "") -> void:
