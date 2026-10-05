@@ -113,7 +113,7 @@ Each archetype gets 7 cards (2 Common, 3 Uncommon, 1 Rare, 1 spell or a token), 
 
 ### Norse: The Pack (wolves)
 
-**Rule: Wolf and Pack.** Some units are Wolves (a tribe tag shown on the card). Pack: the unit gains +1 ATK for each other Wolf you control (max +3). It plays wide like Swarm, but each body hits harder, and Wolf deaths feed the Doomed (Berserker, Odin, Einherjar).
+**Rule: Wolf and Pack.** Some units are Wolves (a tribe tag shown on the card). Pack: the unit gains +1 ATK for each other Wolf you control (max +4). It plays wide like Swarm, but each body hits harder, and Wolf deaths feed the Doomed (Berserker, Odin, Einherjar).
 
 | Card | Rarity | Cost | Stats | Text |
 |---|---|---|---|---|
@@ -122,8 +122,8 @@ Each archetype gets 7 cards (2 Common, 3 Uncommon, 1 Rare, 1 spell or a token), 
 | Call of the Pack | Common | 1 | spell | Summon a Wolf in an empty slot, and another in the other slot of that lane if it's empty (one target, and it sets up a Flank pair). |
 | Geri | Uncommon | 2 | 3 / 4 / SPD 4 | Wolf. Pack. Whenever another Wolf dies, Geri gains +1 ATK / +1 HP. The front half of a pair. |
 | Freki | Uncommon | 2 | 2 / 4 / SPD 4 | Wolf. Pack. Flank. End of round: if Freki attacked this round, summon a Wolf in the nearest empty slot. The back half of a pair. |
-| Blood Scent | Uncommon | 1 | spell | Choose an enemy. Each of your Wolves deals 1 damage to it. |
-| Skoll and Hati | Rare | 3 | 4 / 5 / SPD 4 | Wolf. Pack. Your Wolves have Flank. Start of round: summon a Wolf if you have fewer than 3. |
+| Blood Scent | Uncommon | 2 | spell | Choose an enemy. Each of your Wolves deals damage equal to its ATK to it. |
+| Skoll and Hati | Rare | 3 | 4 / 5 / SPD 4 | Wolf. Pack. Your Wolves have Flank. Start of round: summon a Wolf if you have fewer than 4. |
 
 **Back row: Flank.** A Wolf with Flank in the back row attacks right after the Wolf in front of it in the same lane, hitting the same target (melee, so the target must be one the front Wolf could hit). If the front slot is empty or not a Wolf, it doesn't attack. Wolves therefore pair up within a lane (one front, one behind) rather than filling the front row like Scarabs, which gives the archetype a real back-row role. The Wolf token and Ulfr Hunter don't have Flank: it comes from Freki and Skoll and Hati, so the pairs are earned.
 
@@ -227,7 +227,7 @@ Phases 2-4 are independent of 5-7 and also enrich Act 1, so they can be done in 
 - **Battles:** reinforcement waves are in. Toll: leave 1 Faith unspent each round for it to take, or the Core takes 2 (spending everything was too easy to make the old version matter).
 
 - **Armaments:** when an armed unit dies, its Armament shuffles into your draw pile (not back to hand, not exhausted). Buff effects if they're weak.
-- **Wolves:** Flank gives the archetype its back-row role (a back-row Wolf attacks right after the Wolf in front of it), so Pack plays as lane pairs instead of a full front row like Scarabs. Pack stays +1 ATK per other Wolf, max +3.
+- **Wolves:** Flank gives the archetype its back-row role (a back-row Wolf attacks right after the Wolf in front of it), so Pack plays as lane pairs instead of a full front row like Scarabs. Pack is +1 ATK per other Wolf, max +4 (raised from +3; the cap stops damage growing with the square of the Wolf count). Skoll and Hati summon while you have fewer than 4 Wolves. Blood Scent became a 2-cost finisher dealing each Wolf's ATK, since 1 damage per Wolf was weaker than a Starter. After the change: Pack 7.3 vs Doomed 7.5 HP per fight.
 
 ## 11. Future updates (not in this plan)
 
