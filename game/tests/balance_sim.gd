@@ -28,16 +28,34 @@ const FLOOR_BANDS := [["floors 1-6", 1, 6], ["floors 7-12", 7, 12], ["floors 13-
 var fights: Array = []
 var run_stats: Array = []
 var no_powers := false
+## "archetype=<key>": the bot drafts that archetype's cards first, and only its pantheon's patrons play.
+var archetype := ""
+const ARCHETYPES := {
+	"doomed": ["einherjar", "shieldmaiden", "raven_of_odin", "berserker", "valkyrie", "ragnarok", "thor", "odin"],
+	"raiders": ["raider", "longship", "ulfhednar", "loki"],
+	"pack": ["ulfr_hunter", "call_of_the_pack", "geri", "freki", "blood_scent", "skoll_and_hati"],
+	"olympians": ["hoplite", "peltast", "myrmidon", "athena", "apollo", "phalanx_formation", "achilles", "zeus"],
+	"oracle": ["divine_favor", "pythia", "olympian_ichor", "hermes"],
+	"eternal": ["mummy_guardian", "priest_of_ra", "sphinx", "anubis", "book_of_the_dead", "ra", "osiris"],
+	"swarm": ["scarab_swarm", "sandswarm", "scarab_queen", "plague_of_locusts", "khepri"],
+}
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	var runs := int(args[0]) if not args.is_empty() else 100
 	no_powers = args.has("no_powers")
+	for a in args:
+		if a.begins_with("archetype="):
+			archetype = a.trim_prefix("archetype=")
 	print("Balance: ", Data.BALANCE)
 	if no_powers:
 		print("God powers are never used")
+	if archetype != "":
+		print("Drafting archetype: ", archetype)
 	for patron in Data.PATRONS:
+		if archetype != "" and Data.CARDS[patron["card"]]["faction"] != Data.CARDS[ARCHETYPES[archetype][0]]["faction"]:
+			continue
 		for power in patron["powers"]:
 			for s in range(1, runs + 1):
 				var r := _play_run(s * 7 + power.length(), patron["card"], power)
@@ -263,6 +281,8 @@ func _card_value(run, id: String) -> float:
 		v += 1.5
 	if def["type"] == "spell":
 		v -= 1.0
+	if archetype != "" and id in ARCHETYPES[archetype]:
+		v += 4.0
 	return v
 
 
@@ -478,6 +498,27 @@ func _evaluate(c, i: int) -> Dictionary:
 			if best == null:
 				return none
 			return {"score": 6.0, "action": func(): c.play_spell(i, [[P, best.row, best.lane]])}
+		"call_of_the_pack":
+			var best_lane := -1
+			for lane in 4:
+				if c.unit_at(P, FRONT, lane) == null and c.unit_at(P, BACK, lane) == null:
+					if best_lane == -1 or c.unit_at(E, FRONT, lane) != null:
+						best_lane = lane
+			if best_lane == -1:
+				return none
+			return {"score": 9.0 + c._wolf_count(P), "action": func(): c.play_spell(i, [[P, FRONT, best_lane]])}
+		"blood_scent":
+			var wolves: int = c._wolf_count(P)
+			if wolves < 2:
+				return none
+			var target = null
+			for t in c.units(E):
+				if c.valid_targets(i).has([E, t.row, t.lane]) and (target == null or (t.hp + t.shield <= wolves and t.atk + t.threat > target.atk + target.threat)):
+					target = t
+			if target == null:
+				return none
+			var kills: bool = target.hp + target.shield <= wolves
+			return {"score": 3.0 + wolves + (5.0 if kills else 0.0), "action": func(): c.play_spell(i, [[E, target.row, target.lane]])}
 		"sandswarm":
 			var empty := 0
 			for lane in 4:
@@ -525,6 +566,13 @@ func _best_slot(c, id: String) -> Array:
 					score = 12.0 if ally_front != null else 0.0
 				elif ranged:
 					score = 8.0 + (4.0 if ally_front != null else 0.0) + (2.0 if enemy_here else 0.0)
+			if def.get("tribe", "") == "wolf":
+				var flanker: bool = "flank" in kws or c._has_living(P, "skoll_and_hati") or id == "skoll_and_hati"
+				var behind = c.unit_at(P, BACK, lane)
+				if row == FRONT and behind != null and c.is_wolf(behind) and c.has_flank(behind):
+					score += 4.0
+				elif row == BACK and flanker and id != "skoll_and_hati" and ally_front != null and c.is_wolf(ally_front):
+					score = 18.0 + (4.0 if enemy_here else 0.0)
 			var terrain: String = c.terrain_at(P, row, lane)
 			if terrain == "ley_line" and score > 0:
 				score += 3.0

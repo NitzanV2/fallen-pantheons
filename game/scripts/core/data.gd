@@ -43,6 +43,13 @@ const CARDS := {
 	"longship": {"name": "Longship", "faction": "norse", "rarity": "Common", "type": "spell", "cost": 1, "target": "none", "text": "Gain 2 extra moves this round. Units you move this round gain Shield 2."},
 	"ulfhednar": {"name": "Ulfhednar", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 4, "keywords": [], "text": "When you move it to a new lane, it deals its ATK to the enemy front unit there."},
 	"loki": {"name": "Loki", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["ranged"], "text": "Ranged. +1 move each round. When you move a unit, deal 1 damage to each enemy in its new lane."},
+	# Norse Pack - Wolves
+	"ulfr_hunter": {"name": "Ulfr Hunter", "faction": "norse", "rarity": "Common", "type": "unit", "cost": 1, "atk": 2, "hp": 2, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack."},
+	"call_of_the_pack": {"name": "Call of the Pack", "faction": "norse", "rarity": "Common", "type": "spell", "cost": 1, "target": "empty_ally_slot", "text": "Summon a Wolf in an empty slot, and another in the other slot of that lane if it's empty."},
+	"geri": {"name": "Geri", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. Whenever another of your Wolves dies, Geri gains +1 ATK / +1 HP."},
+	"freki": {"name": "Freki", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 4, "spd": 4, "keywords": ["pack", "flank"], "tribe": "wolf", "text": "Wolf. Pack. Flank. End of round: if Freki attacked this round, summon a Wolf in the nearest empty slot."},
+	"blood_scent": {"name": "Blood Scent", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "enemy", "text": "Each of your Wolves deals 1 damage to an enemy."},
+	"skoll_and_hati": {"name": "Skoll and Hati", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 4, "hp": 5, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. Your Wolves have Flank. Start of round: summon a Wolf if you have fewer than 3 Wolves."},
 
 	# Greek - The Olympians
 	"hoplite": {"name": "Hoplite", "faction": "greek", "rarity": "Common", "type": "unit", "cost": 1, "atk": 2, "hp": 4, "spd": 2, "keywords": [], "rally": 1, "text": "Rally 1."},
@@ -65,7 +72,7 @@ const CARDS := {
 	"priest_of_ra": {"name": "Priest of Ra", "faction": "egypt", "rarity": "Common", "type": "unit", "cost": 1, "atk": 0, "hp": 3, "spd": 2, "keywords": [], "text": "Support: heal the ally in front by 2."},
 	"sphinx": {"name": "Sphinx", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 6, "spd": 1, "keywords": [], "text": "Growth: +1 ATK / +1 HP."},
 	"anubis": {"name": "Anubis", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 3, "atk": 3, "hp": 5, "spd": 3, "keywords": [], "text": "Whenever any unit dies (either side), gain +1 ATK / +1 HP."},
-	"book_of_the_dead": {"name": "Book of the Dead", "faction": "egypt", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "empty_ally_slot", "text": "Return the last ally that died this fight to an empty slot at full HP."},
+	"book_of_the_dead": {"name": "Book of the Dead", "faction": "egypt", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "empty_ally_slot", "needs_fallen": true, "text": "Return the last ally that died this fight to an empty slot at full HP."},
 	"ra": {"name": "Ra", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 6, "spd": 2, "keywords": ["ranged"], "text": "Ranged. Growth: +2 ATK."},
 	"osiris": {"name": "Osiris", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 6, "spd": 2, "keywords": [], "text": "Allies that Revive return at full HP and gain +2 ATK."},
 	# Egyptian Swarm - Scarabs
@@ -76,6 +83,7 @@ const CARDS := {
 
 	# Tokens
 	"scarab": {"name": "Scarab", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 1, "spd": 4, "keywords": [], "token": true, "text": "Summoned token."},
+	"wolf": {"name": "Wolf", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 2, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "token": true, "text": "Wolf. Pack. Summoned token."},
 
 	# Curses - only added by shrines. They can't be played and leave the hand at the start of the next round.
 	"void_taint": {"name": "Void Taint", "faction": "curse", "rarity": "Curse", "type": "curse", "cost": 0, "token": true, "text": "Unplayable. Discarded at the start of the next round."},
@@ -96,7 +104,7 @@ const CARD_SHORT := {
 	"thread_of_fate": "Return a unit to hand", "ragnarok": "Sacrifice: blast its lane", "longship": "+2 moves, Shield 2",
 	"phalanx_formation": "Front row +1 ATK, Shield 2", "divine_favor": "+2 ATK this round", "olympian_ichor": "Heal 4, +1 ATK",
 	"book_of_the_dead": "Return the last fallen ally", "sandswarm": "Scarabs fill the front row",
-	"plague_of_locusts": "Damage = your unit count", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
+	"plague_of_locusts": "Damage = your unit count", "call_of_the_pack": "Summon two Wolves", "blood_scent": "1 damage per Wolf", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
 	"void_web": "Unplayable", "hex": "Unplayable, Faith -1", "ashes": "Unplayable, Core -1",
 }
 
@@ -330,7 +338,7 @@ const GOD_POWERS := {
 			"undertow_2": {"branch": "Undertow", "tier": 2, "name": "Flowing Ranks", "text": "Gain 1 extra move this round."},
 			"pact": {"branch": "Pact", "tier": 1, "name": "Sea Spray", "text": "Draw a card."},
 		}},
-	"osiris_return": {"name": "Osiris's Return", "short": "Return", "god": "Osiris", "pantheon": "egypt", "target": "empty_ally_slot",
+	"osiris_return": {"name": "Osiris's Return", "short": "Return", "god": "Osiris", "pantheon": "egypt", "target": "empty_ally_slot", "needs_fallen": true,
 		"text": "Return the last ally that died this fight to an empty tile with 1 HP.",
 		"nodes": {
 			"life_1": {"branch": "Life", "tier": 1, "name": "Breath of Life", "text": "It returns at full HP."},

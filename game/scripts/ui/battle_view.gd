@@ -856,7 +856,7 @@ func _on_hand_pressed(i: int) -> void:
 			"enemy": "Choose an enemy unit.",
 			"enemy_front": "Choose an enemy front unit to push.",
 			"enemy_pair": "Choose the first enemy to swap.",
-			"empty_ally_slot": "Choose an empty tile for the returning ally.",
+			"empty_ally_slot": "Choose an empty tile for the returning ally." if def.get("needs_fallen", false) else "Choose an empty tile.",
 		}[def["target"]])
 	_refresh()
 

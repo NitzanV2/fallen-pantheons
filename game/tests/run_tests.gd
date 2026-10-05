@@ -36,6 +36,7 @@ func _initialize() -> void:
 	test_raiders()
 	test_oracle()
 	test_swarm()
+	test_pack()
 	test_divine()
 	test_terrain_cards()
 	test_restart_plan()
@@ -618,6 +619,94 @@ func test_swarm() -> void:
 	c.setup({"core": 50, "enemies": [["void_spawn", 0, 0]], "terrain": []}, [], ["sacred_hive"], 1)
 	var mine: Array = c.units(P)
 	check(mine.size() == 2 and mine.all(func(u): return u.id == "scarab" and u.row == B), "sacred hive: 2 Scarabs in the back row")
+
+
+func test_pack() -> void:
+	var c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var hunter = c.debug_place("ulfr_hunter", P, 0, F)
+	check(c.effective_atk(hunter) == 2, "pack: no bonus alone")
+	c.debug_place("wolf", P, 1, F)
+	c.debug_place("wolf", P, 2, F)
+	check(c.effective_atk(hunter) == 4, "pack: +1 ATK per other Wolf")
+	c.debug_place("wolf", P, 3, F)
+	c.debug_place("wolf", P, 1, B)
+	check(c.effective_atk(hunter) == 5, "pack: capped at +3")
+	c.debug_place("ark_sentinel", P, 2, B)
+	check(c.effective_atk(hunter) == 5, "pack: non-Wolves don't count")
+
+	# Flank: Freki behind a front Wolf hits the same target right after it.
+	c = fresh()
+	var zealot = c.debug_place("hollowed_zealot", E, 0, F)
+	zealot.hp = 30
+	zealot.max_hp = 30
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var front = c.debug_place("ulfr_hunter", P, 0, F)
+	var freki = c.debug_place("freki", P, 0, B)
+	check(c.effective_atk(front) == 3 and c.effective_atk(freki) == 3, "flank: both Wolves get Pack +1")
+	c.end_plan()
+	check(freki.attacked_round == 1, "flank: Freki attacked from the back row")
+	check(zealot.hp <= 30 - 6, "flank: the target took both Wolves' hits")
+	var summoned := 0
+	for u in c.units(P):
+		if u.id == "wolf":
+			summoned += 1
+	check(summoned == 1, "freki: summons a Wolf at end of round after attacking")
+
+	# No Flank without a Wolf in front, and plain Wolves don't Flank without Skoll and Hati.
+	c = fresh()
+	zealot = c.debug_place("hollowed_zealot", E, 1, F)
+	zealot.hp = 30
+	c.debug_place("ark_sentinel", P, 1, F)
+	freki = c.debug_place("freki", P, 1, B)
+	c.end_plan()
+	check(freki.attacked_round == 0, "flank: needs a Wolf in front")
+	c = fresh()
+	zealot = c.debug_place("hollowed_zealot", E, 1, F)
+	zealot.hp = 30
+	c.debug_place("ulfr_hunter", P, 1, F)
+	var back_wolf = c.debug_place("ulfr_hunter", P, 1, B)
+	check(not c.has_flank(back_wolf), "flank: plain Wolves lack it")
+	c.debug_place("skoll_and_hati", P, 3, F)
+	check(c.has_flank(back_wolf), "skoll and hati: your Wolves have Flank")
+	c.end_plan()
+	check(back_wolf.attacked_round == 1, "skoll and hati: granted Flank attacks")
+
+	# Skoll and Hati summon while you have fewer than 3 Wolves.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.debug_place("skoll_and_hati", P, 0, F)
+	c.end_plan()
+	check(c._wolf_count(P) == 2, "skoll and hati: summons a Wolf at start of round")
+	c.debug_place("wolf", P, 3, B)
+	c.end_plan()
+	check(c._wolf_count(P) == 3, "skoll and hati: stops at 3 Wolves")
+
+	# Geri grows when another Wolf dies.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var geri = c.debug_place("geri", P, 0, F)
+	var w = c.debug_place("wolf", P, 1, F)
+	c._deal_damage(w, 10, "effect")
+	check(geri.atk == 4 and geri.max_hp == 5, "geri: +1/+1 when another Wolf dies")
+	c._deal_damage(c.debug_place("ark_sentinel", P, 2, F), 10, "effect")
+	check(geri.atk == 4, "geri: ignores non-Wolf deaths")
+
+	# Call of the Pack fills a lane pair; Blood Scent hits once per Wolf.
+	c = fresh()
+	var target = c.debug_place("hollowed_bulwark", E, 3, B)
+	c.hand = [c._new_card("call_of_the_pack"), c._new_card("blood_scent")]
+	c.faith = 3
+	check(c.valid_targets(0).size() == 8, "call of the pack: any empty slot, no fallen ally needed")
+	check(c.play_spell(0, [[P, B, 2]]) == "", "call of the pack: cast")
+	check(c.unit_at(P, B, 2) != null and c.unit_at(P, F, 2) != null, "call of the pack: Wolves in both slots of the lane")
+	check(c.play_spell(0, [[E, B, 3]]) == "", "blood scent: cast")
+	check(target.hp == 6, "blood scent: 1 damage per Wolf")
+	c = fresh()
+	c.debug_place("ark_sentinel", P, 0, F)
+	c.hand = [c._new_card("book_of_the_dead")]
+	c.faith = 3
+	check(c.valid_targets(0).is_empty(), "book of the dead: still needs a fallen ally")
 
 
 func test_divine() -> void:

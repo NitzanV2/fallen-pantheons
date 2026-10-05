@@ -44,6 +44,8 @@ const KEYWORD_INFO := {
 	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot."],
 	"immovable": ["Immovable", "Can't be pushed or swapped and takes no collision damage."],
 	"airborne": ["Airborne", "Melee attacks can't target it."],
+	"pack": ["Pack", "Wolf. Gains +1 ATK for each of your other Wolves (max +3)."],
+	"flank": ["Flank", "In the back row, attacks right after the Wolf in front of it, hitting the same target."],
 	"veil": ["Veil", "Ignores the first damage it takes each round."],
 	"frenzy": ["Frenzy", "Gains +1 ATK each time it takes damage and survives."],
 	"poison": ["Poison", "Units it hits take 1 damage at the end of every round until healed."],
@@ -541,7 +543,8 @@ static func def_icons(def: Dictionary, card_id: String) -> Array:
 		var rest := text
 		for kw in def.get("keywords", []):
 			rest = rest.replacen(KEYWORD_INFO[kw][0] + ".", "")
-		if rest.strip_edges() != "" and card_id != "scarab":
+		rest = rest.replace("Wolf.", "").replace("Summoned token.", "")
+		if rest.strip_edges() != "":
 			out.append("ability")
 	return out
 

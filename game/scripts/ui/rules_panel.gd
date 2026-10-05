@@ -5,6 +5,7 @@ extends ColorRect
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const Data = preload("res://scripts/core/data.gd")
 const Run = preload("res://scripts/core/run.gd")
+const Combat = preload("res://scripts/core/combat.gd")
 
 const GOLD := Color(0.95, 0.78, 0.35)
 const TEXT := Color(0.88, 0.87, 0.92)
@@ -175,7 +176,7 @@ func _attacking(page: VBoxContainer) -> void:
 	_heading(page, "ranged", "Who can attack")
 	_grid(page, 3, [
 		["atk", "Front row", "Always attacks."],
-		["ranged", "Back row", "Attacks only if [b]Ranged[/b]. Melee units wait there, but their Support, Rally and Reinforce still work."],
+		["ranged", "Back row", "Attacks only if [b]Ranged[/b], or as a Wolf with [b]Flank[/b] behind another Wolf. Other melee units wait there, but their Support, Rally and Reinforce still work."],
 		["shield", "No counter-damage", "Only the attacker deals damage."],
 	])
 
@@ -216,7 +217,9 @@ func _keywords(page: VBoxContainer) -> void:
 		["on_death", "On-Death", "Triggers when the unit dies (and also when it Revives)."],
 		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP."],
 		["growth", "Growth", "End of round: gains the listed stats."],
-		["summon", "Summon", "Creates a token (like a 1/1 Scarab) in an empty slot. Tokens never join your deck."],
+		["summon", "Summon", "Creates a token (like a 1/1 Scarab or a 1/2 Wolf) in an empty slot. Tokens never join your deck."],
+		["pack", "Wolf and Pack", "Wolves are a Norse tribe (the card text starts with \"Wolf\"). Pack: gains +1 ATK for each of your other Wolves, up to +%d. Wolf tokens count." % Combat.PACK_MAX],
+		["flank", "Flank", "A Wolf with Flank in the back row attacks right after the Wolf in front of it, hitting the same target (or that Wolf's next target if the first one fell). With no Wolf in front, it doesn't attack. Skoll and Hati give all your Wolves Flank."],
 		["exhaust", "Exhaust", "After you cast it, the card is gone for the rest of this fight."],
 		["immovable", "Immovable", "Can't be pushed or swapped and takes no collision damage."],
 		["hp", "Threat", "Damage the enemy deals to your Core if it survives until time runs out."],

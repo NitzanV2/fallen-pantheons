@@ -24,6 +24,7 @@ var temp_atk := 0
 var moved_round := 0
 var deployed_round := 0
 var veil_round := 0
+var attacked_round := 0
 var poisoned := false
 ## Keywords granted during the fight, on top of the card's own.
 var bonus_kw: Array = []
@@ -48,7 +49,7 @@ func copy():
 	var u = get_script().new()
 	for prop in ["uid", "id", "def", "side", "lane", "row", "atk", "max_hp", "hp", "spd", "threat",
 			"shield", "alive", "revive_used", "is_token", "wide", "width", "empowered", "card", "temp_atk", "moved_round", "deployed_round",
-			"veil_round", "poisoned"]:
+			"veil_round", "poisoned", "attacked_round"]:
 		u.set(prop, get(prop))
 	u.bonus_kw = bonus_kw.duplicate()
 	return u

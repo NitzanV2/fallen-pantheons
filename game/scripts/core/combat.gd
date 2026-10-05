@@ -17,6 +17,8 @@ const LANES := 4
 const MAX_HAND := 7
 const CORE := "core"
 const UNPLAYABLE := ["curse", "status"]
+## Pack: +1 ATK per other Wolf you control, up to this much.
+const PACK_MAX := 3
 
 var rng := RandomNumberGenerator.new()
 var battle: Dictionary
@@ -208,6 +210,8 @@ func effective_atk(u) -> int:
 	var a: int = u.atk + u.temp_atk
 	if u.id == "scarab" and _has_living(u.side, "khepri"):
 		a += 1
+	if u.has_kw("pack"):
+		a += mini(PACK_MAX, _wolf_count(u.side) - (1 if is_wolf(u) else 0))
 	if u.side == PLAYER and has_relic("dragon_prow") and u.moved_round == round_num:
 		a += 2
 	if terrain_at(u.side, u.row, u.lane) == "ley_line":
@@ -219,6 +223,18 @@ func effective_atk(u) -> int:
 	if u.side == PLAYER and u.row == sandstorm_row:
 		a -= 1
 	return max(a, 0)
+
+
+func is_wolf(u) -> bool:
+	return u.def.get("tribe", "") == "wolf"
+
+
+func _wolf_count(side: int) -> int:
+	return units(side).filter(is_wolf).size()
+
+
+func has_flank(u) -> bool:
+	return u.has_kw("flank") or (is_wolf(u) and _has_living(u.side, "skoll_and_hati"))
 
 
 func effective_spd(u) -> int:
@@ -649,7 +665,7 @@ func _targets_for(def: Dictionary, kind: String) -> Array:
 	var out: Array = []
 	match kind:
 		"empty_ally_slot":
-			if def.get("type", "") != "unit" and not _book_target_available():
+			if def.get("needs_fallen", false) and not _book_target_available():
 				return out
 			for row in 2:
 				for lane in LANES:
@@ -810,7 +826,7 @@ func _check_targets(def: Dictionary, targets: Array, direction: int) -> String:
 		"empty_ally_slot":
 			if targets.size() != 1 or targets[0][0] != PLAYER or _at(targets[0]) != null:
 				return "Choose an empty slot on your grid."
-			if not _book_target_available():
+			if def.get("needs_fallen", false) and not _book_target_available():
 				return "No fallen ally to return."
 	return ""
 
@@ -1059,6 +1075,18 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 			_heal(u, 4, "Olympian Ichor")
 			u.atk += 1
 			_log("%s gains +1 ATK." % _unit_label(u))
+		"call_of_the_pack":
+			var slot: Array = targets[0]
+			_summon_wolf(PLAYER, slot[1], slot[2], "Call of the Pack")
+			if unit_at(PLAYER, 1 - slot[1], slot[2]) == null:
+				_summon_wolf(PLAYER, 1 - slot[1], slot[2], "Call of the Pack")
+		"blood_scent":
+			var t = _at(targets[0])
+			var wolves: Array = units(PLAYER).filter(is_wolf)
+			_log("Your Wolves catch the scent of %s." % _unit_label(t))
+			for w in wolves:
+				if t.alive:
+					_deal_damage(t, 1, "effect")
 		"sandswarm":
 			for lane in LANES:
 				if unit_at(PLAYER, FRONT, lane) == null:
@@ -1090,6 +1118,22 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 func _summon_scarab(side: int, row: int, lane: int, source: String) -> void:
 	var s = _spawn("scarab", side, lane, row)
 	_log("%s summons a Scarab (%s)." % [source, _unit_label(s)])
+
+
+func _summon_wolf(side: int, row: int, lane: int, source: String) -> void:
+	var w = _spawn("wolf", side, lane, row)
+	_log("%s summons a Wolf (%s)." % [source, _unit_label(w)])
+
+
+## Nearest empty slot in its own row (left first on ties), then in the other row.
+func _summon_wolf_near(u, source: String) -> void:
+	var lanes: Array = range(LANES)
+	lanes.sort_custom(func(a, b): return absi(a - u.lane) < absi(b - u.lane) or (absi(a - u.lane) == absi(b - u.lane) and a < b))
+	for row in [u.row, 1 - u.row]:
+		for lane in lanes:
+			if unit_at(u.side, row, lane) == null:
+				_summon_wolf(u.side, row, lane, source)
+				return
 
 
 func _count_living(side: int, id: String) -> int:
@@ -1339,6 +1383,8 @@ func _start_of_round(u) -> void:
 			if unit_at(u.side, u.row, lane) == null:
 				_summon_scarab(u.side, u.row, lane, "Scarab Queen")
 				break
+	if u.id == "skoll_and_hati" and _wolf_count(u.side) < 3:
+		_summon_wolf_near(u, "Skoll and Hati")
 	if u.id == "myrmidon":
 		var count := _row_neighbors(u).size()
 		if count > 0:
@@ -1373,6 +1419,9 @@ func _end_of_round(u) -> void:
 			for a in units(u.side):
 				if a.row == u.row:
 					_heal(a, 2, "Apollo")
+		"freki":
+			if u.attacked_round == round_num:
+				_summon_wolf_near(u, "Freki")
 		"hollow_geomancer":
 			var slot: Array = intents.get(u.uid, {}).get("quicksand", [])
 			if slot.size() == 2 and terrain_at(PLAYER, slot[0], slot[1]) == "":
@@ -1486,11 +1535,32 @@ func _act(u) -> void:
 		_damage_core(atk, u.display_name(), true)
 	else:
 		_attack(u, target, atk)
+		if u.row == FRONT and is_wolf(u):
+			_flank(u, target)
 	if u.side == ENEMY and Data.ENEMIES[u.id].has("status_card"):
 		_add_status(u, Data.ENEMIES[u.id]["status_card"])
 
 
+## Flank: the Wolf behind `front` follows up on the same target (or the front Wolf's next one if it fell).
+func _flank(front, target) -> void:
+	var b = unit_at(front.side, BACK, front.lane)
+	if b == null or not b.alive or not is_wolf(b) or not has_flank(b) or b.uid == transformed_uid:
+		return
+	var t = target if target.alive else _pick_target(front, front.lane)
+	if t == null or t is String or not _can_target(b, t):
+		return
+	var atk := effective_atk(b)
+	if atk <= 0:
+		return
+	var prev = actor
+	actor = b
+	_log("%s flanks behind %s." % [_unit_label(b), front.display_name()])
+	_attack(b, t, atk)
+	actor = prev
+
+
 func _attack(u, target, atk: int) -> void:
+	u.attacked_round = round_num
 	var ranged: bool = u.has_kw("ranged")
 	var dmg := atk
 	if ranged and u.side == PLAYER and has_relic("eye_of_horus") and target.row == BACK:
@@ -1832,6 +1902,11 @@ func _death_triggers(u) -> void:
 		elif w.id == "echo_of_fenrir" and u.side == PLAYER:
 			w.atk += 1
 			_log("Fenrir grows stronger (+1 ATK).")
+		elif w.id == "geri" and w.side == u.side and is_wolf(u):
+			w.atk += 1
+			w.max_hp += 1
+			w.hp += 1
+			_log("Geri howls for the fallen Wolf (+1/+1).")
 		elif w.id == "khepri" and w.side == u.side and u.side == PLAYER and u.id == "scarab":
 			_heal_core(1, "Khepri")
 		elif w.id == "odin" and w.side == u.side and u.side == PLAYER:

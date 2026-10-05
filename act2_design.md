@@ -119,9 +119,9 @@ Each archetype gets 7 cards (2 Common, 3 Uncommon, 1 Rare, 1 spell or a token), 
 |---|---|---|---|---|
 | Wolf (token) | Token | 0 | 1 / 2 / SPD 4 | Wolf. Pack. |
 | Ulfr Hunter | Common | 1 | 2 / 2 / SPD 4 | Wolf. Pack. |
-| Call of the Pack | Common | 1 | spell | Summon a Wolf in two empty back-row slots of your choice (front row if the back row is full). |
+| Call of the Pack | Common | 1 | spell | Summon a Wolf in an empty slot, and another in the other slot of that lane if it's empty (one target, and it sets up a Flank pair). |
 | Geri | Uncommon | 2 | 3 / 4 / SPD 4 | Wolf. Pack. Whenever another Wolf dies, Geri gains +1 ATK / +1 HP. The front half of a pair. |
-| Freki | Uncommon | 2 | 2 / 4 / SPD 4 | Wolf. Pack. Flank. End of round: if Freki dealt damage this round, summon a Wolf in the nearest empty slot. The back half of a pair. |
+| Freki | Uncommon | 2 | 2 / 4 / SPD 4 | Wolf. Pack. Flank. End of round: if Freki attacked this round, summon a Wolf in the nearest empty slot. The back half of a pair. |
 | Blood Scent | Uncommon | 1 | spell | Choose an enemy. Each of your Wolves deals 1 damage to it. |
 | Skoll and Hati | Rare | 3 | 4 / 5 / SPD 4 | Wolf. Pack. Your Wolves have Flank. Start of round: summon a Wolf if you have fewer than 3. |
 
@@ -191,7 +191,7 @@ This turns patrons into a 3-power choice. Decide after the archetypes have been 
 Each phase ends with tests, the balance sim, rulebook entries and a push.
 
 1. **Act infrastructure (done).** `Data.ACTS` (name, pools, extra scaling steps, boss bonus, reward odds, price multiplier, map tint), act index on the run, a boss per act with no repeats, the act-complete screen (heal and free upgrade), Act 2 map tint, per-act sim reporting. Act 2 is a placeholder: Act 1's battle pools at Act 1 difficulty, with the boss at +2 ATK / +15 HP, better reward odds and 15% higher prices. An extra scaling step plus late fights as the early pool cost about 8 HP per fight, so almost no bot run reached the Act 2 boss.
-2. **The Pack (Norse).** Wolf tribe tag, Pack, Flank (back-row follow-up attack), 7 cards, the Wolf token, a bot heuristic (prefers summons when the board has space), tests, rulebook keyword entry, art (portraits).
+2. **The Pack (Norse) (done).** Wolf tribe tag, Pack, Flank (back-row follow-up attack; if the front Wolf's target died, it takes that Wolf's next target), 6 cards plus the Wolf token, bot heuristics (Flank Wolves go behind front Wolves, Call of the Pack fills an empty lane, Blood Scent goes for kills), tests, rulebook entries, portraits and Pack/Flank icons. The sim gained `archetype=<key>` (drafts that archetype first, its pantheon's patrons only). Act 1 HP per fight with Norse patrons, 150 runs per power: Pack 7.4, Doomed 7.5, Raiders 7.7, inside the ±1 target. Gleipnir Fragment waits for phase 8.
 3. **The Forge (Greek).** The Armament card type: targeting, attach and replace, shuffle into the draw pile on death, badge on the token, hover listing. Then 7 cards, bot heuristic, tests and rulebook chapter. This is the biggest system change of the three.
 4. **The Sun (Egyptian).** Sunlit terrain and Burn status: tick order relative to Poison, UI badge, rulebook. Then 7 cards and tests.
 5. **Act 2 enemy mechanics and early and late battles.** Reinforcement waves (data, boat marker, arrival), Flooded terrain, Incorporeal, Drown, Drag, Devour, Toll, Judgement, the Drowned status; 9 enemies and 12 battles; replace the placeholder pools from phase 1; art and background.
