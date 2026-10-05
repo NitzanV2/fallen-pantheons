@@ -44,7 +44,7 @@ const CARDS := {
 	"ulfhednar": {"name": "Ulfhednar", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 4, "keywords": [], "text": "When you move it to a new lane, it deals its ATK to the enemy front unit there."},
 	"loki": {"name": "Loki", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["ranged"], "text": "Ranged. +1 move each round. When you move a unit, deal 1 damage to each enemy in its new lane."},
 	# Norse Pack - Wolves
-	"ulfr_hunter": {"name": "Ulfr Hunter", "faction": "norse", "rarity": "Common", "type": "unit", "cost": 1, "atk": 2, "hp": 2, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack."},
+	"ulfr_hunter": {"name": "Ulfr Hunter", "faction": "norse", "rarity": "Common", "type": "unit", "cost": 1, "atk": 2, "hp": 2, "spd": 4, "keywords": ["pack", "reinforce"], "tribe": "wolf", "text": "Wolf. Pack. Reinforce."},
 	"call_of_the_pack": {"name": "Call of the Pack", "faction": "norse", "rarity": "Common", "type": "spell", "cost": 1, "target": "empty_ally_slot", "text": "Summon a Wolf in an empty slot, and another in the other slot of that lane if it's empty."},
 	"geri": {"name": "Geri", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. Whenever another of your Wolves dies, Geri gains +1 ATK / +1 HP."},
 	"freki": {"name": "Freki", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 4, "spd": 4, "keywords": ["pack", "flank"], "tribe": "wolf", "text": "Wolf. Pack. Flank. End of round: if Freki attacked this round, summon a Wolf in the nearest empty slot."},

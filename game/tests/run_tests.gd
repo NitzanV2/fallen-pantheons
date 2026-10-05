@@ -270,6 +270,24 @@ func test_valkyrie_reinforce() -> void:
 	check(not charger.alive, "reinforce: valkyrie kills the charger")
 	check(c.result == "win", "reinforce: fight is won")
 
+	# Valkyrie gains the fallen ally's current ATK, including permanent buffs, not its base ATK.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var buffed = c.debug_place("ark_sentinel", P, 1, F)
+	buffed.atk += 3
+	valk = c.debug_place("valkyrie", P, 1, B)
+	c._deal_damage(buffed, 99, "effect")
+	check(valk.row == F and valk.atk == 1 + 5, "reinforce: gains the fallen ally's buffed ATK (2 base + 3)")
+
+	# Ulfr Hunter Reinforces behind a Wolf (and Gjallarhorn shields it), without Valkyrie's ATK gain.
+	c = fresh(50, false, ["gjallarhorn"])
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var lead = c.debug_place("wolf", P, 2, F)
+	var hunter = c.debug_place("ulfr_hunter", P, 2, B)
+	c._deal_damage(lead, 99, "effect")
+	check(hunter.row == F and hunter.lane == 2, "reinforce: Ulfr Hunter steps forward")
+	check(hunter.atk == 2 and hunter.shield == 4, "reinforce: Gjallarhorn shields Ulfr Hunter, no ATK gain")
+
 
 func test_revive() -> void:
 	var c = fresh()

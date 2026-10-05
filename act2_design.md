@@ -118,7 +118,7 @@ Each archetype gets 7 cards (2 Common, 3 Uncommon, 1 Rare, 1 spell or a token), 
 | Card | Rarity | Cost | Stats | Text |
 |---|---|---|---|---|
 | Wolf (token) | Token | 0 | 1 / 2 / SPD 4 | Wolf. Pack. |
-| Ulfr Hunter | Common | 1 | 2 / 2 / SPD 4 | Wolf. Pack. |
+| Ulfr Hunter | Common | 1 | 2 / 2 / SPD 4 | Wolf. Pack. Reinforce. (A second Reinforce card besides Valkyrie, so Gjallarhorn has more than one target. It waits behind a front Wolf and steps up when that Wolf falls.) |
 | Call of the Pack | Common | 1 | spell | Summon a Wolf in an empty slot, and another in the other slot of that lane if it's empty (one target, and it sets up a Flank pair). |
 | Geri | Uncommon | 2 | 3 / 4 / SPD 4 | Wolf. Pack. Whenever another Wolf dies, Geri gains +1 ATK / +1 HP. The front half of a pair. |
 | Freki | Uncommon | 2 | 2 / 4 / SPD 4 | Wolf. Pack. Flank. End of round: if Freki attacked this round, summon a Wolf in the nearest empty slot. The back half of a pair. |
@@ -192,7 +192,7 @@ Each phase ends with tests, the balance sim, rulebook entries and a push.
 
 1. **Act infrastructure (done).** `Data.ACTS` (name, pools, extra scaling steps, boss bonus, reward odds, price multiplier, map tint), act index on the run, a boss per act with no repeats, the act-complete screen (heal and free upgrade), Act 2 map tint, per-act sim reporting. Act 2 is a placeholder: Act 1's battle pools at Act 1 difficulty, with the boss at +2 ATK / +15 HP, better reward odds and 15% higher prices. An extra scaling step plus late fights as the early pool cost about 8 HP per fight, so almost no bot run reached the Act 2 boss.
 2. **The Pack (Norse) (done).** Wolf tribe tag, Pack, Flank (back-row follow-up attack; if the front Wolf's target died, it takes that Wolf's next target), 6 cards plus the Wolf token, bot heuristics (Flank Wolves go behind front Wolves, Call of the Pack fills an empty lane, Blood Scent goes for kills), tests, rulebook entries, portraits and Pack/Flank icons. The sim gained `archetype=<key>` (drafts that archetype first, its pantheon's patrons only). Act 1 HP per fight with Norse patrons, 150 runs per power: Pack 7.4, Doomed 7.5, Raiders 7.7, inside the ±1 target. Gleipnir Fragment waits for phase 8.
-3. **The Forge (Greek).** The Armament card type: targeting, attach and replace, shuffle into the draw pile on death, badge on the token, hover listing. Then 7 cards, bot heuristic, tests and rulebook chapter. This is the biggest system change of the three.
+3. **The Forge (Greek).** The Armament card type: targeting, attach and replace, shuffle into the draw pile on death, badge on the token, hover listing. Then 7 cards, bot heuristic, tests and rulebook chapter. This is the biggest system change of the three. **Requirement:** at least one Forge card must have Rally, so Laurel Wreath has a second Rally target besides Hoplite (for example, Forge Apprentice gains Rally 1).
 4. **The Sun (Egyptian).** Sunlit terrain and Burn status: tick order relative to Poison, UI badge, rulebook. Then 7 cards and tests.
 5. **Act 2 enemy mechanics and early and late battles.** Reinforcement waves (data, boat marker, arrival), Flooded terrain, Incorporeal, Drown, Drag, Devour, Toll, Judgement, the Drowned status; 9 enemies and 12 battles; replace the placeholder pools from phase 1; art and background.
 6. **Act 2 elites.** Charon, Cerberus (linked units), Hraesvelgr (board-wide push), Erinyes (damage tracking per unit), Keeper of the Twelfth Gate (lane seals, returning guards).

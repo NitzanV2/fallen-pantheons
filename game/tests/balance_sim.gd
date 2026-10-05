@@ -544,7 +544,7 @@ func _best_slot(c, id: String) -> Array:
 	var def: Dictionary = Data.CARDS[id]
 	var kws: Array = def.get("keywords", [])
 	var ranged: bool = "ranged" in kws
-	var support: bool = id in ["athena", "priest_of_ra", "valkyrie"]
+	var support: bool = id in ["athena", "priest_of_ra"] or "reinforce" in kws
 	var best: Array = []
 	var best_score := 0.0
 	for row in 2:
