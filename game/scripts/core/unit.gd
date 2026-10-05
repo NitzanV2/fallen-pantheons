@@ -25,6 +25,8 @@ var card = null
 var temp_atk := 0
 var moved_round := 0
 var deployed_round := 0
+## True when it entered the board from your hand (not summoned or returned by an effect).
+var from_hand := false
 var veil_round := 0
 var attacked_round := 0
 var poisoned := false
@@ -53,7 +55,7 @@ func copy():
 	var u = get_script().new()
 	for prop in ["uid", "id", "def", "side", "lane", "row", "atk", "max_hp", "hp", "spd", "threat",
 			"shield", "alive", "revive_used", "is_token", "wide", "width", "empowered", "card", "temp_atk", "moved_round", "deployed_round",
-			"veil_round", "poisoned", "attacked_round"]:
+			"veil_round", "poisoned", "attacked_round", "from_hand"]:
 		u.set(prop, get(prop))
 	u.bonus_kw = bonus_kw.duplicate()
 	u.armaments = armaments.duplicate()

@@ -520,10 +520,12 @@ func test_raiders() -> void:
 	check(c.unit_at(P, F, 2) != null and c.unit_at(P, F, 0) == null, "fresh: it ends where it was last put")
 	check(c.play_spell(0, []) == "", "fresh: sandswarm")
 	var scarab = c.unit_at(P, F, 1)
-	check(scarab != null and c.move_unit(1, F, 1, B) == "" and c.moves_left == 1, "fresh: tokens summoned this round move freely too")
+	check(scarab != null and c.move_unit(1, F, 1, B) != "" and c.unit_at(P, F, 1) == scarab and c.moves_left == 1,
+		"fresh: units summoned by an effect can't move the round they arrive")
+	check(not c.can_move(scarab) and c.snapshot()["grid"][P][F][1]["move_block"] != "", "fresh: the hover explains why")
 	check(c.play_unit(0, 3, B) == "", "fresh: deploy raider")
 	var fresh_raider = c.unit_at(P, B, 3)
-	check(c.move_unit(3, B, 1, F) == "" and fresh_raider.atk == fresh_raider.def["atk"], "fresh: repositioning doesn't trigger Raider")
+	check(c.move_unit(3, B, 0, B) == "" and fresh_raider.atk == fresh_raider.def["atk"], "fresh: repositioning doesn't trigger Raider")
 	c.end_plan()
 	if c.result == "":
 		check(not c.is_fresh(c.unit_at(P, F, 2)), "fresh: locked in after planning")
@@ -722,6 +724,7 @@ func test_pack() -> void:
 	check(c.valid_targets(0).size() == 8, "call of the pack: any empty slot, no fallen ally needed")
 	check(c.play_spell(0, [[P, B, 2]]) == "", "call of the pack: cast")
 	check(c.unit_at(P, B, 2) != null and c.unit_at(P, F, 2) != null, "call of the pack: Wolves in both slots of the lane")
+	check(c.move_unit(2, B, 0, B) != "" and c.unit_at(P, B, 2) != null and c.moves_left == 1, "call of the pack: the Wolves can't move this round")
 	check(c.play_spell(0, [[E, B, 3]]) == "", "blood scent: cast")
 	check(target.hp == 4, "blood scent: each Wolf deals its ATK (1 + Pack 1)")
 	check("flank" in CardWidget.glossary_icons(Data.CARDS["skoll_and_hati"], "skoll_and_hati"), "glossary: Skoll and Hati explain Flank")

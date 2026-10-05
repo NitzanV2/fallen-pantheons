@@ -751,6 +751,7 @@ func play_unit(hand_index: int, lane: int, row: int) -> String:
 	faith -= def["cost"]
 	hand.remove_at(hand_index)
 	var u = _spawn(card["id"], PLAYER, lane, row, card)
+	u.from_hand = true
 	acted_this_plan = true
 	events.clear()
 	_log("Deployed %s." % _unit_label(u))
@@ -1293,16 +1294,22 @@ func can_move(u) -> bool:
 	return move_block(u) == ""
 
 
-## Units that entered the board during this plan phase aren't locked in yet: they can be
+func _entered_this_plan(u) -> bool:
+	return u.side == PLAYER and phase == "plan" and u.deployed_round == round_num
+
+
+## Units deployed from hand during this plan phase aren't locked in yet: they can be
 ## repositioned freely (no move used, no move triggers, Quicksand ignored).
 func is_fresh(u) -> bool:
-	return u.side == PLAYER and phase == "plan" and u.deployed_round == round_num
+	return _entered_this_plan(u) and u.from_hand
 
 
 ## Why a unit can't move right now, or "" if it can.
 func move_block(u) -> String:
 	if is_fresh(u):
 		return ""
+	if _entered_this_plan(u):
+		return "Summoned this round"
 	if terrain_at(u.side, u.row, u.lane) == "quicksand":
 		return "Stuck in Quicksand"
 	return ""
