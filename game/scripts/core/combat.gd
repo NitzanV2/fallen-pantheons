@@ -46,6 +46,11 @@ var armaments_this_round := 0
 ## Faith added at the start of the next round (on top of the usual 3).
 var faith_next := 0
 var horus_round := 0
+## Lanes hit by Drowned statuses drawn this round (one entry per card): your units there get -1 ATK each.
+var drowned_lanes: Array = []
+## Judgement: the unit of yours that last killed an enemy this round, and the one judged this round.
+var round_killer_uid := -1
+var judged_uid := -1
 var intents := {}
 var petrified_lane := -1
 var sandstorm_row := -1
@@ -226,6 +231,10 @@ func effective_atk(u) -> int:
 		a += 2
 	if is_sunlit(u.side, u.row, u.lane):
 		a += 1
+	if terrain_at(u.side, u.row, u.lane) == "flooded":
+		a -= 1
+	if u.side == PLAYER:
+		a -= drowned_lanes.count(u.lane)
 	if u.id == "peltast" and unit_at(u.side, u.row, u.lane - 1) != null and unit_at(u.side, u.row, u.lane + 1) != null:
 		a += 1
 	if u.side == PLAYER and has_relic("flanking_banner") and (u.lane == 0 or u.lane == LANES - 1):
@@ -255,6 +264,56 @@ func _lane_sunlit(lane: int, width := 1) -> bool:
 			if is_sunlit(PLAYER, row, l):
 				return true
 	return false
+
+
+func _player_unit_by_uid(uid: int):
+	for u in units(PLAYER):
+		if u.uid == uid:
+			return u
+	return null
+
+
+## Living Toll enemies: each takes 1 unspent Faith when planning ends, or the Core takes 2.
+func toll_count() -> int:
+	return units(ENEMY).filter(func(e): return e.has_kw("toll")).size()
+
+
+func _pay_toll() -> void:
+	for e in units(ENEMY):
+		if not e.has_kw("toll"):
+			continue
+		if faith > 0:
+			faith -= 1
+			_log("%s takes 1 Faith as the Toll." % _unit_label(e))
+		else:
+			_log("No Faith for %s's Toll." % e.display_name())
+			_damage_core(2, "The Toll")
+
+
+## Ferry arrivals still to come this fight (waves past the round limit never arrive).
+func pending_waves() -> Array:
+	return battle.get("waves", []).filter(func(w): return w[0] > round_num and (is_boss or w[0] <= max_rounds))
+
+
+func _arrive_waves() -> void:
+	for w in battle.get("waves", []):
+		if w[0] != round_num:
+			continue
+		var slot := _wave_slot(w[2], w[3])
+		if slot.is_empty():
+			continue
+		var u = _spawn(w[1], ENEMY, slot[1], slot[0])
+		_log("%s arrives by ferry (%s)." % [u.display_name(), _unit_label(u)])
+
+
+## The named enemy slot if empty, else the nearest empty one (same row first). [row, lane] or [].
+func _wave_slot(lane: int, row: int) -> Array:
+	for r in [row, 1 - row]:
+		for d in LANES:
+			for l in [lane - d, lane + d]:
+				if l >= 0 and l < LANES and unit_at(ENEMY, r, l) == null:
+					return [r, l]
+	return []
 
 
 func _sunlit_slots() -> Array:
@@ -340,6 +399,9 @@ func snapshot() -> Dictionary:
 		"free_spell": free_spell_active(),
 		"quicksand_targets": _quicksand_targets(),
 		"sunlit": _sunlit_slots(),
+		"toll": toll_count(),
+		"drowned_lanes": drowned_lanes.duplicate(),
+		"waves": pending_waves().map(func(w): return {"round": w[0], "id": w[1], "name": Data.unit_def(w[1])["name"], "lane": w[2], "row": w[3]}),
 		"void_tide": _void_tide(),
 		"power_uses": power_uses,
 		"power_ready": power.get("ready", true),
@@ -375,7 +437,7 @@ func _unit_snapshot(u) -> Dictionary:
 		"text": u.def["text"], "intent": intent.get("text", ""), "intent_type": intent.get("type", ""), "width": u.width,
 		"move_block": move_block(u) if phase == "plan" and u.side == PLAYER else "",
 		"fresh": is_fresh(u),
-		"poisoned": u.poisoned, "burn": u.burn, "swine": u.uid == transformed_uid,
+		"poisoned": u.poisoned, "burn": u.burn, "judged": u.side == PLAYER and u.uid == judged_uid, "swine": u.uid == transformed_uid,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
 		"spellward": u.side == ENEMY and is_spellwarded(u),
 		"armaments": u.armaments.map(func(card): return card["id"]),
@@ -391,8 +453,10 @@ func _start_round() -> void:
 	longship_active = false
 	spells_this_round = 0
 	armaments_this_round = 0
+	drowned_lanes = []
 	for u in units(PLAYER) + units(ENEMY):
 		u.temp_atk = 0
+	_arrive_waves()
 	faith = 3
 	if round_num == 1 and has_relic("ember_of_faith"):
 		faith += 1
@@ -458,7 +522,7 @@ func _capture() -> Dictionary:
 		"grid": g, "deck": deck.duplicate(), "hand": hand.duplicate(), "discard": discard.duplicate(),
 		"exhausted": exhausted.duplicate(), "core_hp": core_hp, "faith": faith, "result": result,
 		"moves_left": moves_left, "longship_active": longship_active, "spells_this_round": spells_this_round, "armaments_this_round": armaments_this_round,
-		"faith_next": faith_next, "horus_round": horus_round,
+		"faith_next": faith_next, "horus_round": horus_round, "drowned_lanes": drowned_lanes.duplicate(),
 		"intents": intents.duplicate(true), "petrified_lane": petrified_lane, "sandstorm_row": sandstorm_row,
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
@@ -490,6 +554,7 @@ func restart_plan() -> String:
 	armaments_this_round = s["armaments_this_round"]
 	faith_next = s["faith_next"]
 	horus_round = s["horus_round"]
+	drowned_lanes = s["drowned_lanes"]
 	intents = s["intents"]
 	petrified_lane = s["petrified_lane"]
 	sandstorm_row = s["sandstorm_row"]
@@ -529,6 +594,10 @@ func _draw(n: int) -> void:
 		if faith_change != 0:
 			faith = maxi(0, faith + faith_change)
 			_log("%s: %+d Faith this round." % [card_def(card)["name"], faith_change])
+		if card_def(card).get("drowned_lane", false):
+			var lane := rng.randi_range(0, LANES - 1)
+			drowned_lanes.append(lane)
+			_log("Drowned: your units in lane %d get -1 ATK this round." % (lane + 1))
 
 
 func _declare_intents() -> void:
@@ -536,9 +605,21 @@ func _declare_intents() -> void:
 	petrified_lane = -1
 	sandstorm_row = -1
 	transformed_uid = -1
+	judged_uid = -1
+	var killer = _player_unit_by_uid(round_killer_uid)
+	round_killer_uid = -1
+	if killer != null and units(ENEMY).any(func(e): return e.has_kw("judgement")):
+		judged_uid = killer.uid
 	for e in units(ENEMY):
 		var it := {}
 		match e.id:
+			"assessor_of_maat":
+				if killer != null:
+					it = {"type": "judge", "text": "JUDGE %s" % killer.display_name()}
+				else:
+					it = {"type": "attack", "text": "Attack lane %d" % (e.lane + 1)}
+			"obol_collector":
+				it = {"type": "toll", "text": "TOLL: 1 Faith or Core -2"}
 			"void_charger":
 				if round_num % 2 == 0:
 					var lane := _lane_with_fewest_player_units()
@@ -1424,6 +1505,10 @@ func end_plan() -> Array:
 		return events
 	phase = "resolve"
 	_log("--- Round %d ---" % round_num)
+	_pay_toll()
+	if result != "":
+		_finish_fight()
+		return events.duplicate()
 
 	if sandstorm_row != -1:
 		_log("Sandstorm: your %s row has -1 ATK this round." % ("front" if sandstorm_row == FRONT else "back"))
@@ -1656,6 +1741,18 @@ func _siege_act(u) -> void:
 			_deal_damage(t, effective_atk(u), "effect")
 
 
+## Drag: with your front slot in its lane empty, your back unit there is pulled forward.
+func _drag(u) -> void:
+	if unit_at(PLAYER, FRONT, u.lane) != null:
+		return
+	var b = unit_at(PLAYER, BACK, u.lane)
+	if b == null or b.has_kw("immovable") or b.wide:
+		return
+	_remove(b)
+	_place(b, FRONT, u.lane)
+	_log("%s drags %s into the front row." % [_unit_label(u), b.display_name()])
+
+
 func _first_empty_enemy_slot() -> Array:
 	for row in 2:
 		for lane in LANES:
@@ -1691,7 +1788,14 @@ func _act(u) -> void:
 	var atk := effective_atk(u)
 	if atk <= 0:
 		return
+	if u.has_kw("drag"):
+		_drag(u)
 	var target = _pick_target(u, u.lane)
+	if u.has_kw("judgement"):
+		var judged = _player_unit_by_uid(judged_uid)
+		if judged != null:
+			target = judged
+			_log("%s passes Judgement on %s." % [_unit_label(u), judged.display_name()])
 	if target == null:
 		return
 	if target is String:
@@ -1730,6 +1834,8 @@ func _attack(u, target, atk: int) -> void:
 	if ranged and u.side == PLAYER and has_relic("eye_of_horus") and target.row == BACK:
 		dmg += 1
 	if u.id == "horus" and target.burn > 0:
+		dmg += 2
+	if u.id == "hel_hound" and (terrain_at(target.side, target.row, target.lane) == "flooded" or target.hp * 2 < target.max_hp):
 		dmg += 2
 	var extra := {"target": [target.side, target.row, target.lane], "ranged": ranged}
 	if u.has_kw("cleave"):
@@ -1890,6 +1996,9 @@ func _deal_damage(t, amount: int, kind: String) -> int:
 		t.veil_round = round_num
 		_log("%s's Veil turns aside %d damage." % [_unit_label(t), amount])
 		return 0
+	if t.has_kw("incorporeal") and kind in ["melee", "cleave"]:
+		amount = maxi(1, amount / 2)
+		_log("%s is Incorporeal: the blow passes half through." % _unit_label(t))
 	if t.id == "achilles":
 		if kind == "melee":
 			_log("Achilles shrugs off the melee attack.")
@@ -1948,6 +2057,8 @@ func _kill(u) -> void:
 	var can_revive: bool = u.has_kw("revive") or (u.side == PLAYER and not u.is_token and has_relic("ankh_of_eternity"))
 	if can_revive and not u.revive_used and _unmaking:
 		_log("Apep unmakes %s - it cannot Revive." % u.display_name())
+	elif can_revive and not u.revive_used and terrain_at(u.side, u.row, u.lane) == "flooded":
+		_log("%s sinks in the flood - it cannot Revive." % u.display_name())
 	elif can_revive and not u.revive_used:
 		u.revive_used = true
 		u.shield = 0
@@ -1977,6 +2088,15 @@ func _kill(u) -> void:
 		horus_round = round_num
 		faith_next += 1
 		_log("Horus claims the burning soul: +1 Faith next round.")
+	if u.side == ENEMY and actor != null and actor.side == PLAYER:
+		round_killer_uid = actor.uid
+	if u.side == ENEMY and u.has_kw("drown") and terrain_at(PLAYER, FRONT, u.lane) == "":
+		terrain[_key(PLAYER, FRONT, u.lane)] = "flooded"
+		_log("%s drowns: your lane %d front slot is Flooded." % [u.display_name(), u.lane + 1])
+	if u.side == PLAYER and actor != null and actor.side == ENEMY and actor.alive and actor.has_kw("devour"):
+		actor.atk += 1
+		_heal(actor, 3, "Devour")
+		_log("%s devours %s (+1 ATK)." % [actor.display_name(), u.display_name()])
 
 	if u.side == PLAYER and not u.is_token:
 		last_dead_ally = u.card
@@ -2106,13 +2226,13 @@ func _reinforce(u) -> void:
 
 
 func _check_enemies_cleared() -> void:
-	if result == "" and units(ENEMY).is_empty():
+	if result == "" and units(ENEMY).is_empty() and pending_waves().is_empty():
 		result = "win"
 
 
 func _end_round_checks() -> void:
 	if result == "":
-		if units(ENEMY).is_empty():
+		if units(ENEMY).is_empty() and pending_waves().is_empty():
 			result = "win"
 		elif not is_boss and round_num >= max_rounds:
 			result = "timeout"

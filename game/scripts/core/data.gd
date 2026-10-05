@@ -110,6 +110,7 @@ const CARDS := {
 	"void_web": {"name": "Void Web", "faction": "status", "rarity": "Status", "type": "status", "cost": 0, "token": true, "text": "Unplayable. Exhausts at the start of the next round."},
 	"hex": {"name": "Hex", "faction": "status", "rarity": "Status", "type": "status", "cost": 0, "token": true, "draw_faith": -1, "text": "Unplayable. When drawn, lose 1 Faith this round. Exhausts at the start of the next round."},
 	"ashes": {"name": "Ashes", "faction": "status", "rarity": "Status", "type": "status", "cost": 0, "token": true, "core_damage": 1, "text": "Unplayable. At the start of the next round, it exhausts and the Core takes 1 (never lethal)."},
+	"drowned": {"name": "Drowned", "faction": "status", "rarity": "Status", "type": "status", "cost": 0, "token": true, "drowned_lane": true, "text": "Unplayable. When drawn, your units in a random lane get -1 ATK this round. Exhausts at the start of the next round."},
 }
 
 ## One-line effect shown on compact non-unit cards; the full text appears on hover.
@@ -123,7 +124,7 @@ const CARD_SHORT := {
 	"plague_of_locusts": "Damage = your unit count", "call_of_the_pack": "Summon two Wolves", "bronze_spear": "+2 ATK", "hoplon": "Shield 2 each round",
 	"dawn_ritual": "Create a Sunlit slot", "noon_blaze": "Burn 3 in Sunlit lanes", "eye_of_ra": "Double an enemy's Burn",
 	"harpe": "+1 ATK and Cleave", "golden_cuirass": "+4 HP and Taunt", "blood_scent": "Each Wolf hits for its ATK", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
-	"void_web": "Unplayable", "hex": "Unplayable, Faith -1", "ashes": "Unplayable, Core -1",
+	"void_web": "Unplayable", "hex": "Unplayable, Faith -1", "ashes": "Unplayable, Core -1", "drowned": "Unplayable, a lane -1 ATK",
 }
 
 const ENEMIES := {
@@ -157,6 +158,16 @@ const ENEMIES := {
 	"echo_of_hydra": {"name": "Echo of the Hydra", "kind": "elite", "atk": 3, "hp": 10, "spd": 3, "threat": 3, "keywords": [], "split": "hydra_head", "text": "Split: when it dies, two 2/4 Hydra Heads grow in its slot and the nearest empty slot in its row."},
 	"hydra_head": {"name": "Hydra Head", "kind": "enemy", "atk": 2, "hp": 4, "spd": 3, "threat": 2, "keywords": [], "text": "Attacks its own lane. Grown from the Hydra."},
 	"echo_of_circe": {"name": "Echo of Circe", "kind": "elite", "atk": 2, "hp": 7, "spd": 3, "threat": 3, "keywords": ["ranged"], "text": "Ranged. TRANSFORM: each round, your highest-cost unit becomes a Swine and can't act (no attack or start-of-round effect)."},
+	# Act 2 - The Drowned Underworld
+	"drowned_thrall": {"name": "Drowned Thrall", "kind": "enemy", "act": 2, "atk": 2, "hp": 5, "spd": 2, "threat": 1, "keywords": ["drown"], "text": "Drown: when it dies, your front slot in its lane becomes Flooded. Attacks its own lane."},
+	"shade": {"name": "Shade", "kind": "enemy", "act": 2, "atk": 3, "hp": 4, "spd": 3, "threat": 1, "keywords": ["incorporeal"], "text": "Incorporeal: melee attacks deal it half damage."},
+	"styx_lamprey": {"name": "Styx Lamprey", "kind": "enemy", "act": 2, "atk": 2, "hp": 4, "spd": 4, "threat": 1, "keywords": ["drag"], "text": "Drag: if your front slot in its lane is empty, it pulls your back unit there, then attacks."},
+	"assessor_of_maat": {"name": "Assessor of Ma'at", "kind": "enemy", "act": 2, "atk": 2, "hp": 5, "spd": 3, "threat": 2, "keywords": ["ranged", "judgement"], "text": "Ranged. Judgement: attacks the unit of yours that last killed an enemy in the previous round, anywhere on the board."},
+	"soul_eater": {"name": "Soul Eater", "kind": "enemy", "act": 2, "atk": 3, "hp": 6, "spd": 2, "threat": 2, "keywords": ["devour"], "text": "Devour: when it kills one of your units and the unit stays dead, it heals 3 and gains +1 ATK."},
+	"hel_hound": {"name": "Hel-Hound", "kind": "enemy", "act": 2, "atk": 3, "hp": 4, "spd": 5, "threat": 2, "keywords": [], "text": "Deals +2 damage to units that are Flooded or below half HP."},
+	"gjoll_wraith": {"name": "Gjoll Wraith", "kind": "enemy", "act": 2, "atk": 1, "hp": 5, "spd": 2, "threat": 1, "keywords": ["ranged"], "status_card": "drowned", "text": "Ranged. Whenever it attacks, shuffles a Drowned into your draw pile (when drawn, your units in a random lane get -1 ATK this round)."},
+	"obol_collector": {"name": "Obol Collector", "kind": "enemy", "act": 2, "atk": 0, "hp": 6, "spd": 1, "threat": 1, "keywords": ["toll"], "text": "Toll: when you end planning, it takes 1 unspent Faith, or the Core takes 2. Doesn't attack."},
+	"grave_shield": {"name": "Grave Shield", "kind": "enemy", "act": 2, "atk": 1, "hp": 10, "spd": 1, "threat": 1, "keywords": ["taunt", "incorporeal"], "text": "Taunt. Incorporeal: melee attacks deal it half damage."},
 }
 
 const RELICS := {
@@ -188,6 +199,7 @@ const TERRAIN := {
 	"ruins": {"name": "Ruins", "text": "Cover: Ranged attacks cannot target the unit in this slot."},
 	"quicksand": {"name": "Quicksand", "text": "The unit in this slot can't be moved and has -1 SPD."},
 	"sunlit": {"name": "Sunlit", "text": "The unit in this slot has +1 ATK, and its attacks apply Burn 1."},
+	"flooded": {"name": "Flooded", "text": "The unit in this slot has -1 ATK and can't Revive."},
 }
 
 const STARTER := ["ark_sentinel", "ark_sentinel", "ark_sentinel", "ark_sentinel", "echo_archer", "echo_archer", "echo_archer", "rebuke", "warding"]
@@ -275,6 +287,47 @@ const BATTLES := [
 	{"id": "circe", "name": "Extra: Echo of Circe (elite)", "deck": "greek", "core": 40, "relics": [],
 		"enemies": [["void_spawn", 0, 0], ["hollowed_zealot", 1, 0], ["void_spawn", 2, 0], ["echo_of_circe", 1, 1]], "terrain": [],
 		"blurb": "Circe turns your most expensive unit into a Swine each round. Go wide."},
+	# Act 2 - The Drowned Underworld. Waves: [round, enemy_id, lane, row], arriving at the start of that round.
+	{"id": "styx_banks", "name": "Act 2: Banks of the Styx", "act": 2, "deck": "egypt", "core": 50, "relics": [],
+		"enemies": [["drowned_thrall", 0, 0], ["shade", 1, 0], ["shade", 2, 0]], "terrain": [],
+		"blurb": "Shades shrug off half of every melee hit. Bring Ranged units, spells or Burn."},
+	{"id": "drowned_procession", "name": "Act 2: Drowned Procession", "act": 2, "deck": "norse", "core": 50, "relics": [],
+		"enemies": [["drowned_thrall", 0, 0], ["drowned_thrall", 2, 0], ["assessor_of_maat", 2, 1]],
+		"waves": [[2, "drowned_thrall", 1, 0]],
+		"terrain": [["flooded", 0, 2, 0]], "blurb": "Every Thrall floods your slot as it dies, the ferry brings another in round 2, and the Assessor judges your finisher."},
+	{"id": "obol_toll", "name": "Act 2: The Ferry Toll", "act": 2, "deck": "greek", "core": 50, "relics": [],
+		"enemies": [["drowned_thrall", 1, 0], ["styx_lamprey", 2, 0], ["obol_collector", 1, 1]], "terrain": [],
+		"waves": [[3, "drowned_thrall", 3, 0]], "blurb": "Keep a Faith for the Toll, kill the Collector, and plan for the ferry in round 3."},
+	{"id": "hounds_of_gjoll", "name": "Act 2: Hounds of Gjoll", "act": 2, "deck": "egypt", "core": 50, "relics": [],
+		"enemies": [["hel_hound", 0, 0], ["shade", 1, 0], ["styx_lamprey", 3, 0]], "terrain": [],
+		"blurb": "The Hel-Hound mauls wounded units and the Lamprey drags your back row forward. Keep your front line healthy."},
+	{"id": "hall_of_two_truths", "name": "Act 2: Hall of Two Truths", "act": 2, "deck": "greek", "core": 50, "relics": [],
+		"enemies": [["grave_shield", 1, 0], ["shade", 2, 0], ["assessor_of_maat", 1, 1], ["assessor_of_maat", 2, 1]], "terrain": [],
+		"blurb": "Two Assessors focus whoever made the last kill, behind an Incorporeal wall."},
+	{"id": "devourers_feast", "name": "Act 2: The Devourer's Feast", "act": 2, "deck": "norse", "core": 50, "relics": [],
+		"enemies": [["drowned_thrall", 0, 0], ["soul_eater", 1, 0], ["soul_eater", 2, 0], ["gjoll_wraith", 3, 1]], "terrain": [],
+		"blurb": "Every unit the Soul Eaters kill makes them stronger. Don't feed them."},
+	{"id": "river_crossing", "name": "Act 2: River Crossing", "act": 2, "deck": "egypt", "core": 50, "relics": [],
+		"enemies": [["styx_lamprey", 1, 0], ["styx_lamprey", 2, 0], ["drowned_thrall", 3, 0]],
+		"terrain": [["flooded", 0, 0, 0], ["flooded", 0, 2, 0]],
+		"waves": [[2, "shade", 0, 0], [2, "shade", 3, 1], [4, "drowned_thrall", 1, 0]],
+		"blurb": "Lampreys drag your back row forward while Shades cross by ferry. A positional puzzle."},
+	{"id": "sunken_sanctum", "name": "Act 2: Sunken Sanctum", "act": 2, "deck": "greek", "core": 50, "relics": [],
+		"enemies": [["grave_shield", 1, 0], ["grave_shield", 2, 0], ["assessor_of_maat", 1, 1], ["obol_collector", 2, 1]], "terrain": [],
+		"blurb": "A damage race behind two walls while the Toll drains your Faith."},
+	{"id": "shade_tide", "name": "Act 2: Tide of Shades", "act": 2, "deck": "norse", "core": 50, "relics": [],
+		"enemies": [["shade", 0, 0], ["shade", 1, 0], ["gjoll_wraith", 2, 1]], "terrain": [],
+		"waves": [[2, "shade", 3, 0]],
+		"blurb": "Two Shades, a third by ferry in round 2. Melee-heavy decks suffer."},
+	{"id": "drowned_legion", "name": "Act 2: Drowned Legion", "act": 2, "deck": "norse", "core": 50, "relics": [],
+		"enemies": [["drowned_thrall", 0, 0], ["hel_hound", 2, 0], ["drowned_thrall", 3, 0], ["siege_engine", 1, 1]], "terrain": [],
+		"blurb": "A Siege Engine fires on your crowded lanes while the Thralls flood them."},
+	{"id": "weighing_room", "name": "Act 2: The Weighing Room", "act": 2, "deck": "egypt", "core": 50, "relics": [],
+		"enemies": [["soul_eater", 1, 0], ["styx_lamprey", 2, 0], ["assessor_of_maat", 0, 1], ["obol_collector", 3, 1]], "terrain": [],
+		"blurb": "Everything at once: Devour, Drag, Judgement and the Toll."},
+	{"id": "gjoll_bridge", "name": "Act 2: Gjoll Bridge", "act": 2, "deck": "greek", "core": 50, "relics": [],
+		"enemies": [["grave_shield", 1, 0], ["hel_hound", 2, 0], ["gjoll_wraith", 0, 1], ["gjoll_wraith", 3, 1]], "terrain": [],
+		"blurb": "Wraiths clog your draws with Drowned while a fast Hel-Hound hunts the wounded."},
 ]
 
 
@@ -384,17 +437,20 @@ const BATTLE_POOLS := {
 	"plague_pit": "late", "sieging_host": "late", "ooze_tide": "late", "silent_chapel": "late", "sinking_sands": "late",
 	"medusa": "elite", "fenrir": "elite", "set": "elite", "hydra": "elite", "circe": "elite",
 	"herald": "boss", "hel": "boss", "apep": "boss",
+	"styx_banks": "act2_early", "drowned_procession": "act2_early", "obol_toll": "act2_early", "hounds_of_gjoll": "act2_early",
+	"hall_of_two_truths": "act2_late", "devourers_feast": "act2_late", "river_crossing": "act2_late", "sunken_sanctum": "act2_late",
+	"shade_tide": "act2_late", "drowned_legion": "act2_late", "weighing_room": "act2_late", "gjoll_bridge": "act2_late",
 }
 
 # A run is a series of acts, each a map ending in a boss. "pools" maps each encounter type to the
-# BATTLE_POOLS tag its battles come from (Act 2 borrows Act 1's fights until it has its own).
+# BATTLE_POOLS tag its battles come from (Act 2 borrows Act 1's elites and bosses until it has its own).
 # "empower_steps" adds that many floor-scaling steps on every floor of the act. "boss_bonus" goes to
 # the boss unit only, never to its summons. Reward odds are [Common, Uncommon, Rare] percentages.
 const ACTS := [
 	{"name": "The Dying Stars", "pools": {"early": "early", "late": "late", "elite": "elite", "boss": "boss"},
 		"empower_steps": 0, "boss_bonus": {}, "price_mult": 1.0, "map_tint": Color(1, 1, 1),
 		"normal_odds": [70, 25, 5], "elite_odds": [40, 45, 15], "shop_odds": [55, 35, 10]},
-	{"name": "The Drowned Underworld", "pools": {"early": "early", "late": "late", "elite": "elite", "boss": "boss"},
+	{"name": "The Drowned Underworld", "pools": {"early": "act2_early", "late": "act2_late", "elite": "elite", "boss": "boss"},
 		"empower_steps": 0, "boss_bonus": {"atk": 2, "hp": 15}, "price_mult": 1.15, "map_tint": Color(0.45, 0.85, 0.85),
 		"normal_odds": [55, 35, 10], "elite_odds": [30, 45, 25], "shop_odds": [45, 40, 15]},
 ]

@@ -25,7 +25,7 @@ const VOID_COLOR := Color(0.78, 0.55, 1.0)
 const BOARD_RECT := Rect2(0, 0, 1250, 640)
 const SIDEBAR_RECT := Rect2(1262, 10, 328, 880)
 const GOLD := Color(0.95, 0.78, 0.35)
-const TERRAIN_COLORS := {"ley_line": Color(0.95, 0.75, 0.2), "ruins": Color(0.75, 0.6, 0.45), "quicksand": Color(0.9, 0.72, 0.4), "sunlit": Color(1.0, 0.85, 0.35)}
+const TERRAIN_COLORS := {"ley_line": Color(0.95, 0.75, 0.2), "ruins": Color(0.75, 0.6, 0.45), "quicksand": Color(0.9, 0.72, 0.4), "sunlit": Color(1.0, 0.85, 0.35), "flooded": Color(0.35, 0.8, 0.85)}
 
 var combat
 var params := {}
@@ -137,7 +137,7 @@ func _build() -> void:
 	fill.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(fill)
 	var bg := TextureRect.new()
-	bg.texture = load("res://art/battle/background.jpg")
+	bg.texture = load("res://art/battle/background_act2.jpg" if params["battle"].get("act", 1) == 2 else "res://art/battle/background.jpg")
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_SCALE
 	bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
@@ -546,6 +546,8 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["burn", "Burn %d" % u["burn"], "At the end of the round it takes %d damage, then Burn drops by 1." % u["burn"]])
 		if u.get("veil", false):
 			out.append(["veil", "Veil up", "Ignores the next damage it takes this round."])
+		if u.get("judged", false):
+			out.append(["judgement", "Judged", "It made the last kill, so every Assessor of Ma'at attacks it this round, wherever it stands."])
 		if u.get("spellward", false):
 			out.append(["spellward", "Spellwarded", "Your spells can't target it."])
 		for arm_id in u.get("armaments", []):
@@ -568,6 +570,13 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["", "Sandstorm", "Units in this row get -1 ATK this round.", Color(0.98, 0.78, 0.42)])
 		if "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
 			out.append(["", "Quicksand incoming", "At the end of the round this slot sinks into Quicksand.", TERRAIN_COLORS["quicksand"]])
+		var drowned: int = snap.get("drowned_lanes", []).count(lane)
+		if drowned > 0:
+			out.append(["", "Drowned lane", "Your units in this lane get -%d ATK this round." % drowned, TERRAIN_COLORS["flooded"]])
+	else:
+		for w in snap.get("waves", []):
+			if w["lane"] == lane and w["row"] == row:
+				out.append(["", "Ferry: round %d" % w["round"], "%s arrives here at the start of round %d (or in the nearest empty slot)." % [w["name"], w["round"]], TERRAIN_COLORS["flooded"]])
 	return out
 
 
@@ -687,6 +696,11 @@ func _render_status(snap: Dictionary) -> void:
 		round_label.text = "Round %d / %d" % [snap["round"], snap["max_rounds"]]
 		round_sub.text = "Survivors deal their Threat when time runs out"
 	faith_label.text = str(snap["faith"])
+	var toll: int = snap.get("toll", 0)
+	if toll > 0:
+		faith_label.text += "  (Toll %d)" % toll
+	faith_label.tooltip_text = CardWidget.wrap_text("Toll: when you end planning, each Obol Collector takes 1 unspent Faith. Without it, the Core takes 2.") if toll > 0 else ""
+	faith_label.mouse_filter = Control.MOUSE_FILTER_STOP if toll > 0 else Control.MOUSE_FILTER_IGNORE
 	var core: int = max(snap["core_hp"], 0)
 	core_bar.max_value = max(combat.core_max, core, 1)
 	core_bar.value = core

@@ -410,7 +410,7 @@ func _play_best_card(c) -> bool:
 	var best_score := 0.0
 	var best_action := Callable()
 	for i in c.hand.size():
-		if not c.can_afford(i):
+		if not c.can_afford(i) or c.card_cost(c.hand[i]) > c.faith - c.toll_count():
 			continue
 		var option := _evaluate(c, i)
 		if option["score"] > best_score:

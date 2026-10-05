@@ -39,7 +39,7 @@ var labels: Control
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	for id in ["player", "enemy", "ley_line", "ruins", "quicksand", "sunlit"]:
+	for id in ["player", "enemy", "ley_line", "ruins", "quicksand", "sunlit", "flooded"]:
 		textures[id] = load("res://art/battle/tile_%s.jpg" % id)
 	labels = Control.new()
 	labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -196,6 +196,20 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 			draw_colored_polygon(quad, Color(0.95, 0.7, 0.3, 0.3))
 		if sunlit and t != "sunlit":
 			draw_colored_polygon(quad, Color(1.0, 0.85, 0.35, 0.25))
+		if lane in snap.get("drowned_lanes", []):
+			draw_colored_polygon(quad, Color(0.2, 0.65, 0.75, 0.3))
+	if side == E and not snap.is_empty():
+		for w in snap.get("waves", []):
+			if w["lane"] == lane and w["row"] == row:
+				draw_colored_polygon(quad, Color(0.25, 0.75, 0.85, 0.22))
+				var center: Vector2 = (quad[0] + quad[1] + quad[2] + quad[3]) / 4.0
+				var font := ThemeDB.fallback_font
+				var text := "FERRY R%d" % w["round"]
+				var fs := int(14 * depth)
+				var width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+				draw_string_outline(font, center + Vector2(-width / 2, fs / 2.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.8))
+				draw_string(font, center + Vector2(-width / 2, fs / 2.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.7, 0.95, 1.0))
+				break
 
 	var closed := quad.duplicate()
 	closed.append(quad[0])
@@ -374,7 +388,7 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 	var status := VBoxContainer.new()
 	status.add_theme_constant_override("separation", int(2 * sc))
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for pair in [["revive", u["revive"]], ["poison", u.get("poisoned", false)], ["veil", u.get("veil", false)],
+	for pair in [["judgement", u.get("judged", false)], ["revive", u["revive"]], ["poison", u.get("poisoned", false)], ["veil", u.get("veil", false)],
 			["spellward", u.get("spellward", false)], ["frenzy", u["empowered"]]]:
 		if pair[1]:
 			status.add_child(CardWidget.icon(pair[0], 20 * sc))
@@ -432,6 +446,10 @@ static func short_intent(text: String, type: String) -> String:
 			return "WARD" if text.begins_with("Ward") else "WAIT"
 		"sandstorm":
 			return "SANDSTORM"
+		"toll":
+			return "TOLL"
+		"judge":
+			return "JUDGE"
 	var cut := text.split("(")[0].split(",")[0]
 	return cut.replace("lanes ", "").replace("lane ", "").replace(" at", "").replace(" and ", "+").strip_edges().to_upper()
 

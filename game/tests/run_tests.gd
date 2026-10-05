@@ -39,6 +39,7 @@ func _initialize() -> void:
 	test_pack()
 	test_forge()
 	test_sun()
+	test_act2_enemies()
 	test_divine()
 	test_terrain_cards()
 	test_restart_plan()
@@ -737,6 +738,149 @@ func test_pack() -> void:
 	c.hand = [c._new_card("book_of_the_dead")]
 	c.faith = 3
 	check(c.valid_targets(0).is_empty(), "book of the dead: still needs a fallen ally")
+
+
+func test_act2_enemies() -> void:
+	# Incorporeal halves melee (min 1); ranged hits in full.
+	var c = fresh()
+	var shade = c.debug_place("shade", E, 0, F)
+	var sentinel = c.debug_place("ark_sentinel", P, 0, F)
+	c._attack(sentinel, shade, 3)
+	check(shade.hp == 3, "incorporeal: melee 3 deals 1")
+	c._attack(sentinel, shade, 1)
+	check(shade.hp == 2, "incorporeal: minimum 1")
+	var archer = c.debug_place("echo_archer", P, 0, B)
+	c._attack(archer, shade, 2)
+	check(not shade.alive, "incorporeal: ranged deals full damage")
+
+	# Drown floods your front slot in its lane; Flooded is -1 ATK and blocks Revive.
+	c = fresh()
+	var thrall = c.debug_place("drowned_thrall", E, 1, F)
+	c.debug_place("hollowed_bulwark", E, 3, F)
+	var mummy = c.debug_place("mummy_guardian", P, 1, F)
+	var atk_before: int = c.effective_atk(mummy)
+	c._deal_damage(thrall, 99, "effect")
+	check(c.terrain_at(P, F, 1) == "flooded", "drown: floods your front slot in its lane")
+	check(c.effective_atk(mummy) == atk_before - 1, "flooded: -1 ATK")
+	c._deal_damage(mummy, 99, "effect")
+	check(not mummy.alive, "flooded: no Revive")
+	c = fresh()
+	c.terrain[c._key(P, F, 2)] = "sunlit"
+	var t2 = c.debug_place("drowned_thrall", E, 2, F)
+	c.debug_place("hollowed_bulwark", E, 3, F)
+	c._deal_damage(t2, 99, "effect")
+	check(c.terrain_at(P, F, 2) == "sunlit", "drown: existing terrain stays")
+
+	# Drag pulls the back unit forward when the front is empty.
+	c = fresh()
+	var lamprey = c.debug_place("styx_lamprey", E, 1, F)
+	var back = c.debug_place("echo_archer", P, 1, B)
+	back.max_hp = 6
+	back.hp = 6
+	c._act(lamprey)
+	check(c.unit_at(P, F, 1) == back and c.unit_at(P, B, 1) == null, "drag: back unit pulled to the front")
+	check(back.hp < back.max_hp, "drag: then attacked")
+
+	# Devour: heals 3 and +1 ATK when its kill stays dead.
+	c = fresh()
+	var eater = c.debug_place("soul_eater", E, 0, F)
+	eater.hp = 2
+	var victim = c.debug_place("echo_archer", P, 0, F)
+	victim.hp = 1
+	c.actor = eater
+	c._act(eater)
+	c.actor = null
+	check(not victim.alive and eater.atk == 4 and eater.hp == 5, "devour: +1 ATK and heals 3")
+
+	# Toll: takes 1 Faith, else the Core takes 2.
+	c = fresh()
+	c.debug_place("obol_collector", E, 3, B)
+	c.debug_place("null_idol", E, 0, F)
+	check(c.toll_count() == 1 and c.snapshot()["toll"] == 1, "toll: counted and shown")
+	c.faith = 0
+	var core: int = c.core_hp
+	c.end_plan()
+	check(c.core_hp <= core - 2, "toll: no Faith, the Core takes 2")
+	c = fresh()
+	c.debug_place("obol_collector", E, 3, B)
+	c.debug_place("null_idol", E, 0, F)
+	c.faith = 1
+	core = c.core_hp
+	c.end_plan()
+	check(c.core_hp == core, "toll: a spare Faith pays it (%d -> %d)" % [core, c.core_hp])
+
+	# Judgement: the last killer is judged next round and attacked anywhere.
+	c = fresh()
+	var assessor = c.debug_place("assessor_of_maat", E, 3, B)
+	c.debug_place("hollowed_bulwark", E, 3, F)
+	var weak = c.debug_place("void_spawn", E, 0, F)
+	weak.hp = 1
+	var killer = c.debug_place("ark_sentinel", P, 0, F)
+	c.actor = killer
+	c._attack(killer, weak, 3)
+	c.actor = null
+	c._declare_intents()
+	check(c.judged_uid == killer.uid and c.intents[assessor.uid]["text"].begins_with("JUDGE"), "judgement: the killer is judged")
+	check(c._unit_snapshot(killer)["judged"], "judgement: shown on the unit")
+	var hp_before: int = killer.hp
+	c._act(assessor)
+	check(killer.hp < hp_before, "judgement: the Assessor hits the judged unit in another lane")
+	c._declare_intents()
+	check(c.judged_uid == -1, "judgement: only the previous round's killer")
+
+	# Hel-Hound: +2 against Flooded or wounded units.
+	c = fresh()
+	var hound = c.debug_place("hel_hound", E, 0, F)
+	var tank = c.debug_place("mummy_guardian", P, 0, F)
+	c._attack(hound, tank, 3)
+	check(tank.hp == 2, "hel-hound: normal damage at full HP")
+	tank.hp = 5
+	tank.max_hp = 20
+	c._attack(hound, tank, 3)
+	check(tank.hp == 0 or not tank.alive or tank.revive_used, "hel-hound: +2 below half HP")
+
+	# Drowned status: a random lane gets -1 ATK this round.
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, F)
+	var units_atk := {}
+	for lane in 4:
+		units_atk[lane] = c.debug_place("ark_sentinel", P, lane, F)
+	c.deck = [c._new_card("drowned")]
+	c._draw(1)
+	check(c.drowned_lanes.size() == 1, "drowned: a lane is chosen")
+	var lane_hit: int = c.drowned_lanes[0]
+	check(c.effective_atk(units_atk[lane_hit]) == units_atk[lane_hit].atk - 1, "drowned: -1 ATK in that lane")
+	check(c.effective_atk(units_atk[(lane_hit + 1) % 4]) == units_atk[(lane_hit + 1) % 4].atk, "drowned: other lanes unaffected")
+
+	# Waves arrive at the start of their round; the fight isn't won while some are pending.
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 0, 0]], "terrain": [], "waves": [[2, "shade", 0, 0]]}, [], [], 1)
+	check(c.pending_waves().size() == 1 and c.snapshot()["waves"][0]["name"] == "Shade", "waves: shown from the start")
+	c._deal_damage(c.unit_at(E, F, 0), 99, "effect")
+	check(c.result == "", "waves: not won while an arrival is pending")
+	c.end_plan()
+	check(c.round_num == 2 and c.unit_at(E, F, 0) != null and c.unit_at(E, F, 0).id == "shade", "waves: the Shade arrives in round 2")
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 0, 0]], "terrain": [], "waves": [[5, "shade", 0, 0]]}, [], [], 1)
+	c._deal_damage(c.unit_at(E, F, 0), 99, "effect")
+	check(c.result == "win", "waves: arrivals after the round limit don't count")
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 0, 0], ["void_spawn", 1, 0]], "terrain": [], "waves": [[2, "shade", 0, 0]]}, [], [], 1)
+	c.end_plan()
+	var arrived = null
+	for e in c.units(E):
+		if e.id == "shade":
+			arrived = e
+	check(arrived != null and arrived.lane == 2 and arrived.row == F, "waves: an occupied slot sends it to the nearest empty one")
+
+	# Every Act 2 battle is valid and pooled.
+	for b in Data.BATTLES:
+		if b.get("act", 1) != 2:
+			continue
+		check(Data.BATTLE_POOLS.has(b["id"]) and Data.BATTLE_POOLS[b["id"]].begins_with("act2_"), "act 2 battle %s is pooled" % b["id"])
+		for e in b["enemies"] + b.get("waves", []).map(func(w): return [w[1]]):
+			check(Data.ENEMIES.has(e[0]), "act 2 battle %s: enemy %s exists" % [b["id"], e[0]])
+	check(Data.ACTS[1]["pools"]["early"] == "act2_early" and Data.ACTS[1]["pools"]["late"] == "act2_late", "act 2 uses its own fights")
 
 
 func test_sun() -> void:

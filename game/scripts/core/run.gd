@@ -446,6 +446,7 @@ func make_combat():
 	b["core"] = core_hp
 	b["core_max"] = max_hp
 	b["enemy_bonus"] = enemy_bonus()
+	b["act"] = act
 	if nodes[current]["type"] == "boss":
 		b["boss_bonus"] = act_def()["boss_bonus"]
 	b["god_power"] = power_state()

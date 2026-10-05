@@ -237,7 +237,15 @@ func _keywords(page: VBoxContainer) -> void:
 		["poison", "Poison", "Units it hits are Poisoned: they take 1 damage at the end of every round. Any heal cures it, even at full HP."],
 		["burn", "Burn", "Burn X: at the end of the round (after Poison) the unit takes X damage, then Burn drops by 1. More Burn adds to it. Heals don't cure it; Revive clears it. Sunlit slots, Priestess of Aten and Noon Blaze apply it, Eye of Ra doubles it, and Horus hits Burning enemies for +2."],
 		["spellward", "Spellward", "Your spells can't target it or the enemies next to it (left, right, in front, behind). It gains Shield 2 whenever you cast a spell."],
+		["incorporeal", "Incorporeal", "Act 2. Melee attacks (and Cleave splash) deal it half damage, rounded down, minimum 1. Ranged attacks, spells and Burn hit it in full."],
+		["drown", "Drown", "Act 2. When it dies, your front slot in its lane becomes [b]Flooded[/b] (if that slot has no terrain yet)."],
+		["drag", "Drag", "Act 2. If your front slot in its lane is empty, it pulls your back unit there before attacking. Keep the front filled."],
+		["devour", "Devour", "Act 2. When it kills one of your units for good (no Revive), it heals 3 and gains +1 ATK."],
+		["toll", "Toll", "Act 2. When you end planning, it takes 1 unspent Faith; with none left, the Core takes 2. The Faith counter shows the Toll while one lives - keep a Faith in reserve or kill it."],
+		["judgement", "Judgement", "Act 2. Attacks the unit of yours that made the last kill in the previous round, wherever it stands (Taunt and Airborne don't stop it). The judged unit shows a scales badge. With no judged unit, it attacks normally."],
 	])
+	_heading(page, "flooded", "Ferry arrivals")
+	page.add_child(_rich("Some Act 2 battles have enemies arriving by ferry mid-fight. Their slot is marked [color=#9fe6f0]FERRY R3[/color] (the round they arrive) from the start of the fight; hover it for details. They arrive at the start of that round's planning, in that slot or the nearest empty one. A fight isn't won while arrivals are still to come, but arrivals planned after the round limit never come."))
 
 
 func _cards(page: VBoxContainer) -> void:
@@ -257,7 +265,7 @@ func _cards(page: VBoxContainer) -> void:
 	_heading(page, "push_right", "Moving units")
 	page.add_child(_rich("Once per round, click one of your units, then an empty slot on your grid, to move it (or drag it there). Some cards give extra moves (Loki, Longship). The status panel shows your moves left.\n\nUnits you deployed from your hand this round aren't locked in yet: until you end planning you can move them freely, as often as you like, without using a move (this doesn't count as moving for Raider, Ulfhednar, Loki or Longship). Units that arrived any other way during planning - summoned (Call of the Pack, Sandswarm, Osiris's Return) or returned by Book of the Dead - can't move at all that round. Other units on Quicksand can't move at all."))
 	_heading(page, "opt_curse", "Curses and statuses")
-	page.add_child(_rich("They can't be played and just take up space. They leave your hand at the start of the next round: curses go to the discard pile, statuses are exhausted. Some also cost Faith or Core HP - read the card.\nEnemies marked [color=#ff9a9a](+Void Web)[/color] or similar shuffle a status card into your draw pile each time they attack."))
+	page.add_child(_rich("They can't be played and just take up space. They leave your hand at the start of the next round: curses go to the discard pile, statuses are exhausted. Some also cost Faith or Core HP - read the card.\nEnemies marked [color=#ff9a9a](+Void Web)[/color] or similar shuffle a status card into your draw pile each time they attack. The Gjoll Wraith's [b]Drowned[/b] gives your units in a random lane -1 ATK for the round it's drawn (that lane glows teal)."))
 
 
 func _powers(page: VBoxContainer) -> void:
@@ -291,6 +299,8 @@ func _enemies(page: VBoxContainer) -> void:
 		["enemies/void_herald.jpg", "TARGET / STRIKE", "The Void Herald's attacks. STRIKE deals 5 to both slots of a lane and to the front units beside it."],
 		["enemies/hel.jpg", "HARVEST", "Hel attacks your lowest-HP unit."],
 		["enemies/apep.jpg", "CONSTRICT lane X", "Apep hits both of your slots in that lane."],
+		["enemies/assessor_of_maat.jpg", "JUDGE unit", "The Assessor of Ma'at attacks that unit (your last killer) wherever it stands."],
+		["enemies/obol_collector.jpg", "TOLL", "Takes 1 unspent Faith when you end planning, or the Core takes 2."],
 	], 60)
 
 	_heading(page, "map/void.png", "Bosses")
@@ -309,6 +319,7 @@ func _terrain(page: VBoxContainer) -> void:
 		["battle/tile_ley_line.jpg", "Ley Line", "Gold border. The unit in this slot has [b]+2 ATK[/b]."],
 		["battle/tile_ruins.jpg", "Ruins", "Brown border. Cover: Ranged attacks can't target the unit in this slot."],
 		["battle/tile_quicksand.jpg", "Quicksand", "Sand border. The unit in this slot can't be moved and has [b]-1 SPD[/b]. Only enemy Geomancers create it."],
+		["battle/tile_flooded.jpg", "Flooded", "Act 2. The unit in this slot has [b]-1 ATK[/b] and [b]can't Revive[/b]. Some battles start with Flooded slots, and Drowned Thralls flood your front slot in their lane when they die."],
 		["battle/tile_sunlit.jpg", "Sunlit", "Your side only. The unit in this slot has [b]+1 ATK[/b], and its attacks apply [b]Burn 1[/b]. Dawn Ritual creates it; a living Benben Stone makes its own slot and the slots left and right of it Sunlit (shown with a golden glow)."],
 	], 72)
 	page.add_child(_rich("Terrain can appear on either side of the board - enemy archers sometimes shelter in Ruins, and enemies on a Ley Line hit harder.\n\nTerrain belongs to the [b]slot[/b], not the unit: moving a unit off it loses the effect. A slot holds one terrain at a time. [b]Channel Ley Line[/b] creates a Ley Line on a front slot and [b]Raise Ruins[/b] creates Ruins on a back slot and [b]Dawn Ritual[/b] creates a Sunlit slot in either row, for the rest of the fight - only on slots without terrain, but a unit may already stand there."))
