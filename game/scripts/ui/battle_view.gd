@@ -548,6 +548,10 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["veil", "Veil up", "Ignores the next damage it takes this round."])
 		if u.get("judged", false):
 			out.append(["judgement", "Judged", "It made the last kill, so every Assessor of Ma'at attacks it this round, wherever it stands."])
+		if u.get("hunted", false):
+			out.append(["vengeance", "Hunted", "It dealt the most damage last round, so every Fury attacks it this round, wherever it stands."])
+		if u.get("ferried", false):
+			out.append(["ferry", "Charon's passenger", "Your lowest-HP back-row unit: at the end of the round Charon ferries it out of the fight, and its card goes to your discard pile. Heal it, or put a weaker unit in the back row."])
 		if u.get("spellward", false):
 			out.append(["spellward", "Spellwarded", "Your spells can't target it."])
 		for arm_id in u.get("armaments", []):
@@ -568,6 +572,14 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["", "Petrified", "Units in this lane skip their action this round.", Color(0.75, 0.9, 0.65)])
 		if snap["sandstorm_row"] == row:
 			out.append(["", "Sandstorm", "Units in this row get -1 ATK this round.", Color(0.98, 0.78, 0.42)])
+		if snap.get("sealed_lane", -1) == lane:
+			if snap.get("seal_broken", false):
+				out.append(["seal", "Seal broken", "The Keeper took %d+ damage this round: units in this lane can attack." % combat.SEAL_BREAK, Color(0.95, 0.8, 0.45)])
+			else:
+				out.append(["seal", "Sealed", "Units in this lane can't attack this round until the Keeper of the Twelfth Gate has taken %d damage this round." % combat.SEAL_BREAK, Color(0.95, 0.8, 0.45)])
+		var wing: int = snap.get("wingbeat", 0)
+		if wing != 0:
+			out.append(["wingbeat", "Wingbeat", "When you end planning, your units are pushed one lane %s. Units that can't move (board edge or an occupied slot) take 2." % ("left" if wing < 0 else "right"), Color(0.7, 0.85, 1.0)])
 		if "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
 			out.append(["", "Quicksand incoming", "At the end of the round this slot sinks into Quicksand.", TERRAIN_COLORS["quicksand"]])
 		var drowned: int = snap.get("drowned_lanes", []).count(lane)
@@ -575,7 +587,9 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["", "Drowned lane", "Your units in this lane get -%d ATK this round." % drowned, TERRAIN_COLORS["flooded"]])
 	else:
 		for w in snap.get("waves", []):
-			if w["lane"] == lane and w["row"] == row:
+			if w["lane"] == lane and w["row"] == row and w.get("returning", false):
+				out.append(["", "Returns: round %d" % w["round"], "%s comes back here at the start of round %d (or in the nearest empty slot) unless the Keeper falls first." % [w["name"], w["round"]], Color(0.95, 0.8, 0.45)])
+			elif w["lane"] == lane and w["row"] == row:
 				out.append(["", "Ferry: round %d" % w["round"], "%s arrives here at the start of round %d (or in the nearest empty slot)." % [w["name"], w["round"]], TERRAIN_COLORS["flooded"]])
 	return out
 

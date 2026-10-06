@@ -51,6 +51,17 @@ var drowned_lanes: Array = []
 ## Judgement: the unit of yours that last killed an enemy this round, and the one judged this round.
 var round_killer_uid := -1
 var judged_uid := -1
+## Vengeance: damage each of your units dealt to enemies this round (by uid), and the unit the Furies hunt.
+var damage_dealt := {}
+var vengeance_uid := -1
+## Hraesvelgr's Wingbeat this round: -1 left, 1 right, 0 none.
+var wingbeat_dir := 0
+## The Keeper's Seal: your sealed lane this round, and the damage the Keeper took this round.
+var sealed_lane := -1
+var gate_damage := 0
+const SEAL_BREAK := 6
+## Gate Guardians coming back, in the waves format plus a "return" tag.
+var returning: Array = []
 var intents := {}
 var petrified_lane := -1
 var sandstorm_row := -1
@@ -290,20 +301,78 @@ func _pay_toll() -> void:
 			_damage_core(2, "The Toll")
 
 
+## Charon's Ferry target: your back-row unit with the lowest HP (leftmost on ties), or null.
+func ferry_target():
+	if not _has_living(ENEMY, "charon"):
+		return null
+	var best = null
+	for u in units(PLAYER):
+		if u.row == BACK and not u.has_kw("immovable") and (best == null or u.hp < best.hp or (u.hp == best.hp and u.lane < best.lane)):
+			best = u
+	return best
+
+
+## Removes the unit from the fight without a death: no On-Death, no Revive, the card goes to the discard pile.
+func _ferry(charon) -> void:
+	var t = ferry_target()
+	if t == null:
+		return
+	t.alive = false
+	_remove(t)
+	_return_armaments(t)
+	if t.is_token:
+		_log("%s ferries %s away." % [_unit_label(charon), t.display_name()])
+	else:
+		discard.append(t.card)
+		_log("%s ferries %s out of the fight. Its card goes to your discard pile." % [_unit_label(charon), t.display_name()])
+
+
+## Hraesvelgr's Wingbeat: every unit of yours shifts one lane; blocked ones stay and take 2.
+func _wingbeat(dir: int) -> void:
+	_log("Hraesvelgr's wingbeat pushes your units %s!" % ("left" if dir < 0 else "right"))
+	var order := units(PLAYER)
+	order.sort_custom(func(a, b): return a.lane > b.lane if dir > 0 else a.lane < b.lane)
+	for u in order:
+		if not u.alive or u.has_kw("immovable"):
+			continue
+		var dest: int = u.lane + dir
+		var free: bool = dest >= 0 and dest + u.width <= LANES
+		if free:
+			for i in u.width:
+				var o = unit_at(PLAYER, u.row, dest + i)
+				if o != null and o != u:
+					free = false
+		if free:
+			_remove(u)
+			_place(u, u.row, dest)
+		else:
+			_log("%s can't give way and takes 2." % _unit_label(u))
+			_deal_damage(u, 2, "effect")
+
+
+## True while the Keeper's Seal stops this unit of yours from attacking.
+func is_sealed(u) -> bool:
+	return u.side == PLAYER and sealed_lane >= u.lane and sealed_lane < u.lane + u.width \
+		and gate_damage < SEAL_BREAK and _has_living(ENEMY, "keeper_of_the_gate")
+
+
 ## Ferry arrivals still to come this fight (waves past the round limit never arrive).
 func pending_waves() -> Array:
-	return battle.get("waves", []).filter(func(w): return w[0] > round_num and (is_boss or w[0] <= max_rounds))
+	return (battle.get("waves", []) + returning).filter(func(w): return w[0] > round_num and (is_boss or w[0] <= max_rounds))
 
 
 func _arrive_waves() -> void:
-	for w in battle.get("waves", []):
+	for w in battle.get("waves", []) + returning:
 		if w[0] != round_num:
 			continue
 		var slot := _wave_slot(w[2], w[3])
 		if slot.is_empty():
 			continue
 		var u = _spawn(w[1], ENEMY, slot[1], slot[0])
-		_log("%s arrives by ferry (%s)." % [u.display_name(), _unit_label(u)])
+		if w.size() > 4:
+			_log("%s returns through the Gate (%s)." % [u.display_name(), _unit_label(u)])
+		else:
+			_log("%s arrives by ferry (%s)." % [u.display_name(), _unit_label(u)])
 
 
 ## The named enemy slot if empty, else the nearest empty one (same row first). [row, lane] or [].
@@ -401,7 +470,10 @@ func snapshot() -> Dictionary:
 		"sunlit": _sunlit_slots(),
 		"toll": toll_count(),
 		"drowned_lanes": drowned_lanes.duplicate(),
-		"waves": pending_waves().map(func(w): return {"round": w[0], "id": w[1], "name": Data.unit_def(w[1])["name"], "lane": w[2], "row": w[3]}),
+		"waves": pending_waves().map(func(w): return {"round": w[0], "id": w[1], "name": Data.unit_def(w[1])["name"], "lane": w[2], "row": w[3], "returning": w.size() > 4}),
+		"sealed_lane": sealed_lane if _has_living(ENEMY, "keeper_of_the_gate") else -1,
+		"seal_broken": gate_damage >= SEAL_BREAK,
+		"wingbeat": wingbeat_dir if _has_living(ENEMY, "hraesvelgr") else 0,
 		"void_tide": _void_tide(),
 		"power_uses": power_uses,
 		"power_ready": power.get("ready", true),
@@ -438,6 +510,8 @@ func _unit_snapshot(u) -> Dictionary:
 		"move_block": move_block(u) if phase == "plan" and u.side == PLAYER else "",
 		"fresh": is_fresh(u),
 		"poisoned": u.poisoned, "burn": u.burn, "judged": u.side == PLAYER and u.uid == judged_uid, "swine": u.uid == transformed_uid,
+		"hunted": u.side == PLAYER and u.uid == vengeance_uid and units(ENEMY).any(func(e): return e.has_kw("vengeance")),
+		"ferried": u.side == PLAYER and ferry_target() == u,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
 		"spellward": u.side == ENEMY and is_spellwarded(u),
 		"armaments": u.armaments.map(func(card): return card["id"]),
@@ -527,6 +601,7 @@ func _capture() -> Dictionary:
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
+		"gate_damage": gate_damage, "returning": returning.duplicate(true),
 		"power_uses": power_uses, "power_refunded": power_refunded, "power_invoked": power_invoked, "falls": falls,
 	}
 
@@ -567,6 +642,8 @@ func restart_plan() -> String:
 	rng.state = s["rng"]
 	terrain = s["terrain"]
 	transformed_uid = s["transformed_uid"]
+	gate_damage = s["gate_damage"]
+	returning = s["returning"].duplicate(true)
 	power_uses = s["power_uses"]
 	power_refunded = s["power_refunded"]
 	power_invoked = s["power_invoked"]
@@ -610,9 +687,35 @@ func _declare_intents() -> void:
 	round_killer_uid = -1
 	if killer != null and units(ENEMY).any(func(e): return e.has_kw("judgement")):
 		judged_uid = killer.uid
+	vengeance_uid = -1
+	var most := 0
+	for uid in damage_dealt:
+		if damage_dealt[uid] > most and _player_unit_by_uid(uid) != null:
+			most = damage_dealt[uid]
+			vengeance_uid = uid
+	damage_dealt.clear()
+	var hunted = _player_unit_by_uid(vengeance_uid)
+	wingbeat_dir = 0
+	sealed_lane = -1
+	gate_damage = 0
 	for e in units(ENEMY):
 		var it := {}
 		match e.id:
+			"charon":
+				it = {"type": "attack", "text": "Attack lane %d, FERRY your weakest back-row unit" % (e.lane + 1)}
+			"erinyes_fury":
+				if hunted != null:
+					it = {"type": "vengeance", "text": "AVENGE on %s" % hunted.display_name()}
+				else:
+					it = {"type": "attack", "text": "Attack lane %d" % (e.lane + 1)}
+			"hraesvelgr":
+				if wingbeat_dir == 0:
+					wingbeat_dir = -1 if rng.randi_range(0, 1) == 0 else 1
+				it = {"type": "wingbeat", "text": "WINGBEAT: push your units %s, then attack lane %d" % ["left" if wingbeat_dir < 0 else "right", e.lane + 1]}
+			"keeper_of_the_gate":
+				if sealed_lane == -1:
+					sealed_lane = 2 if round_num == 1 else _lane_with_most_player_atk()
+				it = {"type": "seal", "text": "SEAL lane %d" % (sealed_lane + 1)}
 			"assessor_of_maat":
 				if killer != null:
 					it = {"type": "judge", "text": "JUDGE %s" % killer.display_name()}
@@ -1509,6 +1612,8 @@ func end_plan() -> Array:
 	if result != "":
 		_finish_fight()
 		return events.duplicate()
+	if wingbeat_dir != 0 and _has_living(ENEMY, "hraesvelgr"):
+		_wingbeat(wingbeat_dir)
 
 	if sandstorm_row != -1:
 		_log("Sandstorm: your %s row has -1 ATK this round." % ("front" if sandstorm_row == FRONT else "back"))
@@ -1567,6 +1672,14 @@ func end_plan() -> Array:
 					_hel_end_of_round(boss)
 				"apep":
 					_apep_end_of_round(boss)
+				"charon":
+					_ferry(boss)
+
+	if result == "":
+		var heads := units(ENEMY).filter(func(e): return e.id == "cerberus_head")
+		if heads.size() == 3:
+			for h in heads:
+				_heal(h, 2, "Cerberus")
 
 	_end_round_checks()
 	return events.duplicate()
@@ -1768,6 +1881,9 @@ func _act(u) -> void:
 	if u.uid == transformed_uid:
 		_log("%s is a Swine this round and cannot act." % _unit_label(u))
 		return
+	if is_sealed(u):
+		_log("%s is held by the Seal of the Twelfth Gate and cannot attack." % _unit_label(u))
+		return
 	if u.id == "void_herald":
 		_herald_act(u)
 		return
@@ -1796,6 +1912,11 @@ func _act(u) -> void:
 		if judged != null:
 			target = judged
 			_log("%s passes Judgement on %s." % [_unit_label(u), judged.display_name()])
+	if u.has_kw("vengeance"):
+		var hunted = _player_unit_by_uid(vengeance_uid)
+		if hunted != null:
+			target = hunted
+			_log("%s takes Vengeance on %s." % [_unit_label(u), hunted.display_name()])
 	if target == null:
 		return
 	if target is String:
@@ -2012,6 +2133,13 @@ func _deal_damage(t, amount: int, kind: String) -> int:
 	var before: int = t.hp
 	t.hp -= amount
 	var excess: int = max(0, amount - before)
+	if amount > 0 and actor != null and actor.side == PLAYER and t.side == ENEMY:
+		damage_dealt[actor.uid] = damage_dealt.get(actor.uid, 0) + amount
+	if t.id == "keeper_of_the_gate" and amount > 0:
+		var was_sealed: bool = gate_damage < SEAL_BREAK
+		gate_damage += amount
+		if was_sealed and gate_damage >= SEAL_BREAK and sealed_lane != -1:
+			_log("The Keeper staggers: the Seal on lane %d breaks for this round." % (sealed_lane + 1))
 	if absorbed > 0:
 		_log("%s takes %d (%d blocked by Shield)." % [_unit_label(t), amount, absorbed])
 	else:
@@ -2093,6 +2221,16 @@ func _kill(u) -> void:
 	if u.side == ENEMY and u.has_kw("drown") and terrain_at(PLAYER, FRONT, u.lane) == "":
 		terrain[_key(PLAYER, FRONT, u.lane)] = "flooded"
 		_log("%s drowns: your lane %d front slot is Flooded." % [u.display_name(), u.lane + 1])
+	if u.id == "cerberus_head":
+		for h in units(ENEMY):
+			if h.id == "cerberus_head":
+				h.atk += 2
+				_log("%s howls for its fallen twin (+2 ATK)." % _unit_label(h))
+	if u.id == "gate_guardian" and _has_living(ENEMY, "keeper_of_the_gate"):
+		returning.append([round_num + 2, "gate_guardian", u.lane, u.row, "return"])
+	if u.id == "keeper_of_the_gate" and not returning.is_empty():
+		returning.clear()
+		_log("With the Keeper gone, the Gate Guardians stay down.")
 	if u.side == PLAYER and actor != null and actor.side == ENEMY and actor.alive and actor.has_kw("devour"):
 		actor.atk += 1
 		_heal(actor, 3, "Devour")

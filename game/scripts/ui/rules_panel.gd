@@ -243,6 +243,11 @@ func _keywords(page: VBoxContainer) -> void:
 		["devour", "Devour", "Act 2. When it kills one of your units for good (no Revive), it heals 3 and gains +1 ATK."],
 		["toll", "Toll", "Act 2. When you end planning, it takes 1 unspent Faith; with none left, the Core takes 2. The Faith counter shows the Toll while one lives - keep a Faith in reserve or kill it."],
 		["judgement", "Judgement", "Act 2. Attacks the unit of yours that made the last kill in the previous round, wherever it stands (Taunt and Airborne don't stop it). The judged unit shows a scales badge. With no judged unit, it attacks normally."],
+		["vengeance", "Vengeance", "Act 2 (the Erinyes). Attacks the unit of yours that dealt the most damage to enemies last round, wherever it stands; that unit shows a badge. With none, it attacks normally. Spreading your damage keeps your carry safe."],
+		["ferry", "Ferry", "Act 2 (Charon). At the end of each round, your back-row unit with the lowest HP leaves the fight. It isn't a death (no On-Death, no Revive): its card goes to your discard pile to be drawn again, and tokens are lost. The current passenger shows a badge."],
+		["linked", "Linked", "Act 2 (Cerberus). When one Head dies, the other Heads gain +2 ATK. At the end of a round where all three Heads live, each heals 2. Spread damage, then finish them close together."],
+		["wingbeat", "Wingbeat", "Act 2 (Hraesvelgr). When you end planning, all your units are pushed one lane in the direction shown beside your grid. A unit that would leave the board or hit an occupied slot stays put and takes 2. Immovable units don't move."],
+		["seal", "Seal", "Act 2 (Keeper of the Twelfth Gate). Your units in the sealed lane (marked SEALED) can't attack this round, until the Keeper has taken %d damage this round. While the Keeper lives, each fallen Gate Guardian comes back two rounds later (marked RETURNS on its slot)." % 6],
 	])
 	_heading(page, "flooded", "Ferry arrivals")
 	page.add_child(_rich("Some Act 2 battles have enemies arriving by ferry mid-fight. Their slot is marked [color=#9fe6f0]FERRY R3[/color] (the round they arrive) from the start of the fight; hover it for details. They arrive at the start of that round's planning, in that slot or the nearest empty one. A fight isn't won while arrivals are still to come, but arrivals planned after the round limit never come."))
@@ -301,7 +306,20 @@ func _enemies(page: VBoxContainer) -> void:
 		["enemies/apep.jpg", "CONSTRICT lane X", "Apep hits both of your slots in that lane."],
 		["enemies/assessor_of_maat.jpg", "JUDGE unit", "The Assessor of Ma'at attacks that unit (your last killer) wherever it stands."],
 		["enemies/obol_collector.jpg", "TOLL", "Takes 1 unspent Faith when you end planning, or the Core takes 2."],
+		["enemies/erinyes_fury.jpg", "AVENGE on unit", "The Furies attack that unit (your top damage dealer last round) wherever it stands."],
+		["enemies/hraesvelgr.jpg", "PUSH LEFT / RIGHT", "Hraesvelgr's Wingbeat: your units shift one lane that way when you end planning, then it attacks."],
+		["enemies/keeper_of_the_gate.jpg", "SEAL lane X", "Your units in that lane can't attack until the Keeper takes 6 damage this round."],
 	], 60)
+
+	_heading(page, "map/elite.png", "Act 2 elites")
+	page.add_child(_rich("Elite fights in the Drowned Underworld each test one thing:"))
+	_grid(page, 3, [
+		["enemies/charon.jpg", "Charon", "Toll and Ferry: keep a Faith spare and keep your weakest unit out of the back row."],
+		["enemies/cerberus_head.jpg", "Cerberus", "Three Linked Heads: area damage, or bring them all low before finishing them."],
+		["enemies/hraesvelgr.jpg", "Hraesvelgr", "Wingbeat shoves your army sideways: leave a gap on the side it pushes toward."],
+		["enemies/erinyes_fury.jpg", "The Erinyes", "Three Airborne Furies hunt your top damage dealer. Ranged units and spells reach them."],
+		["enemies/keeper_of_the_gate.jpg", "Keeper of the Twelfth Gate", "Seals a lane and raises its Guardians again. Kill the Keeper to stop them."],
+	], 72)
 
 	_heading(page, "map/void.png", "Bosses")
 	page.add_child(_rich("Each act ends with a boss, shown on the map from the start of the act (hover the boss node); no boss appears twice in a run. Boss fights have no round limit, and each boss favours some strategies and punishes others."))

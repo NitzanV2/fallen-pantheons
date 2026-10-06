@@ -168,6 +168,12 @@ const ENEMIES := {
 	"gjoll_wraith": {"name": "Gjoll Wraith", "kind": "enemy", "act": 2, "atk": 1, "hp": 5, "spd": 2, "threat": 1, "keywords": ["ranged"], "status_card": "drowned", "text": "Ranged. Whenever it attacks, shuffles a Drowned into your draw pile (when drawn, your units in a random lane get -1 ATK this round)."},
 	"obol_collector": {"name": "Obol Collector", "kind": "enemy", "act": 2, "atk": 0, "hp": 6, "spd": 1, "threat": 1, "keywords": ["toll"], "text": "Toll: when you end planning, it takes 1 unspent Faith, or the Core takes 2. Doesn't attack."},
 	"grave_shield": {"name": "Grave Shield", "kind": "enemy", "act": 2, "atk": 1, "hp": 10, "spd": 1, "threat": 1, "keywords": ["taunt", "incorporeal"], "text": "Taunt. Incorporeal: melee attacks deal it half damage."},
+	"charon": {"name": "Charon, the Ferryman", "kind": "elite", "act": 2, "atk": 3, "hp": 14, "spd": 2, "threat": 3, "keywords": ["toll", "ferry"], "text": "Toll. Ferry: at the end of each round, carries your back-row unit with the lowest HP out of the fight. Its card goes to your discard pile (tokens are lost). It doesn't die, so On-Death and Revive don't trigger."},
+	"cerberus_head": {"name": "Head of Cerberus", "kind": "elite", "act": 2, "atk": 2, "hp": 7, "spd": 3, "threat": 2, "keywords": ["linked"], "text": "Linked: when a Head dies, the other Heads gain +2 ATK. End of round: if all three Heads live, each heals 2."},
+	"hraesvelgr": {"name": "Hraesvelgr", "kind": "elite", "act": 2, "atk": 3, "hp": 13, "spd": 3, "threat": 3, "keywords": ["ranged", "airborne", "wingbeat"], "text": "Ranged. Airborne. Wingbeat: when you end planning, all your units are pushed one lane in the direction its intent shows. A unit pushed off the board or into an occupied slot stays put and takes 2."},
+	"erinyes_fury": {"name": "Fury", "kind": "elite", "act": 2, "atk": 2, "hp": 6, "spd": 4, "threat": 1, "keywords": ["airborne", "vengeance"], "text": "Airborne. Vengeance: attacks whichever of your units dealt the most damage last round, wherever it stands. With none, it attacks its own lane."},
+	"keeper_of_the_gate": {"name": "Keeper of the Twelfth Gate", "kind": "elite", "act": 2, "atk": 0, "hp": 18, "spd": 1, "threat": 3, "keywords": ["immovable", "seal"], "width": 2, "text": "Immovable. Occupies back lanes 2-3. Seal: each round it seals one of your lanes; your units there can't attack until the Keeper has taken 6 damage that round. While it lives, a fallen Gate Guardian returns two rounds later. Doesn't attack."},
+	"gate_guardian": {"name": "Gate Guardian", "kind": "enemy", "act": 2, "atk": 3, "hp": 5, "spd": 2, "threat": 1, "keywords": [], "text": "While the Keeper of the Twelfth Gate lives, it returns to its slot two rounds after it dies."},
 }
 
 const RELICS := {
@@ -328,6 +334,21 @@ const BATTLES := [
 	{"id": "gjoll_bridge", "name": "Act 2: Gjoll Bridge", "act": 2, "deck": "greek", "core": 50, "relics": [],
 		"enemies": [["grave_shield", 1, 0], ["hel_hound", 2, 0], ["gjoll_wraith", 0, 1], ["gjoll_wraith", 3, 1]], "terrain": [],
 		"blurb": "Wraiths clog your draws with Drowned while a fast Hel-Hound hunts the wounded."},
+	{"id": "charon", "name": "Act 2: Charon, the Ferryman (elite)", "act": 2, "deck": "greek", "core": 50, "relics": [],
+		"enemies": [["shade", 0, 0], ["charon", 1, 0], ["drowned_thrall", 2, 0]], "terrain": [],
+		"blurb": "Charon takes his Toll and ferries your weakest back-row unit out of the fight every round."},
+	{"id": "cerberus", "name": "Act 2: Cerberus (elite)", "act": 2, "deck": "norse", "core": 50, "relics": [],
+		"enemies": [["cerberus_head", 1, 0], ["cerberus_head", 2, 0], ["cerberus_head", 3, 0]], "terrain": [],
+		"blurb": "Three linked Heads: each one that dies enrages the others, and while all three live they heal."},
+	{"id": "hraesvelgr", "name": "Act 2: Hraesvelgr (elite)", "act": 2, "deck": "egypt", "core": 50, "relics": [],
+		"enemies": [["drowned_thrall", 0, 0], ["shade", 3, 0], ["hraesvelgr", 1, 1]], "terrain": [],
+		"blurb": "The Corpse-Swallower's wingbeat shoves your whole army a lane sideways every round."},
+	{"id": "erinyes", "name": "Act 2: The Erinyes (elite)", "act": 2, "deck": "greek", "core": 50, "relics": [],
+		"enemies": [["erinyes_fury", 0, 0], ["drowned_thrall", 1, 0], ["erinyes_fury", 2, 0], ["erinyes_fury", 3, 0]], "terrain": [],
+		"blurb": "The Furies hunt whichever of your units dealt the most damage last round. Spread the killing."},
+	{"id": "twelfth_gate", "name": "Act 2: The Twelfth Gate (elite)", "act": 2, "deck": "egypt", "core": 50, "relics": [],
+		"enemies": [["shade", 0, 0], ["gate_guardian", 1, 0], ["gate_guardian", 2, 0], ["keeper_of_the_gate", 1, 1]], "terrain": [],
+		"blurb": "The Keeper seals a lane each round and its Guardians keep coming back. Break the Seal with 6 damage."},
 ]
 
 
@@ -440,17 +461,18 @@ const BATTLE_POOLS := {
 	"styx_banks": "act2_early", "drowned_procession": "act2_early", "obol_toll": "act2_early", "hounds_of_gjoll": "act2_early",
 	"hall_of_two_truths": "act2_late", "devourers_feast": "act2_late", "river_crossing": "act2_late", "sunken_sanctum": "act2_late",
 	"shade_tide": "act2_late", "drowned_legion": "act2_late", "weighing_room": "act2_late", "gjoll_bridge": "act2_late",
+	"charon": "act2_elite", "cerberus": "act2_elite", "hraesvelgr": "act2_elite", "erinyes": "act2_elite", "twelfth_gate": "act2_elite",
 }
 
 # A run is a series of acts, each a map ending in a boss. "pools" maps each encounter type to the
-# BATTLE_POOLS tag its battles come from (Act 2 borrows Act 1's elites and bosses until it has its own).
+# BATTLE_POOLS tag its battles come from (Act 2 borrows Act 1's bosses until it has its own).
 # "empower_steps" adds that many floor-scaling steps on every floor of the act. "boss_bonus" goes to
 # the boss unit only, never to its summons. Reward odds are [Common, Uncommon, Rare] percentages.
 const ACTS := [
 	{"name": "The Dying Stars", "pools": {"early": "early", "late": "late", "elite": "elite", "boss": "boss"},
 		"empower_steps": 0, "boss_bonus": {}, "price_mult": 1.0, "map_tint": Color(1, 1, 1),
 		"normal_odds": [70, 25, 5], "elite_odds": [40, 45, 15], "shop_odds": [55, 35, 10]},
-	{"name": "The Drowned Underworld", "pools": {"early": "act2_early", "late": "act2_late", "elite": "elite", "boss": "boss"},
+	{"name": "The Drowned Underworld", "pools": {"early": "act2_early", "late": "act2_late", "elite": "act2_elite", "boss": "boss"},
 		"empower_steps": 0, "boss_bonus": {"atk": 2, "hp": 15}, "price_mult": 1.15, "map_tint": Color(0.45, 0.85, 0.85),
 		"normal_odds": [55, 35, 10], "elite_odds": [30, 45, 25], "shop_odds": [45, 40, 15]},
 ]

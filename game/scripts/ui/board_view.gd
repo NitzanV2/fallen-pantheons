@@ -190,6 +190,8 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 	if side == P and not snap.is_empty():
 		if snap["petrified_lane"] == lane:
 			draw_colored_polygon(quad, Color(0.55, 0.68, 0.5, 0.38))
+		if snap.get("sealed_lane", -1) == lane and not snap.get("seal_broken", false):
+			draw_colored_polygon(quad, Color(0.85, 0.7, 0.3, 0.3))
 		if snap["sandstorm_row"] == row:
 			draw_colored_polygon(quad, Color(0.95, 0.72, 0.35, 0.22))
 		if "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
@@ -204,7 +206,7 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 				draw_colored_polygon(quad, Color(0.25, 0.75, 0.85, 0.22))
 				var center: Vector2 = (quad[0] + quad[1] + quad[2] + quad[3]) / 4.0
 				var font := ThemeDB.fallback_font
-				var text := "FERRY R%d" % w["round"]
+				var text := ("RETURNS R%d" if w.get("returning", false) else "FERRY R%d") % w["round"]
 				var fs := int(14 * depth)
 				var width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 				draw_string_outline(font, center + Vector2(-width / 2, fs / 2.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.8))
@@ -250,6 +252,9 @@ func _draw_labels() -> void:
 		var color := Color(0.75, 0.9, 0.65)
 		if snap["petrified_lane"] == lane:
 			text = "PETRIFIED"
+		elif snap.get("sealed_lane", -1) == lane:
+			text = "SEAL BROKEN" if snap.get("seal_broken", false) else "SEALED"
+			color = Color(0.95, 0.8, 0.45)
 		if text != "":
 			var quad := tile_quad(P, 1, lane, 0)
 			var cx: float = (quad[2].x + quad[3].x) / 2.0
@@ -262,6 +267,19 @@ func _draw_labels() -> void:
 		for line in [["SANDSTORM", 0], ["-1 ATK", 18]]:
 			labels.draw_string_outline(font, Vector2(x - 150, y + line[1]), line[0], HORIZONTAL_ALIGNMENT_RIGHT, 150, 16, 5, Color(0, 0, 0, 0.9))
 			labels.draw_string(font, Vector2(x - 150, y + line[1]), line[0], HORIZONTAL_ALIGNMENT_RIGHT, 150, 16, Color(0.98, 0.78, 0.42))
+	var dir: int = snap.get("wingbeat", 0)
+	if dir != 0:
+		var y: float = (ROW_Y[row_index(P, 0)][0] + ROW_Y[row_index(P, 1)][1]) / 2.0
+		var lines := [["WINGBEAT", 0], ["<< PUSH" if dir < 0 else "PUSH >>", 18]]
+		for line in lines:
+			var pos: Vector2
+			var align := HORIZONTAL_ALIGNMENT_RIGHT if dir < 0 else HORIZONTAL_ALIGNMENT_LEFT
+			if dir < 0:
+				pos = Vector2(CENTER_X - half_width(y) - 166, y + line[1])
+			else:
+				pos = Vector2(CENTER_X + half_width(y) + 16, y + line[1])
+			labels.draw_string_outline(font, pos, line[0], align, 150, 16, 5, Color(0, 0, 0, 0.9))
+			labels.draw_string(font, pos, line[0], align, 150, 16, Color(0.7, 0.85, 1.0))
 
 
 func _draw_ellipse(center: Vector2, radius: Vector2, color: Color) -> void:
@@ -388,7 +406,7 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 	var status := VBoxContainer.new()
 	status.add_theme_constant_override("separation", int(2 * sc))
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for pair in [["judgement", u.get("judged", false)], ["revive", u["revive"]], ["poison", u.get("poisoned", false)], ["veil", u.get("veil", false)],
+	for pair in [["judgement", u.get("judged", false)], ["vengeance", u.get("hunted", false)], ["ferry", u.get("ferried", false)], ["revive", u["revive"]], ["poison", u.get("poisoned", false)], ["veil", u.get("veil", false)],
 			["spellward", u.get("spellward", false)], ["frenzy", u["empowered"]]]:
 		if pair[1]:
 			status.add_child(CardWidget.icon(pair[0], 20 * sc))
@@ -450,6 +468,12 @@ static func short_intent(text: String, type: String) -> String:
 			return "TOLL"
 		"judge":
 			return "JUDGE"
+		"vengeance":
+			return "AVENGE"
+		"wingbeat":
+			return "PUSH LEFT" if "left" in text else "PUSH RIGHT"
+		"seal":
+			return text.to_upper()
 	var cut := text.split("(")[0].split(",")[0]
 	return cut.replace("lanes ", "").replace("lane ", "").replace(" at", "").replace(" and ", "+").strip_edges().to_upper()
 

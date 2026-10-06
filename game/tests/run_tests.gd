@@ -40,6 +40,7 @@ func _initialize() -> void:
 	test_forge()
 	test_sun()
 	test_act2_enemies()
+	test_act2_elites()
 	test_divine()
 	test_terrain_cards()
 	test_restart_plan()
@@ -881,6 +882,114 @@ func test_act2_enemies() -> void:
 		for e in b["enemies"] + b.get("waves", []).map(func(w): return [w[1]]):
 			check(Data.ENEMIES.has(e[0]), "act 2 battle %s: enemy %s exists" % [b["id"], e[0]])
 	check(Data.ACTS[1]["pools"]["early"] == "act2_early" and Data.ACTS[1]["pools"]["late"] == "act2_late", "act 2 uses its own fights")
+
+
+func test_act2_elites() -> void:
+	# Charon ferries your lowest-HP back unit at the end of the round: no death, card to the discard pile.
+	var c = fresh()
+	c.debug_place("charon", E, 3, F)
+	var strong = c.debug_place("ark_sentinel", P, 0, B)
+	var weak = c.debug_place("echo_archer", P, 1, B)
+	var front = c.debug_place("mummy_guardian", P, 1, F)
+	check(c.ferry_target() == weak and c._unit_snapshot(weak)["ferried"], "charon: the weakest back unit is marked")
+	check(not c._unit_snapshot(front)["ferried"], "charon: front units are safe")
+	c.faith = 1
+	var falls_before: int = c.falls
+	var weak_card: Dictionary = weak.card
+	c.end_plan()
+	check(not weak.alive and c.unit_at(P, B, 1) == null, "charon: the passenger leaves the board")
+	check(weak_card in c.discard + c.deck + c.hand, "charon: its card goes back into your piles")
+	check(c.falls == falls_before, "charon: a ferry isn't a death")
+	check(strong.alive, "charon: one unit per round")
+
+	# Cerberus: a fallen Head enrages the others; all three alive heal 2 at the end of the round.
+	c = fresh()
+	var h1 = c.debug_place("cerberus_head", E, 1, F)
+	var h2 = c.debug_place("cerberus_head", E, 2, F)
+	var h3 = c.debug_place("cerberus_head", E, 3, F)
+	h1.hp = 3
+	h2.hp = 3
+	c.end_plan()
+	check(h1.hp == 5 and h2.hp == 5 and h3.hp == 7, "cerberus: all three alive heal 2")
+	c._deal_damage(h1, 99, "effect")
+	check(h2.atk == 4 and h3.atk == 4, "cerberus: survivors gain +2 ATK")
+	h2.hp = 3
+	c.end_plan()
+	check(h2.hp <= 3, "cerberus: no heal once a Head is gone")
+
+	# Hraesvelgr: Wingbeat shifts your units; blocked ones stay and take 2.
+	c = fresh()
+	c.debug_place("hraesvelgr", E, 1, B)
+	c.debug_place("null_idol", E, 0, F)
+	var a = c.debug_place("ark_sentinel", P, 0, F)
+	var b2 = c.debug_place("ark_sentinel", P, 2, F)
+	var edge = c.debug_place("ark_sentinel", P, 3, F)
+	c.wingbeat_dir = 1
+	check(c.snapshot()["wingbeat"] == 1, "wingbeat: shown in the snapshot")
+	c._wingbeat(1)
+	check(c.unit_at(P, F, 1) == a, "wingbeat: a unit with room shifts one lane")
+	check(c.unit_at(P, F, 3) == edge and edge.hp == edge.max_hp - 2, "wingbeat: the edge unit stays and takes 2")
+	check(c.unit_at(P, F, 2) == b2 and b2.hp == b2.max_hp - 2, "wingbeat: a blocked unit stays and takes 2")
+	c._wingbeat(-1)
+	check(c.unit_at(P, F, 0) == a and a.hp == a.max_hp, "wingbeat: shifts back left")
+	c = fresh()
+	c.debug_place("hraesvelgr", E, 1, B)
+	c._declare_intents()
+	check(c.wingbeat_dir in [-1, 1], "wingbeat: a direction is declared")
+
+	# Erinyes: the unit that dealt the most damage last round is hunted.
+	c = fresh()
+	var fury = c.debug_place("erinyes_fury", E, 0, F)
+	var t1 = c.debug_place("void_spawn", E, 2, F)
+	t1.max_hp = 30
+	t1.hp = 30
+	var small = c.debug_place("echo_archer", P, 0, F)
+	var big = c.debug_place("ark_sentinel", P, 2, F)
+	big.atk = 5
+	c.actor = small
+	c._deal_damage(t1, 2, "ranged")
+	c.actor = big
+	c._deal_damage(t1, 5, "melee")
+	c.actor = null
+	c._declare_intents()
+	check(c.vengeance_uid == big.uid and c.intents[fury.uid]["type"] == "vengeance", "erinyes: the top damage dealer is hunted")
+	check(c._unit_snapshot(big)["hunted"], "erinyes: shown on the unit")
+	var hp_before: int = big.hp
+	c._act(fury)
+	check(big.hp < hp_before and small.hp == small.max_hp, "erinyes: the Fury attacks the hunted unit in another lane")
+	c._declare_intents()
+	check(c.vengeance_uid == -1, "erinyes: only last round's damage counts")
+
+	# Keeper: seals a lane until it takes 6 damage this round; Guardians return two rounds later.
+	c = fresh()
+	var keeper = c.debug_place("keeper_of_the_gate", E, 1, B)
+	var guard = c.debug_place("gate_guardian", E, 1, F)
+	var sealed_unit = c.debug_place("ark_sentinel", P, 2, F)
+	c._declare_intents()
+	check(c.sealed_lane == 2 and c.snapshot()["sealed_lane"] == 2, "keeper: round 1 seals lane 3")
+	check(c.is_sealed(sealed_unit), "keeper: your unit in the lane is sealed")
+	c._deal_damage(keeper, 6, "effect")
+	check(not c.is_sealed(sealed_unit) and c.snapshot()["seal_broken"], "keeper: 6 damage breaks the Seal")
+	c.gate_damage = 0
+	var guard_hp: int = guard.hp
+	c._act(sealed_unit)
+	check(guard.hp == guard_hp and keeper.hp == keeper.max_hp - 6, "keeper: a sealed unit doesn't attack")
+	c._deal_damage(guard, 99, "effect")
+	check(c.pending_waves().size() == 1 and c.snapshot()["waves"][0]["returning"], "keeper: the Guardian is due back")
+	check(c.result == "", "keeper: not won while the Keeper lives")
+	c.end_plan()
+	c.end_plan()
+	check(c.round_num == 3 and c.unit_at(E, F, 1) != null and c.unit_at(E, F, 1).id == "gate_guardian", "keeper: the Guardian returns two rounds later")
+	c = fresh()
+	keeper = c.debug_place("keeper_of_the_gate", E, 1, B)
+	guard = c.debug_place("gate_guardian", E, 1, F)
+	c._deal_damage(guard, 99, "effect")
+	c._deal_damage(keeper, 99, "effect")
+	check(c.result == "win" and c.pending_waves().is_empty(), "keeper: killing the Keeper stops the Guardians")
+
+	for id in ["charon", "cerberus", "hraesvelgr", "erinyes", "twelfth_gate"]:
+		check(Data.BATTLE_POOLS.get(id, "") == "act2_elite", "act 2 elite %s is pooled" % id)
+	check(Data.ACTS[1]["pools"]["elite"] == "act2_elite", "act 2 uses its own elites")
 
 
 func test_sun() -> void:
