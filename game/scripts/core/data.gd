@@ -522,10 +522,11 @@ const ACT_HEAL := 0.75
 #   gold / hp: gain (positive) or lose (negative). Shrine HP loss never drops the Core below 1.
 #   max_hp: raise or lower max Core HP.   card: add a random card ("Common", "Uncommon", "Rare", "Divine", "any").
 #   curse: add that curse card.   relic: add a random relic (40 gold if none are left).
-#   remove: choose a card to remove.   remove_random: remove that many random cards.
+#   remove: choose a card to remove.   remove_random: remove that many random cards.   lose_relic: lose a random relic.
 #   choose: pick 1 of 3 cards ("pantheon" or a rarity; "Divine" offers 2).   goto: continue to another stage of the event.
 # Events with "stages" continue there after a "goto"; each stage has its own "text" and "options".
 # An event's "weight" sets how often it's picked (default EVENT_WEIGHT); rare events use less.
+# An event's "act" is the first act it can appear in (default 1).
 const EVENT_WEIGHT := 10
 const LEAVE := {"label": "Leave.", "text": "You move on."}
 const CANOPIC_JAR := [
@@ -655,6 +656,51 @@ const EVENTS := {
 				"fx": {"choose": "Divine"}, "text": "The nameless god accepts. Two gifts shimmer on the altar."},
 			{"label": "Offer gold: pay 60 gold, gain a random Divine card.", "cost": {"gold": 60},
 				"fx": {"card": "Divine"}, "text": "The gold melts into the altar, and a gift rises in its place."},
+			LEAVE]},
+
+	# Act 2 only ("act": 2).
+	"ferrymans_price": {"name": "The Ferryman's Price", "act": 2,
+		"text": "The river blocks your path. Charon's boat drifts out of the mist, and a bony hand opens. Everyone pays.",
+		"options": [
+			{"label": "Pay the fare: 30 gold.", "cost": {"gold": 30}, "text": "The coins vanish into his robes. The crossing is silent."},
+			{"label": "Pay in blood: lose 7 Core HP.", "fx": {"hp": -7}, "text": "He takes his fare from your veins. The far bank is cold."},
+			{"label": "Give him a card: a random card leaves your deck.", "fx": {"remove_random": 1}, "text": "He plucks a memory from your deck without looking."},
+			{"label": "Swim: 50% cross and find a drowned purse (+50 gold), 50% lose 12 Core HP and gain a Void Taint.", "outcomes": [
+				{"weight": 50, "text": "You haul yourself onto the far bank, a sodden purse tangled in your arm.", "fx": {"gold": 50}},
+				{"weight": 50, "text": "The dead pull at you all the way across.", "fx": {"hp": -12, "curse": "void_taint"}}]}]},
+	"scales_of_maat": {"name": "Scales of Ma'at", "act": 2,
+		"text": "Anubis waits beside golden scales: a heart on one pan, a feather on the other. Ammit watches from below.",
+		"options": [
+			{"label": "Lay a burden on the scales: remove a card from your deck and heal 8 Core HP.", "fx": {"remove": true, "hp": 8},
+				"text": "The scales settle. What you let go of weighs nothing now."},
+			{"label": "Weigh your own heart: 60% gain 8 max Core HP, 40% Ammit bites (lose 10 Core HP).", "outcomes": [
+				{"weight": 60, "text": "Your heart is lighter than the feather. Anubis nods.", "fx": {"max_hp": 8}},
+				{"weight": 40, "text": "The pan sinks. Ammit lunges before Anubis can stop her.", "fx": {"hp": -10}}]},
+			LEAVE]},
+	"lethes_spring": {"name": "Lethe's Spring", "act": 2,
+		"text": "A milky spring pools in the dark. Memories rise from its surface like mist and fade. One sip, and something is gone forever.",
+		"options": [
+			{"label": "Sip carefully: remove a card from your deck, gain 30 gold. 25% you also forget a relic.", "outcomes": [
+				{"weight": 75, "text": "The water takes only what you offer.", "fx": {"remove": true, "gold": 30}},
+				{"weight": 25, "text": "The water takes more than you offered.", "fx": {"remove": true, "gold": 30, "lose_relic": true}}]},
+			{"label": "Drink deeply: heal 18 Core HP, two random cards leave your deck.", "fx": {"hp": 18, "remove_random": 2},
+				"text": "Your wounds and your memories fade together."},
+			LEAVE]},
+	"drowned_feast": {"name": "The Drowned Feast", "act": 2,
+		"text": "In a flooded hall, the drowned dead sit at a long table. A gilded reliquary rests at its head. They turn to look at you.",
+		"options": [
+			{"label": "Take a seat and eat: heal 15 Core HP, add a Void Rot to your deck.", "fx": {"hp": 15, "curse": "void_rot"},
+				"text": "The food is cold and tastes of the river. You feel restored, and changed."},
+			{"label": "Steal the reliquary: 50% gain a relic, 50% the dead notice (lose 12 Core HP).", "outcomes": [
+				{"weight": 50, "text": "You slip it under your arm while the dead toast their host.", "fx": {"relic": true}},
+				{"weight": 50, "text": "A hundred drowned hands seize you at once.", "fx": {"hp": -12}}]},
+			LEAVE]},
+	"persephones_pomegranate": {"name": "Persephone's Pomegranate", "act": 2,
+		"text": "Persephone offers a split pomegranate, its seeds glowing like embers. \"Eat, and the underworld will give you its gifts. It will also keep a part of you.\"",
+		"options": [
+			{"label": "Eat six seeds: lose 12 max Core HP, gain a random relic and choose 1 of 3 rare cards.", "cost": {"max_hp": 12},
+				"fx": {"relic": true, "choose": "Rare"}, "text": "The seeds burn sweetly. Part of you will never leave this place."},
+			{"label": "Eat a single seed: heal 12 Core HP.", "fx": {"hp": 12}, "text": "Just one. Even that leaves a sweet ache."},
 			LEAVE]},
 }
 

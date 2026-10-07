@@ -2035,9 +2035,29 @@ func test_status_cards() -> void:
 
 
 func test_event_data() -> void:
-	var fx_keys := ["gold", "hp", "max_hp", "card", "curse", "relic", "remove", "remove_random", "choose", "goto"]
+	var fx_keys := ["gold", "hp", "max_hp", "card", "curse", "relic", "remove", "remove_random", "choose", "goto", "lose_relic"]
+	var act2_events: Array = Data.EVENTS.keys().filter(func(id): return Data.EVENTS[id].get("act", 1) == 2)
+	check(act2_events.size() >= 4, "events: Act 2 has its own events")
+	var run = Run.new()
+	run.setup(3, "myrmidon")
+	for n in 60:
+		run._pick_event()
+		check(Data.EVENTS[run.shrine["event"]].get("act", 1) <= 1, "events: no Act 2 event in Act 1 (%s)" % run.shrine["event"])
+	run.act = 2
+	run.seen_events.clear()
+	var seen := {}
+	for n in Data.EVENTS.size():
+		run._pick_event()
+		seen[run.shrine["event"]] = true
+	check(seen.size() == Data.EVENTS.size(), "events: Act 2 cycles through every event before repeating")
+	run.relics = ["obol", "sun_disk"]
+	run.start_event("lethes_spring")
+	var notes: Array = run._apply_fx({"lose_relic": true})
+	check(run.relics.size() == 1 and notes.size() == 1, "events: lose_relic removes one relic")
 	for ev_id in Data.EVENTS:
 		var ev: Dictionary = Data.EVENTS[ev_id]
+		if ev_id != "pantheon_shrine":
+			check(ResourceLoader.exists("res://art/events/%s.jpg" % ev_id), "event %s has art" % ev_id)
 		var stages: Array = [ev]
 		check(ev.get("weight", Data.EVENT_WEIGHT) > 0, "event %s: weight" % ev_id)
 		for s in ev.get("stages", {}):

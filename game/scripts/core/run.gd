@@ -658,9 +658,10 @@ func buy_heal() -> String:
 ## Events already met this run are skipped until every event has been seen.
 ## Rare events have a lower "weight".
 func _pick_event() -> void:
-	var ids: Array = Data.EVENTS.keys().filter(func(id): return not seen_events.has(id))
+	var open: Array = Data.EVENTS.keys().filter(func(id): return Data.EVENTS[id].get("act", 1) <= act)
+	var ids: Array = open.filter(func(id): return not seen_events.has(id))
 	if ids.is_empty():
-		ids = Data.EVENTS.keys()
+		ids = open
 	var total := 0
 	for ev_id in ids:
 		total += Data.EVENTS[ev_id].get("weight", Data.EVENT_WEIGHT)
@@ -707,8 +708,8 @@ func can_choose(i: int) -> bool:
 		return false
 	if cost.has("max_hp") and max_hp - cost["max_hp"] < MIN_MAX_HP:
 		return false
-	var fx: Dictionary = option.get("fx", {})
-	if (fx.has("remove") or fx.has("remove_random")) and deck.size() <= MIN_DECK:
+	var all_fx: Array = [option.get("fx", {})] + option.get("outcomes", []).map(func(o): return o.get("fx", {}))
+	if all_fx.any(func(fx): return fx.has("remove") or fx.has("remove_random")) and deck.size() <= MIN_DECK:
 		return false
 	return true
 
@@ -801,6 +802,9 @@ func _apply_fx(fx: Dictionary) -> Array:
 	if fx.has("curse"):
 		deck.append(fx["curse"])
 		notes.append("%s is added to your deck." % Data.CARDS[fx["curse"]]["name"])
+	if fx.has("lose_relic") and not relics.is_empty():
+		var lost: String = relics.pop_at(event_rng.randi_range(0, relics.size() - 1))
+		notes.append("You forget %s." % Data.RELICS[lost]["name"])
 	for n in fx.get("remove_random", 0):
 		if deck.size() <= MIN_DECK:
 			break
