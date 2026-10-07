@@ -79,6 +79,9 @@ var events: Array = []
 var actor = null
 var aegis_used := false
 var mead_used := false
+var styx_used := false
+var obol_used := false
+var armaments_played := 0
 var valhalla_returned := {}
 var last_dead_ally = null
 var enemy_bonus := {"atk": 0, "hp": 0}
@@ -133,6 +136,16 @@ func setup(battle_def: Dictionary, deck_ids: Array, relic_ids: Array, seed_value
 			if summoned < 2 and slot_open(PLAYER, BACK, lane):
 				_summon_scarab(PLAYER, BACK, lane, "Sacred Hive")
 				summoned += 1
+	if has_relic("sun_disk"):
+		var bare: Array = []
+		for row in 2:
+			for lane in LANES:
+				if unit_at(PLAYER, row, lane) == null and terrain_at(PLAYER, row, lane) == "":
+					bare.append([row, lane])
+		if not bare.is_empty():
+			var slot: Array = bare[rng.randi_range(0, bare.size() - 1)]
+			terrain[_key(PLAYER, slot[0], slot[1])] = "sunlit"
+			_log("Sun Disk: your lane %d %s slot is Sunlit." % [slot[1] + 1, "front" if slot[0] == FRONT else "back"])
 	if has_relic("void_touched_heart"):
 		_damage_core(3, "Void-Touched Heart")
 	_start_round()
@@ -226,6 +239,9 @@ func _spawn(id: String, side: int, lane: int, row: int, card = null):
 	_next_uid += 1
 	u.card = card
 	u.deployed_round = round_num
+	if side == PLAYER and is_wolf(u) and has_relic("gleipnir_fragment"):
+		u.max_hp += 1
+		u.hp += 1
 	_place(u, row, lane)
 	return u
 
@@ -314,7 +330,10 @@ func _pay_toll() -> void:
 	for e in units(ENEMY):
 		if not e.has_kw("toll"):
 			continue
-		if faith > 0:
+		if has_relic("obol") and not obol_used:
+			obol_used = true
+			_log("The Obol pays %s's Toll." % _unit_label(e))
+		elif faith > 0:
 			faith -= 1
 			_log("%s takes 1 Faith as the Toll." % _unit_label(e))
 		else:
@@ -819,6 +838,7 @@ func _capture() -> Dictionary:
 		"faith_next": faith_next, "horus_round": horus_round, "drowned_lanes": drowned_lanes.duplicate(),
 		"intents": intents.duplicate(true), "petrified_lane": petrified_lane, "sandstorm_row": sandstorm_row,
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
+		"styx_used": styx_used, "obol_used": obol_used, "armaments_played": armaments_played,
 		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
 		"gate_damage": gate_damage, "extra_waves": extra_waves.duplicate(true),
@@ -856,6 +876,9 @@ func restart_plan() -> String:
 	sandstorm_row = s["sandstorm_row"]
 	aegis_used = s["aegis_used"]
 	mead_used = s["mead_used"]
+	styx_used = s["styx_used"]
+	obol_used = s["obol_used"]
+	armaments_played = s["armaments_played"]
 	valhalla_returned = s["valhalla_returned"]
 	last_dead_ally = s["last_dead_ally"]
 	_next_uid = s["next_uid"]
@@ -1133,6 +1156,8 @@ func card_cost(card: Dictionary) -> int:
 		return 0
 	if def["type"] == "spell" and free_spell_active():
 		return 0
+	if def["type"] == "armament" and armaments_played == 0 and has_relic("anvil_of_lemnos"):
+		return 0
 	if def["type"] == "armament" and armaments_this_round == 0 and _has_living(PLAYER, "forge_apprentice"):
 		return maxi(0, def["cost"] - 1)
 	return def["cost"]
@@ -1278,6 +1303,7 @@ func play_spell(hand_index: int, targets: Array, direction := 0) -> String:
 	hand.remove_at(hand_index)
 	if def["type"] == "armament":
 		armaments_this_round += 1
+		armaments_played += 1
 		acted_this_plan = true
 		events.clear()
 		_attach(_at(targets[0]), card)
@@ -2493,7 +2519,7 @@ func _kill(u) -> void:
 	var can_revive: bool = u.has_kw("revive") or (u.side == PLAYER and not u.is_token and has_relic("ankh_of_eternity"))
 	if can_revive and not u.revive_used and _unmaking:
 		_log("Apep unmakes %s - it cannot Revive." % u.display_name())
-	elif can_revive and not u.revive_used and terrain_at(u.side, u.row, u.lane) == "flooded":
+	elif can_revive and not u.revive_used and terrain_at(u.side, u.row, u.lane) == "flooded" and not (u.side == PLAYER and has_relic("charons_lantern")):
 		_log("%s sinks in the flood - it cannot Revive." % u.display_name())
 	elif can_revive and not u.revive_used:
 		u.revive_used = true
@@ -2512,6 +2538,20 @@ func _kill(u) -> void:
 		if u.side == PLAYER and has_relic("ankh_of_eternity"):
 			_damage_core(2, "Ankh of Eternity")
 		_check_enemies_cleared()
+		return
+
+	if u.side == PLAYER and not u.is_token and has_relic("styx_water") and not styx_used and not _unmaking:
+		styx_used = true
+		u.shield = 0
+		u.poisoned = false
+		u.burn = 0
+		_log("%s falls..." % _unit_label(u))
+		_on_death(u)
+		_death_triggers(u)
+		u.hp = 1
+		if not u.has_kw("incorporeal"):
+			u.bonus_kw.append("incorporeal")
+		_log("Styx Water: %s returns from the river with 1 HP, Incorporeal." % _unit_label(u))
 		return
 
 	u.alive = false

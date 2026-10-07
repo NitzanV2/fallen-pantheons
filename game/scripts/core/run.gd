@@ -480,6 +480,9 @@ func finish_combat(c) -> void:
 		if has_relic("pilgrims_pouch"):
 			reward["gold"] += 8
 			reward["notes"].append("Pilgrim's Pouch: +8 gold.")
+		if type == "elite" and has_relic("obol"):
+			reward["gold"] += 10
+			reward["notes"].append("Obol: +10 gold.")
 		if has_relic("healing_ampoule"):
 			reward["notes"].append("Healing Ampoule: healed %d." % _heal(3))
 		reward["cards"] = _card_choices(act_def()["elite_odds" if type == "elite" else "normal_odds"], reward_rng)
@@ -552,10 +555,16 @@ func _card_pool(rarity: String, factions: Array, exclude: Array) -> Array:
 	return out
 
 
+## Unowned pool relics this act can drop (some only appear from a later act on).
+func _relic_droppable(id: String) -> bool:
+	var def: Dictionary = Data.RELICS[id]
+	return def.get("pool", true) and not relics.has(id) and def.get("act", 1) <= act
+
+
 func _random_relic(rng: RandomNumberGenerator, exclude: Array = []) -> String:
 	var pool: Array = []
 	for id in Data.RELICS:
-		if Data.RELICS[id].get("pool", true) and not relics.has(id) and not exclude.has(id):
+		if _relic_droppable(id) and not exclude.has(id):
 			pool.append(id)
 	if pool.is_empty():
 		return ""
@@ -564,7 +573,7 @@ func _random_relic(rng: RandomNumberGenerator, exclude: Array = []) -> String:
 
 func _relics_left() -> bool:
 	for id in Data.RELICS:
-		if Data.RELICS[id].get("pool", true) and not relics.has(id):
+		if _relic_droppable(id):
 			return true
 	return false
 

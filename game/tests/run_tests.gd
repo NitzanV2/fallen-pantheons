@@ -42,6 +42,7 @@ func _initialize() -> void:
 	test_act2_enemies()
 	test_act2_elites()
 	test_act2_bosses()
+	test_act2_relics()
 	test_divine()
 	test_terrain_cards()
 	test_restart_plan()
@@ -1332,6 +1333,76 @@ func test_terrain_cards() -> void:
 
 
 # ---------------------------------------------------------------- fuzzing
+
+func test_act2_relics() -> void:
+	var c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 3, 0]], "terrain": []}, [], ["gleipnir_fragment"], 1)
+	var wolf = c._spawn("wolf", P, 0, F)
+	check(wolf.max_hp == Data.CARDS["wolf"]["hp"] + 1 and wolf.hp == wolf.max_hp, "relic: Gleipnir gives Wolves +1 HP")
+	var other = c._spawn("ark_sentinel", P, 1, F)
+	check(other.max_hp == Data.CARDS["ark_sentinel"]["hp"], "relic: Gleipnir skips non-Wolves")
+
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 3, 0]], "terrain": []}, ["bronze_spear", "bronze_spear"], ["anvil_of_lemnos"], 1)
+	var holder = c.debug_place("ark_sentinel", P, 0, F)
+	var spears: Array = c.hand.filter(func(k): return k["id"] == "bronze_spear")
+	check(spears.size() == 2 and c.card_cost(spears[0]) == 0, "relic: Anvil makes the first Armament free")
+	c.faith = 0
+	check(c.play_spell(c.hand.find(spears[0]), [[P, F, 0]]) == "", "relic: free Armament played with 0 Faith")
+	check(c.card_cost(spears[1]) == Data.CARDS["bronze_spear"]["cost"], "relic: Anvil only once per fight")
+	check(holder.armaments.size() == 1, "relic: Armament attached")
+
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 3, 0]], "terrain": []}, [], ["sun_disk"], 3)
+	check(c.terrain.values().count("sunlit") == 1, "relic: Sun Disk lights one slot")
+
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["obol_collector", 3, 0], ["obol_collector", 2, 0]], "terrain": []}, [], ["obol"], 1)
+	c.faith = 0
+	var core: int = c.core_hp
+	c._pay_toll()
+	check(c.core_hp == core - 2, "relic: Obol pays one Toll, the other still costs 2")
+	core = c.core_hp
+	c._pay_toll()
+	check(c.core_hp == core - 4, "relic: Obol once per fight")
+
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 3, 0]], "terrain": [["flooded", P, 0, F]]}, [], ["charons_lantern"], 1)
+	var reviver = c.debug_place("ark_sentinel", P, 0, F)
+	reviver.bonus_kw.append("revive")
+	reviver.hp = 0
+	c._kill(reviver)
+	check(reviver.alive, "relic: Charon's Lantern lets Revive work on Flooded slots")
+
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 3, 0]], "terrain": []}, [], ["styx_water"], 1)
+	var first = c.debug_place("ark_sentinel", P, 0, F)
+	var second = c.debug_place("ark_sentinel", P, 1, F)
+	var token = c._spawn("wolf", P, 2, F)
+	token.hp = 0
+	c._kill(token)
+	check(not token.alive, "relic: Styx Water skips tokens")
+	first.hp = 0
+	c._kill(first)
+	check(first.alive and first.hp == 1 and first.has_kw("incorporeal"), "relic: Styx Water returns the first ally with 1 HP, Incorporeal")
+	second.hp = 0
+	c._kill(second)
+	check(not second.alive, "relic: Styx Water once per fight")
+
+	var run = Run.new()
+	run.setup(5, "myrmidon")
+	run.act = 1
+	for i in 40:
+		var r: String = run._random_relic(run.reward_rng)
+		check(Data.RELICS[r].get("act", 1) <= 1, "relic: Act 2 relics never drop in Act 1 (%s)" % r)
+	run.act = 2
+	var seen := {}
+	for i in 200:
+		seen[run._random_relic(run.reward_rng)] = true
+	check(seen.has("obol") and seen.has("charons_lantern"), "relic: Act 2 relics drop in Act 2")
+	for id in Data.RELICS:
+		check(ResourceLoader.exists("res://art/relics/%s.png" % id), "relic %s has art" % id)
+
 
 func test_patron_relics() -> void:
 	var c = fresh(50, false, ["mead_of_the_einherjar"])

@@ -138,8 +138,8 @@ func _basics(page: VBoxContainer) -> void:
 	_grid(page, 3, [
 		["map/void.png", "Acts", "Each act is a %d-floor map that ends with a boss. Beat the last act's boss to win the run. No boss appears twice in a run." % Run.FLOORS],
 		["opt_heal", "Between acts", "Beating an act boss heals [b]%d%% of your missing Core HP[/b], recharges your god power and grants [b]a free god power upgrade[/b]." % roundi(Data.ACT_HEAL * 100)],
-		["map/elite.png", "Deeper acts", "Act 2's boss has +%d ATK / +%d HP, rewards are rarer and shop prices are %d%% higher." % [
-			act2["boss_bonus"].get("atk", 0), act2["boss_bonus"].get("hp", 0), roundi((act2["price_mult"] - 1.0) * 100)]],
+		["map/elite.png", "Deeper acts", "Act 2 has its own enemies, elites and bosses. Rewards roll Uncommon and Rare cards more often, shop prices are %d%% higher, and a few relics (%s) only drop from Act 2 on." % [
+			roundi((act2["price_mult"] - 1.0) * 100), ", ".join(Data.RELICS.keys().filter(func(id): return Data.RELICS[id].get("act", 1) > 1).map(func(id): return Data.RELICS[id]["name"]))]],
 	])
 
 	_heading(page, "battle/tile_player.jpg", "The battlefield")
