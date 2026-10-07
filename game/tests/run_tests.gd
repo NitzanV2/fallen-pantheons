@@ -1517,6 +1517,8 @@ func test_god_powers() -> void:
 	c.end_plan()
 	check(p1.hp <= 5, "sekhmet full: Virulence ticks 2")
 
+	_test_power_tier3()
+
 	# Undo round restores the power.
 	c = _with_power(fresh(), "thors_thunderclap")
 	c.debug_place("hollowed_zealot", E, 1, F)
@@ -1525,6 +1527,86 @@ func test_god_powers() -> void:
 	check(c.power_uses == 0 and c.can_restart_plan(), "power: counts as a plan action")
 	c.restart_plan()
 	check(c.power_uses == 1 and c.unit_at(E, F, 1).hp == 5, "power: Undo round restores it")
+
+
+func _test_power_tier3() -> void:
+	for id in Data.GOD_POWERS:
+		var nodes: Dictionary = Data.GOD_POWERS[id]["nodes"]
+		check(nodes.values().filter(func(n): return n["tier"] == 3).size() == 2, "tier 3: %s has one per branch" % id)
+
+	var c = _with_power(fresh(), "tyrs_oath", ["blood_1", "blood_2", "blood_3", "oath_1", "oath_2", "oath_3"])
+	var foe = c.debug_place("hollowed_bulwark", E, 0, B)
+	var victim = c.debug_place("hoplite", P, 0, F)
+	var faith_before: int = c.faith
+	var foe_hp: int = foe.hp
+	var victim_atk: int = c.effective_atk(victim)
+	c.use_power([[P, F, 0]])
+	check(foe.hp == foe_hp - victim_atk, "tier 3: Blood Eagle hits the lane's enemy for the unit's ATK")
+	check(c.faith == faith_before + Data.CARDS["hoplite"]["cost"], "tier 3: Oath Kept refunds the unit's cost as Faith")
+
+	c = _with_power(fresh(), "thors_thunderclap", ["storm_1", "storm_2", "storm_3", "hammer_1", "hammer_2", "hammer_3"])
+	var weak: Array = []
+	for lane in 3:
+		var w = c.debug_place("void_spawn", E, lane, F)
+		w.hp = 1
+		weak.append(w)
+	var tough = c.debug_place("hollowed_zealot", E, 3, F)
+	tough.max_hp = 30
+	tough.hp = 30
+	var atk_before: int = tough.atk
+	c.use_power([[E, F, 0]])
+	check(c.power_uses == 1, "tier 3: Ragnarok refunds after the first kill")
+	c.use_power([[E, F, 2]])
+	check(c.power_uses == 1, "tier 3: Ragnarok refunds again")
+	check(tough.atk == atk_before - 1, "tier 3: Thunder Rolls takes 1 ATK from a survivor")
+	c.use_power([[E, F, 3]])
+	check(c.power_uses == 0 and tough.atk == atk_before - 2, "tier 3: no kill, no refund; Thunder Rolls stacks")
+
+	c = _with_power(fresh(), "zeus_lightning_bolt", ["chain_1", "chain_2", "chain_3", "sky_1", "sky_2", "sky_3"])
+	var big = c.debug_place("hollowed_bulwark", E, 0, F)
+	big.max_hp = 20
+	big.hp = 20
+	var rest: Array = []
+	for lane in [1, 2, 3]:
+		for row in 2:
+			rest.append(c.debug_place("hollowed_bulwark", E, lane, row))
+	var rest_hp: int = rest[0].hp
+	c.use_power([[E, F, 0]])
+	check(big.hp == 13, "tier 3: Keraunos first hit deals 7")
+	check(rest.all(func(r): return r.hp == rest_hp - 2), "tier 3: Wrath of Olympus chains to every enemy")
+
+	c = _with_power(fresh(), "poseidons_tide", ["wave_1", "wave_2", "wave_3", "undertow_1", "undertow_2", "undertow_3"])
+	var pushed = c.debug_place("hollowed_bulwark", E, 1, F)
+	pushed.max_hp = 40
+	pushed.hp = 40
+	var behind = c.debug_place("hollowed_bulwark", E, 1, B)
+	var behind_hp: int = behind.hp
+	var s1 = c.debug_place("hoplite", P, 1, F)
+	var s2 = c.debug_place("hoplite", P, 3, F)
+	c.use_power([[E, F, 1]], 1)
+	check(behind.hp == behind_hp - 4, "tier 3: Tsunami hits the enemy behind for the impact")
+	check(pushed.hp == 40 - 4 - c.effective_atk(s1) - c.effective_atk(s2), "tier 3: Encircling Current, both neighbours strike")
+
+	c = _with_power(fresh(), "osiris_return", ["life_1", "life_2", "life_3", "wings_1", "wings_2", "wings_3"])
+	var dead = c.debug_place("ark_sentinel", P, 0, F)
+	var hurt = c.debug_place("ark_sentinel", P, 3, B)
+	hurt.hp = 1
+	foe = c.debug_place("hollowed_bulwark", E, 1, F)
+	foe_hp = foe.hp
+	dead.hp = 0
+	c._kill(dead)
+	c.use_power([[P, F, 1]])
+	var back_unit = c.unit_at(P, F, 1)
+	check(hurt.hp == hurt.max_hp, "tier 3: Field of Reeds heals the others to full")
+	check(foe.hp == foe_hp - c.effective_atk(back_unit), "tier 3: Avenging Ba strikes the lane's enemy")
+
+	c = _with_power(fresh(), "sekhmets_plague", ["plague_1", "plague_2", "plague_3", "hunt_1", "hunt_2", "hunt_3"])
+	var p = c.debug_place("hollowed_bulwark", E, 1, F)
+	var p_hp: int = p.hp
+	var p_atk: int = c.effective_atk(p)
+	c.use_power([[E, F, 1]])
+	check(p.hp == p_hp - 3, "tier 3: Pride of the Lioness bites for 3")
+	check(c.effective_atk(p) == maxi(0, p_atk - 1), "tier 3: Pestilence, Poisoned enemies -1 ATK")
 
 
 func test_power_cooldown() -> void:

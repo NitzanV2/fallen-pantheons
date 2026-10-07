@@ -265,7 +265,15 @@ func effective_atk(u) -> int:
 		a += 1
 	if u.side == PLAYER and u.row == sandstorm_row:
 		a -= 1
+	if u.side == ENEMY and u.poisoned and _up("plague_3"):
+		a -= 1
 	return max(a, 0)
+
+
+## The front enemy in a lane, else the back one.
+func _lane_foe(lane: int):
+	var foe = unit_at(ENEMY, FRONT, lane)
+	return foe if foe != null else unit_at(ENEMY, BACK, lane)
 
 
 ## Sunlit: the terrain, or a slot in a living Benben Stone's row, at most one lane from it. Player side only.
@@ -1403,8 +1411,14 @@ func _resolve_power(targets: Array, direction: int) -> void:
 	match power["id"]:
 		"tyrs_oath":
 			var hp: int = t.hp
+			var sacrificed_atk := effective_atk(t)
 			var bonus := 2 if _up("blood_1") else 1
 			_log("Tyr's Oath: %s is sacrificed." % _unit_label(t))
+			if _up("blood_3") and sacrificed_atk > 0:
+				var foe = _lane_foe(t.lane)
+				if foe != null:
+					_log("Blood Eagle: %s strikes %s." % [t.display_name(), _unit_label(foe)])
+					_deal_damage(foe, sacrificed_atk, "effect")
 			t.hp = 0
 			_kill(t)
 			for a in units(PLAYER):
@@ -1421,6 +1435,11 @@ func _resolve_power(targets: Array, direction: int) -> void:
 				discard.erase(t.card)
 				hand.append(t.card)
 				_log("Sworn Return: %s returns to your hand." % t.display_name())
+			if _up("oath_3"):
+				var cost: int = Data.CARDS[t.id].get("cost", 0)
+				if cost > 0:
+					faith += cost
+					_log("Oath Kept: +%d Faith." % cost)
 			if _up("pact"):
 				faith += 1
 				_log("Blood Pact: +1 Faith.")
@@ -1438,23 +1457,28 @@ func _resolve_power(targets: Array, direction: int) -> void:
 					if side_unit != null and side_unit != t:
 						hits.append([side_unit, 2])
 			_log("Thor's Thunderclap strikes %s." % _unit_label(t))
+			var weakened: Array = []
 			for h in hits:
 				_deal_damage(h[0], h[1], "effect")
+				if _up("hammer_3") and h[0].alive and h[0].atk > 0 and not weakened.has(h[0]):
+					weakened.append(h[0])
+					h[0].atk -= 1
+					_log("Thunder Rolls: %s loses 1 ATK." % h[0].display_name())
 			if _up("pact"):
 				for row in 2:
 					var a = unit_at(PLAYER, row, lane)
 					if a != null:
 						a.shield += 2
 						_log("Storm Shield: %s gains Shield 2." % a.display_name())
-			if _up("storm_2") and not main.alive and not power_refunded:
+			if _up("storm_2") and not main.alive and (not power_refunded or _up("storm_3")):
 				power_refunded = true
 				power_uses += 1
 				_log("Thunder Returns: Thor's Thunderclap can be used again.")
 		"zeus_lightning_bolt":
 			var hit: Array = [t]
 			_log("Zeus's Lightning Bolt strikes %s." % _unit_label(t))
-			_deal_damage(t, 4 if _up("sky_1") else 2, "effect")
-			for n in (3 if _up("chain_1") else 1):
+			_deal_damage(t, 7 if _up("sky_3") else (4 if _up("sky_1") else 2), "effect")
+			for n in (LANES * 2 if _up("chain_3") else (3 if _up("chain_1") else 1)):
 				var pool: Array = units(ENEMY).filter(func(e): return not hit.has(e))
 				if pool.is_empty():
 					break
@@ -1474,15 +1498,22 @@ func _resolve_power(targets: Array, direction: int) -> void:
 				_log("Charged Ranks: your Ranged units gain +1 ATK this round.")
 		"poseidons_tide":
 			var impact := power_push_damage()
+			var behind = unit_at(ENEMY, BACK, t.lane)
 			var moved := _push(t, direction, impact)
 			if moved and _up("wave_2") and t.alive:
 				_log("Riptide drags %s under." % _unit_label(t))
 				_deal_damage(t, impact, "effect")
+			if _up("wave_3") and behind != null and behind != t and behind.alive:
+				_log("Tsunami crashes into %s." % _unit_label(behind))
+				_deal_damage(behind, impact, "effect")
 			if _up("undertow_1") and t.alive:
-				var a = unit_at(PLAYER, FRONT, t.lane)
-				if a != null and effective_atk(a) > 0:
-					_log("Ambush Current: %s strikes %s." % [a.display_name(), t.display_name()])
-					_deal_damage(t, effective_atk(a), "effect")
+				var strikers: Array = [unit_at(PLAYER, FRONT, t.lane)]
+				if _up("undertow_3"):
+					strikers += [unit_at(PLAYER, FRONT, t.lane - 1), unit_at(PLAYER, FRONT, t.lane + t.width)]
+				for a in strikers:
+					if a != null and t.alive and effective_atk(a) > 0:
+						_log("%s: %s strikes %s." % ["Ambush Current" if a == strikers[0] else "Encircling Current", a.display_name(), t.display_name()])
+						_deal_damage(t, effective_atk(a), "effect")
 			if _up("undertow_2"):
 				moves_left += 1
 				_log("Flowing Ranks: +1 move this round.")
@@ -1503,6 +1534,15 @@ func _resolve_power(targets: Array, direction: int) -> void:
 			if _up("wings_2") and not u.has_kw("revive"):
 				u.bonus_kw.append("revive")
 			_log("Osiris returns %s with %d HP." % [_unit_label(u), u.hp])
+			if _up("life_3"):
+				for a in units(PLAYER):
+					if a != u and a.hp < a.max_hp:
+						_heal(a, a.max_hp - a.hp, "Field of Reeds")
+			if _up("wings_3") and effective_atk(u) > 0:
+				var foe = _lane_foe(u.lane)
+				if foe != null:
+					_log("Avenging Ba: %s strikes %s." % [u.display_name(), _unit_label(foe)])
+					_deal_damage(foe, effective_atk(u), "effect")
 			if _up("pact"):
 				_heal_core(3, "Gift of the Nile")
 		"sekhmets_plague":
@@ -1522,7 +1562,7 @@ func _resolve_power(targets: Array, direction: int) -> void:
 					_log("%s is Poisoned." % _unit_label(e))
 			if _up("hunt_1"):
 				for e in hit:
-					_deal_damage(e, 1, "effect")
+					_deal_damage(e, 3 if _up("hunt_3") else 1, "effect")
 			if _up("pact"):
 				for a in units(PLAYER):
 					_heal(a, 1, "Sun's Mercy")

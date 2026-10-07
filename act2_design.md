@@ -235,4 +235,6 @@ Phases 2-4 are independent of 5-7 and also enrich Act 1, so they can be done in 
 
 ## 11. Future updates (not in this plan)
 
+- **Handlock:** a full hand plus a full board leaves no draws and no plays. Seen against Nidhogg: 4 Rotted slots, the other 4 held by respawning Wolves, 8 cards in hand. Fix candidates: a once-per-round cycle (discard a card, draw one), dismissing your own unit during planning, replacing a unit by playing onto it, or Rotted slots recovering. Related bug: Valhalla's Gate, Thread of Fate and Sworn Return add to the hand past `MAX_HAND` (7).
+
 - **Patron starting cards:** each patron could offer a starting card from the new archetype as an alternative (for example Ulfr Hunter instead of Shieldmaiden).

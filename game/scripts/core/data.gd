@@ -402,11 +402,11 @@ const PATRONS := [
 # "target" uses the spell target values at the top of this file. Powers respect Spellward but
 # are not spells (they don't trigger Pythia, Hermes or Oracle's Tripod).
 #
-# Upgrade trees: two branches of tiers 1-2 plus one Pact node. Drafting cards of the power's
-# pantheon earns a pick at each POWER_THRESHOLDS count; a tier-2 node needs its tier-1 node.
+# Upgrade trees: two branches of tiers 1-3 plus one Pact node. Drafting cards of the power's
+# pantheon earns a pick at each POWER_THRESHOLDS count; each tier needs the one below it.
 # The Pact node needs PACT_CARDS drafted cards from any other pantheon, so new pantheons never
-# change a tree. Later acts add thresholds and deeper tiers on top of these nodes.
-const POWER_THRESHOLDS := [4, 8, 12]
+# change a tree.
+const POWER_THRESHOLDS := [4, 8, 12, 16, 20]
 const PACT_CARDS := 3
 # After a fight where the power was used, it sits out the next POWER_COOLDOWN_FLOORS floors.
 const POWER_COOLDOWN_FLOORS := 3
@@ -416,8 +416,10 @@ const GOD_POWERS := {
 		"nodes": {
 			"blood_1": {"branch": "Blood", "tier": 1, "name": "Blood Price", "text": "Your other units gain +2 ATK instead of +1."},
 			"blood_2": {"branch": "Blood", "tier": 2, "name": "Undying Oath", "text": "The ATK bonus lasts the whole fight."},
+			"blood_3": {"branch": "Blood", "tier": 3, "name": "Blood Eagle", "text": "The sacrificed unit deals damage equal to its ATK to the front enemy in its lane (the back one if the front is empty)."},
 			"oath_1": {"branch": "Oath", "tier": 1, "name": "Hand of Tyr", "text": "Heal the Core by the sacrificed unit's HP."},
 			"oath_2": {"branch": "Oath", "tier": 2, "name": "Sworn Return", "text": "If the unit stays dead, its card returns to your hand."},
+			"oath_3": {"branch": "Oath", "tier": 3, "name": "Oath Kept", "text": "Gain Faith equal to the sacrificed unit's cost."},
 			"pact": {"branch": "Pact", "tier": 1, "name": "Blood Pact", "text": "Also gain 1 Faith."},
 		}},
 	"thors_thunderclap": {"name": "Thor's Thunderclap", "short": "Thunderclap", "god": "Thor", "pantheon": "norse", "target": "enemy",
@@ -425,8 +427,10 @@ const GOD_POWERS := {
 		"nodes": {
 			"storm_1": {"branch": "Storm", "tier": 1, "name": "Wrath of the Fallen", "text": "+1 damage for each time one of your units fell this fight (up to +3)."},
 			"storm_2": {"branch": "Storm", "tier": 2, "name": "Thunder Returns", "text": "If it kills, you can use it again this fight (once)."},
+			"storm_3": {"branch": "Storm", "tier": 3, "name": "Ragnarok", "text": "Thunder Returns has no limit: every kill lets you use it again."},
 			"hammer_1": {"branch": "Hammer", "tier": 1, "name": "Mjolnir's Arc", "text": "Also hits the other enemy in the target's lane."},
 			"hammer_2": {"branch": "Hammer", "tier": 2, "name": "Shockwave", "text": "Also deals 2 damage to the enemies left and right of the target."},
+			"hammer_3": {"branch": "Hammer", "tier": 3, "name": "Thunder Rolls", "text": "Every enemy it hits loses 1 ATK for the fight."},
 			"pact": {"branch": "Pact", "tier": 1, "name": "Storm Shield", "text": "Your units in the target's lane gain Shield 2."},
 		}},
 	"zeus_lightning_bolt": {"name": "Zeus's Lightning Bolt", "short": "Lightning Bolt", "god": "Zeus", "pantheon": "greek", "target": "enemy",
@@ -434,8 +438,10 @@ const GOD_POWERS := {
 		"nodes": {
 			"chain_1": {"branch": "Chain", "tier": 1, "name": "Forked Bolt", "text": "Chains to two more enemies."},
 			"chain_2": {"branch": "Chain", "tier": 2, "name": "Storm Chain", "text": "Chains deal 2 damage."},
+			"chain_3": {"branch": "Chain", "tier": 3, "name": "Wrath of Olympus", "text": "The bolt chains to every other enemy."},
 			"sky_1": {"branch": "Sky", "tier": 1, "name": "Thunderhead", "text": "The first hit deals 4."},
 			"sky_2": {"branch": "Sky", "tier": 2, "name": "Divine Spark", "text": "Gain 1 Faith for each enemy the bolt kills."},
+			"sky_3": {"branch": "Sky", "tier": 3, "name": "Keraunos", "text": "The first hit deals 7."},
 			"pact": {"branch": "Pact", "tier": 1, "name": "Charged Ranks", "text": "Your Ranged units gain +1 ATK this round."},
 		}},
 	"poseidons_tide": {"name": "Poseidon's Tide", "short": "Tide", "god": "Poseidon", "pantheon": "greek", "target": "enemy_front",
@@ -443,8 +449,10 @@ const GOD_POWERS := {
 		"nodes": {
 			"wave_1": {"branch": "Wave", "tier": 1, "name": "Crashing Wave", "text": "Impacts deal 4 instead of 2."},
 			"wave_2": {"branch": "Wave", "tier": 2, "name": "Riptide", "text": "The pushed enemy takes the impact damage even when nothing stops it."},
+			"wave_3": {"branch": "Wave", "tier": 3, "name": "Tsunami", "text": "The enemy behind it in its starting lane also takes the impact damage."},
 			"undertow_1": {"branch": "Undertow", "tier": 1, "name": "Ambush Current", "text": "Your front unit in the lane where it ends up strikes it for its ATK."},
 			"undertow_2": {"branch": "Undertow", "tier": 2, "name": "Flowing Ranks", "text": "Gain 1 extra move this round."},
+			"undertow_3": {"branch": "Undertow", "tier": 3, "name": "Encircling Current", "text": "Your front units in the lanes beside it also strike it for their ATK."},
 			"pact": {"branch": "Pact", "tier": 1, "name": "Sea Spray", "text": "Draw a card."},
 		}},
 	"osiris_return": {"name": "Osiris's Return", "short": "Return", "god": "Osiris", "pantheon": "egypt", "target": "empty_ally_slot", "needs_fallen": true,
@@ -452,8 +460,10 @@ const GOD_POWERS := {
 		"nodes": {
 			"life_1": {"branch": "Life", "tier": 1, "name": "Breath of Life", "text": "It returns at full HP."},
 			"life_2": {"branch": "Life", "tier": 2, "name": "Embalmed", "text": "It also gains Shield 3."},
+			"life_3": {"branch": "Life", "tier": 3, "name": "Field of Reeds", "text": "Also heal your other units to full HP."},
 			"wings_1": {"branch": "Wings", "tier": 1, "name": "Risen Fury", "text": "It gains +2 ATK."},
 			"wings_2": {"branch": "Wings", "tier": 2, "name": "Undying", "text": "It gains Revive."},
+			"wings_3": {"branch": "Wings", "tier": 3, "name": "Avenging Ba", "text": "It strikes the front enemy in its lane for its ATK (the back one if the front is empty)."},
 			"pact": {"branch": "Pact", "tier": 1, "name": "Gift of the Nile", "text": "Also heal the Core by 3."},
 		}},
 	"sekhmets_plague": {"name": "Sekhmet's Plague", "short": "Plague", "god": "Sekhmet", "pantheon": "egypt", "target": "enemy",
@@ -461,8 +471,10 @@ const GOD_POWERS := {
 		"nodes": {
 			"plague_1": {"branch": "Plague", "tier": 1, "name": "Spreading Sickness", "text": "Also poisons the lanes on either side."},
 			"plague_2": {"branch": "Plague", "tier": 2, "name": "Virulence", "text": "Poison deals 2 damage to enemies each round."},
+			"plague_3": {"branch": "Plague", "tier": 3, "name": "Pestilence", "text": "Poisoned enemies have -1 ATK."},
 			"hunt_1": {"branch": "Hunt", "tier": 1, "name": "Lion's Bite", "text": "Also deal 1 damage to each enemy hit."},
 			"hunt_2": {"branch": "Hunt", "tier": 2, "name": "Feast", "text": "Whenever a poisoned enemy dies this fight, heal the Core by 2."},
+			"hunt_3": {"branch": "Hunt", "tier": 3, "name": "Pride of the Lioness", "text": "Lion's Bite deals 3 instead of 1."},
 			"pact": {"branch": "Pact", "tier": 1, "name": "Sun's Mercy", "text": "Also heal each of your units by 1 (curing their Poison)."},
 		}},
 }
