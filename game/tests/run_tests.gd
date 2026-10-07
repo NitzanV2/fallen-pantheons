@@ -735,6 +735,9 @@ func test_pack() -> void:
 	check("pack" in CardWidget.glossary_icons(Data.CARDS["blood_scent"], "blood_scent"), "glossary: Wolf cards explain Wolves")
 	check("revive" in CardWidget.glossary_icons(Data.CARDS["osiris"], "osiris"), "glossary: mentioned keywords are explained")
 	check(not "taunt" in CardWidget.glossary_icons(Data.CARDS["thor"], "thor"), "glossary: unmentioned keywords stay out")
+	check(not "toll" in CardWidget.glossary_icons(CardWidget.enemy_def("hel"), "hel"), "glossary: Hel's Toll of the Dead isn't the Toll keyword")
+	check("toll" in CardWidget.glossary_icons(CardWidget.enemy_def("obol_collector"), "obol_collector"), "glossary: the Obol Collector explains Toll")
+	check(not CardWidget.bold_keywords(Data.ENEMIES["hel"]["text"]).contains("[b]Toll[/b]"), "glossary: Toll of the Dead isn't bolded as Toll")
 	c = fresh()
 	c.debug_place("ark_sentinel", P, 0, F)
 	c.hand = [c._new_card("book_of_the_dead")]

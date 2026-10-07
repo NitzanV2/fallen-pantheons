@@ -35,6 +35,8 @@ const RARITY_STYLES := {
 }
 const ENEMY_TYPE_LINES := {"enemy": "Void enemy", "elite": "Elite enemy", "boss": "Boss"}
 ## Icon id -> [display name, rule]. Names are bolded in full card text.
+## Ability names that contain a keyword's name but aren't that keyword (Hel's Toll of the Dead isn't Toll).
+const NOT_KEYWORDS := ["Toll of the Dead"]
 const KEYWORD_INFO := {
 	"ranged": ["Ranged", "Can attack from the back row. Can't target units on Ruins."],
 	"taunt": ["Taunt", "Enemies attacking from its lane or an adjacent lane must target it."],
@@ -573,6 +575,8 @@ static func def_icons(def: Dictionary, card_id: String) -> Array:
 static func glossary_icons(def: Dictionary, card_id: String) -> Array:
 	var out: Array = def_icons(def, card_id)
 	var text: String = def["text"]
+	for phrase in NOT_KEYWORDS:
+		text = text.replace(phrase, "")
 	for id in KEYWORD_INFO:
 		if id in out or id == "ability":
 			continue
@@ -586,9 +590,13 @@ static func glossary_icons(def: Dictionary, card_id: String) -> Array:
 
 
 static func bold_keywords(text: String) -> String:
+	for i in NOT_KEYWORDS.size():
+		text = text.replace(NOT_KEYWORDS[i], "{%d}" % i)
 	for id in KEYWORD_INFO:
 		var word: String = KEYWORD_INFO[id][0]
 		text = text.replace(word, "[b]%s[/b]" % word)
+	for i in NOT_KEYWORDS.size():
+		text = text.replace("{%d}" % i, NOT_KEYWORDS[i])
 	return text
 
 
