@@ -248,6 +248,9 @@ func _keywords(page: VBoxContainer) -> void:
 		["linked", "Linked", "Act 2 (Cerberus). When one Head dies, the other Heads gain +2 ATK. At the end of a round where all three Heads live, each heals 2. Spread damage, then finish them close together."],
 		["wingbeat", "Wingbeat", "Act 2 (Hraesvelgr). When you end planning, all your units are pushed one lane in the direction shown beside your grid. A unit that would leave the board or hit an occupied slot stays put and takes 2. Immovable units don't move."],
 		["seal", "Seal", "Act 2 (Keeper of the Twelfth Gate). Your units in the sealed lane (marked SEALED) can't attack this round, until the Keeper has taken %d damage this round. While the Keeper lives, each fallen Gate Guardian comes back two rounds later (marked RETURNS on its slot)." % 6],
+		["claim", "Claim Soul", "Act 2 boss (Hades). When you end planning, Hades claims the costliest card left in your hand (two at half HP); it's out of play for the fight and listed beside the enemy grid. Dealing him 8 damage in one round frees the latest claimed card back to your hand."],
+		["weighing", "Weighing", "Act 2 boss (Ammit). At the end of each round, the heavier of your lanes 1-2 and lanes 3-4 (by total ATK) takes the difference x2, split across its front units."],
+		["gnaw", "Gnaw", "Act 2 boss (Nidhogg). At the end of each round the slot marked GNAW becomes Rotted for the rest of the fight."],
 	])
 	_heading(page, "flooded", "Ferry arrivals")
 	page.add_child(_rich("Some Act 2 battles have enemies arriving by ferry mid-fight. Their slot is marked [color=#9fe6f0]FERRY R3[/color] (the round they arrive) from the start of the fight; hover it for details. They arrive at the start of that round's planning, in that slot or the nearest empty one. A fight isn't won while arrivals are still to come, but arrivals planned after the round limit never come."))
@@ -309,6 +312,9 @@ func _enemies(page: VBoxContainer) -> void:
 		["enemies/erinyes_fury.jpg", "AVENGE on unit", "The Furies attack that unit (your top damage dealer last round) wherever it stands."],
 		["enemies/hraesvelgr.jpg", "PUSH LEFT / RIGHT", "Hraesvelgr's Wingbeat: your units shift one lane that way when you end planning, then it attacks."],
 		["enemies/keeper_of_the_gate.jpg", "SEAL lane X", "Your units in that lane can't attack until the Keeper takes 6 damage this round."],
+		["enemies/hades.jpg", "CLAIM / HELM", "Hades claims your costliest card when you end planning (the card is tagged HADES CLAIMS in your hand). HELM: he can't be targeted or damaged this round."],
+		["enemies/ammit.jpg", "WEIGH", "Ammit weighs your lanes 1-2 against 3-4 at the end of the round; the totals show under your grid."],
+		["enemies/nidhogg.jpg", "GNAW / BREATH", "Nidhogg rots the slot marked GNAW at the end of the round. BREATH poisons both of your units in that lane and deals them 2."],
 	], 60)
 
 	_heading(page, "map/elite.png", "Act 2 elites")
@@ -328,7 +334,13 @@ func _enemies(page: VBoxContainer) -> void:
 		["enemies/hel.jpg", "Hel", "Hides behind Draugr that rise again each round. HARVEST hits your lowest-HP unit, and every unit you lose for good heals her 2 and costs the Core 2. She grows stronger each round - keep your units alive."],
 		["enemies/apep.jpg", "Apep", "Coils across the whole back row. Shield is useless while it lives, units it kills can't Revive, and CONSTRICT crushes whole lanes - move out of them."],
 	], 92)
-	_tip(page, "When Hel or Apep falls, their minions go with them.")
+	page.add_child(_rich("[b]Act 2 bosses[/b] (the Drowned Underworld):"))
+	_grid(page, 3, [
+		["enemies/hades.jpg", "Hades", "Claim Soul: when you end planning he takes the costliest card left in your hand for the rest of the fight - play it first to keep it. Dominion of the Dead: at the end of each round the Core takes 1 per card he holds, so deal him %d damage in one round to free the latest one. Every 3rd round his Helm of Darkness makes him untargetable. A Shade arrives by ferry every other round. At half HP he claims two cards a round and two Shades come at a time." % 8],
+		["enemies/ammit.jpg", "Ammit", "Weighing of the Heart: at the end of each round your total ATK in lanes 1-2 is weighed against lanes 3-4. The heavier side's front units split the difference x2 (the Core takes it if that side has no front units). At half HP it's x3 and she heals 4 per unit it kills. She attacks your highest-ATK unit and keeps two Soul Eaters in front of her."],
+		["enemies/nidhogg.jpg", "Nidhogg", "Each round it gnaws one of your slots (your highest-ATK unit's, marked GNAW); at the end of the round it becomes [b]Rotted[/b] for the fight. A unit there flees to an adjacent free slot or takes 4. After 4 Rotted slots it gnaws the Core for 2 each round instead. Every other round its poison breath hits your most crowded lane (Poison and 3 damage), and it keeps two Styx Lampreys in front of it."],
+	], 92)
+	_tip(page, "When a boss falls, its minions go with it.")
 
 
 func _terrain(page: VBoxContainer) -> void:
@@ -338,6 +350,7 @@ func _terrain(page: VBoxContainer) -> void:
 		["battle/tile_ruins.jpg", "Ruins", "Brown border. Cover: Ranged attacks can't target the unit in this slot."],
 		["battle/tile_quicksand.jpg", "Quicksand", "Sand border. The unit in this slot can't be moved and has [b]-1 SPD[/b]. Only enemy Geomancers create it."],
 		["battle/tile_flooded.jpg", "Flooded", "Act 2. The unit in this slot has [b]-1 ATK[/b] and [b]can't Revive[/b]. Some battles start with Flooded slots, and Drowned Thralls flood your front slot in their lane when they die."],
+		["battle/tile_rotted.jpg", "Rotted", "Act 2 (Nidhogg). Your side only. No unit can be deployed, moved or summoned into this slot for the rest of the fight. A unit already there when it rots flees to an adjacent free slot, or stays and takes 4."],
 		["battle/tile_sunlit.jpg", "Sunlit", "Your side only. The unit in this slot has [b]+1 ATK[/b], and its attacks apply [b]Burn 1[/b]. Dawn Ritual creates it; a living Benben Stone makes its own slot and the slots left and right of it Sunlit (shown with a golden glow)."],
 	], 72)
 	page.add_child(_rich("Terrain can appear on either side of the board - enemy archers sometimes shelter in Ruins, and enemies on a Ley Line hit harder.\n\nTerrain belongs to the [b]slot[/b], not the unit: moving a unit off it loses the effect. A slot holds one terrain at a time. [b]Channel Ley Line[/b] creates a Ley Line on a front slot and [b]Raise Ruins[/b] creates Ruins on a back slot and [b]Dawn Ritual[/b] creates a Sunlit slot in either row, for the rest of the fight - only on slots without terrain, but a unit may already stand there."))

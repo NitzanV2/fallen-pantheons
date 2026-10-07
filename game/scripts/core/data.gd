@@ -174,6 +174,9 @@ const ENEMIES := {
 	"erinyes_fury": {"name": "Fury", "kind": "elite", "act": 2, "atk": 2, "hp": 6, "spd": 4, "threat": 1, "keywords": ["airborne", "vengeance"], "text": "Airborne. Vengeance: attacks whichever of your units dealt the most damage last round, wherever it stands. With none, it attacks its own lane."},
 	"keeper_of_the_gate": {"name": "Keeper of the Twelfth Gate", "kind": "elite", "act": 2, "atk": 0, "hp": 18, "spd": 1, "threat": 3, "keywords": ["immovable", "seal"], "width": 2, "text": "Immovable. Occupies back lanes 2-3. Seal: each round it seals one of your lanes; your units there can't attack until the Keeper has taken 6 damage that round. While it lives, a fallen Gate Guardian returns two rounds later. Doesn't attack."},
 	"gate_guardian": {"name": "Gate Guardian", "kind": "enemy", "act": 2, "atk": 3, "hp": 5, "spd": 2, "threat": 1, "keywords": [], "text": "While the Keeper of the Twelfth Gate lives, it returns to its slot two rounds after it dies."},
+	"hades": {"name": "Hades, Lord of the Dead", "kind": "boss", "act": 2, "atk": 4, "hp": 70, "spd": 2, "threat": 0, "keywords": ["ranged", "immovable", "claim"], "text": "Ranged. Immovable. Claim Soul: when you end planning, he claims the costliest card left in your hand; it stays out of play for the fight. Dealing him 8 damage in one round frees the latest claimed card back to your hand. Dominion of the Dead: at the end of each round the Core takes 1 per card he holds. Helm of Darkness: every 3rd round he can't be targeted or damaged. A Shade arrives by ferry every other round. Phase 2 (half HP or less): claims two cards a round, and two Shades arrive at a time. When Hades falls, his Shades fade."},
+	"ammit": {"name": "Ammit, the Devourer", "kind": "boss", "act": 2, "atk": 5, "hp": 70, "spd": 2, "threat": 0, "keywords": ["ranged", "immovable", "weighing"], "width": 2, "text": "Ranged. Immovable. Occupies back lanes 2-3. Attacks your highest-ATK unit. Weighing of the Heart: at the end of each round, your total ATK in lanes 1-2 is weighed against lanes 3-4. The heavier side's front units split the difference x2 as damage (the Core takes it if that side has no front units). Phase 2 (half HP or less): the difference is x3, and she heals 4 for each unit the Weighing kills. End of round: with fewer than two Soul Eaters, one crawls into an empty front slot. When Ammit falls, her Soul Eaters die."},
+	"nidhogg": {"name": "Nidhogg, the Corpse-Gnawer", "kind": "boss", "act": 2, "atk": 5, "hp": 65, "spd": 2, "threat": 0, "keywords": ["ranged", "immovable", "gnaw"], "width": 2, "text": "Ranged. Immovable. Coils over back lanes 2-3. Gnaw: at the end of each round, the slot its intent shows becomes Rotted (no unit can enter it for the rest of the fight); a unit there is pushed to an adjacent free slot, or takes 4. Once 4 of your slots are Rotted, it gnaws the Core for 2 each round instead. Even rounds: POISON BREATH instead of attacking, poisoning both units in your most crowded lane and dealing them 3. End of round: with fewer than two Styx Lampreys, one slithers into an empty front slot. When Nidhogg falls, its brood flees."},
 }
 
 const RELICS := {
@@ -206,6 +209,7 @@ const TERRAIN := {
 	"quicksand": {"name": "Quicksand", "text": "The unit in this slot can't be moved and has -1 SPD."},
 	"sunlit": {"name": "Sunlit", "text": "The unit in this slot has +1 ATK, and its attacks apply Burn 1."},
 	"flooded": {"name": "Flooded", "text": "The unit in this slot has -1 ATK and can't Revive."},
+	"rotted": {"name": "Rotted", "text": "Gnawed by Nidhogg: no unit can be deployed, moved or summoned here for the rest of the fight."},
 }
 
 const STARTER := ["ark_sentinel", "ark_sentinel", "ark_sentinel", "ark_sentinel", "echo_archer", "echo_archer", "echo_archer", "rebuke", "warding"]
@@ -349,6 +353,18 @@ const BATTLES := [
 	{"id": "twelfth_gate", "name": "Act 2: The Twelfth Gate (elite)", "act": 2, "deck": "egypt", "core": 50, "relics": [],
 		"enemies": [["shade", 0, 0], ["gate_guardian", 1, 0], ["gate_guardian", 2, 0], ["keeper_of_the_gate", 1, 1]], "terrain": [],
 		"blurb": "The Keeper seals a lane each round and its Guardians keep coming back. Break the Seal with 6 damage."},
+	{"id": "hades", "name": "Act 2 Boss: Hades, Lord of the Dead", "act": 2, "deck": "greek", "core": 50, "relics": [],
+		"enemies": [["hades", 1, 1], ["shade", 1, 0], ["shade", 2, 0]], "terrain": [], "boss": true, "short": "Hades",
+		"hint": "Claims the costliest card in your hand every round and hides under his Helm every third round. Hurts decks built around a few key cards; rewards cheap, deep decks and burst damage.",
+		"blurb": "Play your best card before he claims it. Deal him 8 in a round to win a card back."},
+	{"id": "ammit", "name": "Act 2 Boss: Ammit, the Devourer", "act": 2, "deck": "egypt", "core": 50, "relics": [],
+		"enemies": [["ammit", 1, 1], ["soul_eater", 0, 0], ["soul_eater", 3, 0]], "terrain": [], "boss": true, "short": "Ammit",
+		"hint": "Weighs your lanes 1-2 against 3-4 every round and punishes the heavier side. Hurts tall, lopsided boards; rewards balance.",
+		"blurb": "Keep your ATK in lanes 1-2 and 3-4 even. The preview under your board shows the scales."},
+	{"id": "nidhogg", "name": "Act 2 Boss: Nidhogg, the Corpse-Gnawer", "act": 2, "deck": "norse", "core": 50, "relics": [],
+		"enemies": [["nidhogg", 1, 1], ["styx_lamprey", 1, 0], ["drowned_thrall", 2, 0]], "terrain": [], "boss": true, "short": "Nidhogg",
+		"hint": "Rots one of your slots every round and breathes poison every other round. The board shrinks; hurts slow scaling decks and rewards mobility.",
+		"blurb": "Move units off the slot it is about to gnaw. Rotted slots are gone for the fight."},
 ]
 
 
@@ -462,18 +478,19 @@ const BATTLE_POOLS := {
 	"hall_of_two_truths": "act2_late", "devourers_feast": "act2_late", "river_crossing": "act2_late", "sunken_sanctum": "act2_late",
 	"shade_tide": "act2_late", "drowned_legion": "act2_late", "weighing_room": "act2_late", "gjoll_bridge": "act2_late",
 	"charon": "act2_elite", "cerberus": "act2_elite", "hraesvelgr": "act2_elite", "erinyes": "act2_elite", "twelfth_gate": "act2_elite",
+	"hades": "act2_boss", "ammit": "act2_boss", "nidhogg": "act2_boss",
 }
 
 # A run is a series of acts, each a map ending in a boss. "pools" maps each encounter type to the
-# BATTLE_POOLS tag its battles come from (Act 2 borrows Act 1's bosses until it has its own).
+# BATTLE_POOLS tag its battles come from.
 # "empower_steps" adds that many floor-scaling steps on every floor of the act. "boss_bonus" goes to
 # the boss unit only, never to its summons. Reward odds are [Common, Uncommon, Rare] percentages.
 const ACTS := [
 	{"name": "The Dying Stars", "pools": {"early": "early", "late": "late", "elite": "elite", "boss": "boss"},
 		"empower_steps": 0, "boss_bonus": {}, "price_mult": 1.0, "map_tint": Color(1, 1, 1),
 		"normal_odds": [70, 25, 5], "elite_odds": [40, 45, 15], "shop_odds": [55, 35, 10]},
-	{"name": "The Drowned Underworld", "pools": {"early": "act2_early", "late": "act2_late", "elite": "act2_elite", "boss": "boss"},
-		"empower_steps": 0, "boss_bonus": {"atk": 2, "hp": 15}, "price_mult": 1.15, "map_tint": Color(0.45, 0.85, 0.85),
+	{"name": "The Drowned Underworld", "pools": {"early": "act2_early", "late": "act2_late", "elite": "act2_elite", "boss": "act2_boss"},
+		"empower_steps": 0, "boss_bonus": {}, "price_mult": 1.15, "map_tint": Color(0.45, 0.85, 0.85),
 		"normal_odds": [55, 35, 10], "elite_odds": [30, 45, 25], "shop_odds": [45, 40, 15]},
 ]
 ## Share of missing Core HP healed when an act is completed.

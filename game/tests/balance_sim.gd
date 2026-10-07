@@ -530,7 +530,7 @@ func _evaluate(c, i: int) -> Dictionary:
 		"call_of_the_pack":
 			var best_lane := -1
 			for lane in 4:
-				if c.unit_at(P, FRONT, lane) == null and c.unit_at(P, BACK, lane) == null:
+				if c.slot_open(P, FRONT, lane) and c.unit_at(P, BACK, lane) == null:
 					if best_lane == -1 or c.unit_at(E, FRONT, lane) != null:
 						best_lane = lane
 			if best_lane == -1:
@@ -604,7 +604,7 @@ func _best_slot(c, id: String) -> Array:
 	var best_score := 0.0
 	for row in 2:
 		for lane in 4:
-			if c.unit_at(P, row, lane) != null:
+			if not c.slot_open(P, row, lane):
 				continue
 			var enemy_here: bool = c.unit_at(E, FRONT, lane) != null or c.unit_at(E, BACK, lane) != null
 			var ally_front = c.unit_at(P, FRONT, lane)

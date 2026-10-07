@@ -62,6 +62,9 @@ const KEYWORD_INFO := {
 	"wingbeat": ["Wingbeat", "When you end planning, your units are pushed one lane the shown way; blocked ones take 2."],
 	"vengeance": ["Vengeance", "Attacks your unit that dealt the most damage last round, anywhere."],
 	"seal": ["Seal", "Your units in the sealed lane can't attack until the Keeper takes 6 damage that round."],
+	"claim": ["Claim Soul", "When you end planning, Hades claims your costliest card for the fight. 8 damage to him in a round frees the latest."],
+	"weighing": ["Weighing", "End of round: the heavier of your lanes 1-2 and 3-4 takes the ATK difference x2 on its front units."],
+	"gnaw": ["Gnaw", "End of round: the marked slot of yours becomes Rotted for the fight; a unit there must flee or take 4."],
 	"flooded": ["Flooded", "Terrain: the unit there has -1 ATK and can't Revive."],
 	"sunlit": ["Sunlit", "Terrain on your side: the unit there has +1 ATK, and its attacks apply Burn 1."],
 	"spellward": ["Spellward", "Your spells can't target it or the enemies next to it."],
@@ -433,7 +436,8 @@ static func _face(def: Dictionary, card_id: String, art_kind: String, size: Vect
 	ribbon.add_theme_stylebox_override("panel", rsb)
 	ribbon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	place(root, ribbon, 6 * s, art_bottom - 4 * s, -6 * s, art_bottom + 20 * s)
-	var name_label := _label(def["name"], int((14 if def["name"].length() <= 14 else 12) * s), Color(0.96, 0.94, 0.88), true)
+	var name_size: int = 14 if def["name"].length() <= 14 else (12 if def["name"].length() <= 20 else (10 if def["name"].length() <= 23 else 9))
+	var name_label := _label(def["name"], int(name_size * s), Color(0.96, 0.94, 0.88), true)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.clip_text = true

@@ -25,7 +25,7 @@ const VOID_COLOR := Color(0.78, 0.55, 1.0)
 const BOARD_RECT := Rect2(0, 0, 1250, 640)
 const SIDEBAR_RECT := Rect2(1262, 10, 328, 880)
 const GOLD := Color(0.95, 0.78, 0.35)
-const TERRAIN_COLORS := {"ley_line": Color(0.95, 0.75, 0.2), "ruins": Color(0.75, 0.6, 0.45), "quicksand": Color(0.9, 0.72, 0.4), "sunlit": Color(1.0, 0.85, 0.35), "flooded": Color(0.35, 0.8, 0.85)}
+const TERRAIN_COLORS := {"ley_line": Color(0.95, 0.75, 0.2), "ruins": Color(0.75, 0.6, 0.45), "quicksand": Color(0.9, 0.72, 0.4), "sunlit": Color(1.0, 0.85, 0.35), "flooded": Color(0.35, 0.8, 0.85), "rotted": Color(0.65, 0.8, 0.4)}
 
 var combat
 var params := {}
@@ -554,6 +554,10 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["ferry", "Charon's passenger", "Your lowest-HP back-row unit: at the end of the round Charon ferries it out of the fight, and its card goes to your discard pile. Heal it, or put a weaker unit in the back row."])
 		if u.get("spellward", false):
 			out.append(["spellward", "Spellwarded", "Your spells can't target it."])
+		if u.get("helm", false):
+			out.append(["helm", "Helm of Darkness", "Every 3rd round Hades can't be targeted or damaged. Hit his Shades this round."])
+		if u["id"] == "hades" and not snap.get("claimed", []).is_empty():
+			out.append(["claim", "Claimed cards", "%s. Deal Hades %d damage in one round to free the latest one." % [", ".join(snap["claimed"]), combat.HADES_FREE]])
 		for arm_id in u.get("armaments", []):
 			out.append(["armament", "Armed: %s" % Data.CARDS[arm_id]["name"], Data.CARDS[arm_id]["text"].trim_prefix("Armament. ")])
 		if u.get("swine", false):
@@ -582,6 +586,14 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["wingbeat", "Wingbeat", "When you end planning, your units are pushed one lane %s. Units that can't move (board edge or an occupied slot) take 2." % ("left" if wing < 0 else "right"), Color(0.7, 0.85, 1.0)])
 		if "%d:%d" % [row, lane] in snap.get("quicksand_targets", []):
 			out.append(["", "Quicksand incoming", "At the end of the round this slot sinks into Quicksand.", TERRAIN_COLORS["quicksand"]])
+		if "%d:%d" % [row, lane] in snap.get("rot_targets", []):
+			out.append(["gnaw", "Gnawed this round", "At the end of the round Nidhogg rots this slot for the rest of the fight. A unit here is pushed to an adjacent free slot, or takes 4.", TERRAIN_COLORS["rotted"]])
+		var w: Dictionary = snap.get("weighing", {})
+		if not w.is_empty():
+			var mine: int = w["left"] if lane < 2 else w["right"]
+			var other: int = w["right"] if lane < 2 else w["left"]
+			var verdict := "The scales balance: nothing happens." if mine == other else ("This side is heavier: its front units split %d damage at the end of the round." % ((mine - other) * w["mult"]) if mine > other else "The other side is heavier.")
+			out.append(["weighing", "Weighing of the Heart", "Lanes %s: %d ATK against %d. %s" % ["1-2" if lane < 2 else "3-4", mine, other, verdict], Color(0.95, 0.8, 0.45)])
 		var drowned: int = snap.get("drowned_lanes", []).count(lane)
 		if drowned > 0:
 			out.append(["", "Drowned lane", "Your units in this lane get -%d ATK this round." % drowned, TERRAIN_COLORS["flooded"]])
@@ -742,6 +754,11 @@ func _render_hand(snap: Dictionary) -> void:
 		button.set_drag_forwarding(_hand_drag.bind(i), Callable(), Callable())
 		var affordable: bool = not animating and snap["phase"] == "plan" and not def["type"] in Combat.UNPLAYABLE and cost <= snap["faith"]
 		button.modulate = Color(1, 1, 1, 1.0 if affordable else 0.45)
+		if i in snap.get("claim_next", []) and snap["phase"] == "plan":
+			var tag := CardWidget._label("HADES CLAIMS", 15, Color(1.0, 0.5, 0.45), true)
+			tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			tag.tooltip_text = CardWidget.wrap_text("Claim Soul: when you end planning, Hades claims this card for the rest of the fight. Play it first to keep it.")
+			CardWidget.place(button, tag, 0, -22, -1, 0)
 		hand_box.add_child(button)
 
 
@@ -761,7 +778,7 @@ func _current_targets() -> Array:
 		var out: Array = []
 		for row in 2:
 			for lane in 4:
-				if combat.unit_at(P, row, lane) == null:
+				if combat.slot_open(P, row, lane):
 					out.append([P, row, lane])
 		return out
 	return []

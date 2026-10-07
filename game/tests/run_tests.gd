@@ -41,6 +41,7 @@ func _initialize() -> void:
 	test_sun()
 	test_act2_enemies()
 	test_act2_elites()
+	test_act2_bosses()
 	test_divine()
 	test_terrain_cards()
 	test_restart_plan()
@@ -882,6 +883,104 @@ func test_act2_enemies() -> void:
 		for e in b["enemies"] + b.get("waves", []).map(func(w): return [w[1]]):
 			check(Data.ENEMIES.has(e[0]), "act 2 battle %s: enemy %s exists" % [b["id"], e[0]])
 	check(Data.ACTS[1]["pools"]["early"] == "act2_early" and Data.ACTS[1]["pools"]["late"] == "act2_late", "act 2 uses its own fights")
+
+
+func test_act2_bosses() -> void:
+	# Hades claims your costliest playable card when you end planning; 8 damage in one round frees it.
+	var c = fresh(80, true)
+	var h = c.debug_place("hades", E, 1, B)
+	c._declare_intents()
+	c.hand = [c._new_card("ark_sentinel"), c._new_card("thor"), c._new_card("shieldmaiden")]
+	var thor: Dictionary = c.hand[1]
+	check(c.claim_preview() == [1] and c.snapshot()["claim_next"] == [1], "hades: previews the costliest card")
+	c.end_plan()
+	check(thor in c.claimed and not thor in c.hand and c.hand.size() == 2, "hades: claims it when you end planning")
+	check(c.snapshot()["claimed"] == ["Thor"], "hades: the claimed card is listed")
+	check(c.core_hp == 80 - 4 - 1, "hades: Dominion of the Dead costs 1 per claimed card")
+	check(c.pending_waves().size() == 1 and c.pending_waves()[0][1] == "shade", "hades: a Shade is on its way")
+	c._deal_damage(h, 5, "effect")
+	check(c.claimed.size() == 1, "hades: under 8 damage keeps the claim")
+	c._deal_damage(h, 3, "effect")
+	check(c.claimed.is_empty() and thor in c.hand, "hades: 8 damage in a round frees the card")
+	c.end_plan()
+	check(c.round_num == 3 and c.helm_active(h) and c._unit_snapshot(h)["helm"], "hades: Helm of Darkness on round 3")
+	var hp_before: int = h.hp
+	c._deal_damage(h, 10, "effect")
+	check(h.hp == hp_before, "hades: the Helm blocks damage")
+	check(not [E, B, 1] in c._targets_for({}, "enemy"), "hades: the Helm blocks spell targeting")
+	h.hp = 30
+	c.end_plan()
+	check(c.pending_waves().size() == 2 and c.pending_waves().all(func(w): return w[1] == "shade"), "hades: phase 2 ferries two Shades")
+	c.hand = [c._new_card("ark_sentinel"), c._new_card("thor"), c._new_card("odin")]
+	check(c.claim_preview().size() == 2, "hades: phase 2 claims two cards")
+	c._deal_damage(h, 99, "effect")
+	check(not h.alive and c.pending_waves().is_empty(), "hades: his death cancels the Shades")
+
+	# Ammit weighs lanes 1-2 against 3-4; the heavier side's front units take the difference x2.
+	c = fresh(50, true)
+	var am = c.debug_place("ammit", E, 1, B)
+	var l1 = c.debug_place("ark_sentinel", P, 0, F)
+	c.debug_place("echo_archer", P, 1, B)
+	var r1 = c.debug_place("ark_sentinel", P, 2, F)
+	l1.max_hp = 10
+	l1.hp = 10
+	check(c.weighing() == {"left": 4, "right": 2, "mult": 2}, "ammit: weighs both sides")
+	c._ammit_weigh(am)
+	check(l1.hp == 6 and r1.hp == 4, "ammit: the heavier side's front takes the difference x2")
+	var l2 = c.debug_place("ark_sentinel", P, 1, F)
+	l1.hp = 10
+	l2.max_hp = 10
+	l2.hp = 10
+	c._ammit_weigh(am)
+	check(l1.hp == 6 and l2.hp == 6, "ammit: the damage is split across the front units")
+	c = fresh(50, true)
+	am = c.debug_place("ammit", E, 1, B)
+	c.debug_place("echo_archer", P, 3, B)
+	c._ammit_weigh(am)
+	check(c.core_hp == 46, "ammit: no front units on the heavy side means the Core takes it")
+	c = fresh(50, true)
+	am = c.debug_place("ammit", E, 1, B)
+	var victim = c.debug_place("ark_sentinel", P, 0, F)
+	victim.hp = 1
+	am.hp = 30
+	c._ammit_weigh(am)
+	check(not victim.alive and am.hp == 34, "ammit: phase 2 devours the units the Weighing kills")
+	c = fresh(50, true)
+	am = c.debug_place("ammit", E, 1, B)
+	var even = c.debug_place("ark_sentinel", P, 0, F)
+	c.debug_place("ark_sentinel", P, 3, F)
+	c._ammit_weigh(am)
+	check(even.hp == 4 and c.core_hp == 50, "ammit: balanced scales do nothing")
+
+	# Nidhogg rots the slot of your highest-ATK unit; the unit flees or takes 4.
+	c = fresh(50, true)
+	var n = c.debug_place("nidhogg", E, 1, B)
+	var big = c.debug_place("thor", P, 1, F)
+	var small = c.debug_place("ark_sentinel", P, 0, F)
+	c._declare_intents()
+	check(c._rot_slot() == [F, 1] and "0:1" in c.snapshot()["rot_targets"], "nidhogg: gnaws the highest-ATK unit's slot")
+	c._nidhogg_gnaw(n)
+	check(c.terrain_at(P, F, 1) == "rotted", "nidhogg: the slot becomes Rotted")
+	check(big.alive and big.row == F and big.lane == 2 and big.hp == big.max_hp, "nidhogg: the unit flees to an adjacent free slot")
+	check(not c.slot_open(P, F, 1) and c.move_unit(0, F, 1, F) != "" and small.lane == 0, "rotted: units can't move in")
+	c.hand = [c._new_card("ark_sentinel")]
+	c.faith = 3
+	check(not [P, F, 1] in c.valid_targets(0) and c.play_unit(0, 1, F) != "", "rotted: units can't be deployed there")
+	var trapped = c.debug_place("ark_sentinel", P, 0, B)
+	c.debug_place("ark_sentinel", P, 1, B)
+	c.intents[n.uid] = {"type": "attack", "rot": [B, 0]}
+	c._nidhogg_gnaw(n)
+	check(trapped.hp == 0 or not trapped.alive, "nidhogg: a trapped unit takes 4")
+	c.intents[n.uid] = {"type": "breath", "lane": 2}
+	c._nidhogg_breath(n)
+	check(big.poisoned and big.hp == big.max_hp - 3, "nidhogg: poison breath poisons and deals 3")
+	for lane in 4:
+		c.terrain[c._key(P, F, lane)] = "rotted"
+	check(c._rot_slot().is_empty(), "nidhogg: stops rotting at 4 Rotted slots")
+	c.intents[n.uid] = {"type": "attack", "rot": []}
+	var core_before: int = c.core_hp
+	c._nidhogg_gnaw(n)
+	check(c.core_hp == core_before - 2, "nidhogg: then gnaws the Core")
 
 
 func test_act2_elites() -> void:
@@ -1883,7 +1982,8 @@ func test_acts() -> void:
 		c = run.make_combat()
 		var boss_unit = c.units(E).filter(func(u): return Data.unit_def(u.id).get("kind", "") == "boss")[0]
 		var base: Dictionary = Data.ENEMIES[boss_unit.id]
-		check(boss_unit.max_hp == base["hp"] + Data.ACTS[1]["boss_bonus"]["hp"], "acts: act 2 boss gains bonus HP")
+		check(boss_unit.max_hp == base["hp"] + Data.ACTS[1]["boss_bonus"].get("hp", 0), "acts: act 2 boss gets its act's bonus HP")
+		check(Data.BATTLE_POOLS[run.boss_id] == "act2_boss" and base.get("act", 1) == 2, "acts: act 2 has its own bosses")
 		check(c.units(E).filter(func(u): return Data.unit_def(u.id).get("kind", "") != "boss").all(func(u): return u.max_hp == Data.ENEMIES[u.id]["hp"]), "acts: boss minions get no bonus")
 		c.result = "win"
 		run.finish_combat(c)
@@ -1998,7 +2098,7 @@ func _random_move(c, rng: RandomNumberGenerator) -> void:
 	var empties: Array = []
 	for row in 2:
 		for lane in 4:
-			if c.unit_at(P, row, lane) == null:
+			if c.slot_open(P, row, lane):
 				empties.append([row, lane])
 	if empties.is_empty():
 		return
@@ -2029,7 +2129,7 @@ func _check_invariants(c, total_cards: int, tag: String) -> void:
 	var armed: Array = []
 	for u in c.units(P):
 		armed.append_array(u.armaments)
-	for pile in [c.hand, c.deck, c.discard, c.exhausted, armed]:
+	for pile in [c.hand, c.deck, c.discard, c.exhausted, c.claimed, armed]:
 		for card in pile:
 			check(not cids.has(card["cid"]), "%s: card %s is in two places" % [tag, card["id"]])
 			cids[card["cid"]] = true

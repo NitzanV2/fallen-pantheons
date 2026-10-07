@@ -39,7 +39,7 @@ var labels: Control
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	for id in ["player", "enemy", "ley_line", "ruins", "quicksand", "sunlit", "flooded"]:
+	for id in ["player", "enemy", "ley_line", "ruins", "quicksand", "sunlit", "flooded", "rotted"]:
 		textures[id] = load("res://art/battle/tile_%s.jpg" % id)
 	labels = Control.new()
 	labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -200,17 +200,14 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 			draw_colored_polygon(quad, Color(1.0, 0.85, 0.35, 0.25))
 		if lane in snap.get("drowned_lanes", []):
 			draw_colored_polygon(quad, Color(0.2, 0.65, 0.75, 0.3))
+		if "%d:%d" % [row, lane] in snap.get("rot_targets", []):
+			draw_colored_polygon(quad, Color(0.5, 0.75, 0.2, 0.3 + 0.1 * sin(pulse * 4.0)))
+			_tile_text(quad, "GNAW", int(14 * depth), Color(0.8, 1.0, 0.5))
 	if side == E and not snap.is_empty():
 		for w in snap.get("waves", []):
 			if w["lane"] == lane and w["row"] == row:
 				draw_colored_polygon(quad, Color(0.25, 0.75, 0.85, 0.22))
-				var center: Vector2 = (quad[0] + quad[1] + quad[2] + quad[3]) / 4.0
-				var font := ThemeDB.fallback_font
-				var text := ("RETURNS R%d" if w.get("returning", false) else "FERRY R%d") % w["round"]
-				var fs := int(14 * depth)
-				var width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-				draw_string_outline(font, center + Vector2(-width / 2, fs / 2.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.8))
-				draw_string(font, center + Vector2(-width / 2, fs / 2.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.7, 0.95, 1.0))
+				_tile_text(quad, ("RETURNS R%d" if w.get("returning", false) else "FERRY R%d") % w["round"], int(14 * depth), Color(0.7, 0.95, 1.0))
 				break
 
 	var closed := quad.duplicate()
@@ -225,6 +222,14 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 	elif hover == slot:
 		draw_colored_polygon(quad, Color(1, 1, 1, 0.08))
 		draw_polyline(closed, Color(1, 1, 1, 0.55), 2.0, true)
+
+
+func _tile_text(quad: PackedVector2Array, text: String, fs: int, color: Color) -> void:
+	var center: Vector2 = (quad[0] + quad[1] + quad[2] + quad[3]) / 4.0
+	var font := ThemeDB.fallback_font
+	var width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	draw_string_outline(font, center + Vector2(-width / 2, fs / 2.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.8))
+	draw_string(font, center + Vector2(-width / 2, fs / 2.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
 
 func _draw_divider() -> void:
@@ -255,6 +260,11 @@ func _draw_labels() -> void:
 		elif snap.get("sealed_lane", -1) == lane:
 			text = "SEAL BROKEN" if snap.get("seal_broken", false) else "SEALED"
 			color = Color(0.95, 0.8, 0.45)
+		else:
+			for row in 2:
+				if "%d:%d" % [row, lane] in snap.get("rot_targets", []):
+					text = "GNAW (%s)" % ("FRONT" if row == 0 else "BACK")
+					color = Color(0.8, 1.0, 0.5)
 		if text != "":
 			var quad := tile_quad(P, 1, lane, 0)
 			var cx: float = (quad[2].x + quad[3].x) / 2.0
@@ -267,6 +277,29 @@ func _draw_labels() -> void:
 		for line in [["SANDSTORM", 0], ["-1 ATK", 18]]:
 			labels.draw_string_outline(font, Vector2(x - 150, y + line[1]), line[0], HORIZONTAL_ALIGNMENT_RIGHT, 150, 16, 5, Color(0, 0, 0, 0.9))
 			labels.draw_string(font, Vector2(x - 150, y + line[1]), line[0], HORIZONTAL_ALIGNMENT_RIGHT, 150, 16, Color(0.98, 0.78, 0.42))
+	var w: Dictionary = snap.get("weighing", {})
+	if not w.is_empty():
+		var sides := [[w["left"], w["right"], 0, "1-2"], [w["right"], w["left"], 2, "3-4"]]
+		for s in sides:
+			var mine: int = s[0]
+			var text := "LANES %s: %d ATK" % [s[3], mine]
+			var color := Color(0.95, 0.85, 0.55)
+			if mine > s[1]:
+				text += "  (-%d)" % ((mine - s[1]) * w["mult"])
+				color = Color(1.0, 0.5, 0.45)
+			var left_quad := tile_quad(P, 1, s[2], 0)
+			var right_quad := tile_quad(P, 1, s[2] + 1, 0)
+			var cx: float = (left_quad[3].x + right_quad[2].x) / 2.0
+			labels.draw_string_outline(font, Vector2(cx - 150, bottom), text, HORIZONTAL_ALIGNMENT_CENTER, 300, 16, 5, Color(0, 0, 0, 0.9))
+			labels.draw_string(font, Vector2(cx - 150, bottom), text, HORIZONTAL_ALIGNMENT_CENTER, 300, 16, color)
+	var claimed: Array = snap.get("claimed", [])
+	if not claimed.is_empty():
+		var y: float = ROW_Y[row_index(E, 1)][0] + 10
+		var x: float = CENTER_X - half_width(y) - 16
+		var lines: Array = ["CLAIMED BY HADES"] + claimed
+		for k in lines.size():
+			labels.draw_string_outline(font, Vector2(x - 190, y + k * 18), lines[k], HORIZONTAL_ALIGNMENT_RIGHT, 190, 15, 5, Color(0, 0, 0, 0.9))
+			labels.draw_string(font, Vector2(x - 190, y + k * 18), lines[k], HORIZONTAL_ALIGNMENT_RIGHT, 190, 15, Color(1.0, 0.6, 0.55) if k == 0 else Color(0.85, 0.82, 0.9))
 	var dir: int = snap.get("wingbeat", 0)
 	if dir != 0:
 		var y: float = (ROW_Y[row_index(P, 0)][0] + ROW_Y[row_index(P, 1)][1]) / 2.0
@@ -407,7 +440,7 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 	status.add_theme_constant_override("separation", int(2 * sc))
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for pair in [["judgement", u.get("judged", false)], ["vengeance", u.get("hunted", false)], ["ferry", u.get("ferried", false)], ["revive", u["revive"]], ["poison", u.get("poisoned", false)], ["veil", u.get("veil", false)],
-			["spellward", u.get("spellward", false)], ["frenzy", u["empowered"]]]:
+			["spellward", u.get("spellward", false)], ["helm", u.get("helm", false)], ["frenzy", u["empowered"]]]:
 		if pair[1]:
 			status.add_child(CardWidget.icon(pair[0], 20 * sc))
 	if u.get("burn", 0) > 0:
@@ -474,6 +507,12 @@ static func short_intent(text: String, type: String) -> String:
 			return "PUSH LEFT" if "left" in text else "PUSH RIGHT"
 		"seal":
 			return text.to_upper()
+		"claim":
+			return "HELM+CLAIM" if text.begins_with("HELM") else "CLAIM"
+		"weigh":
+			return "WEIGH"
+		"breath":
+			return text.split(",")[0].replace("POISON ", "").replace("lane ", "").to_upper()
 	var cut := text.split("(")[0].split(",")[0]
 	return cut.replace("lanes ", "").replace("lane ", "").replace(" at", "").replace(" and ", "+").strip_edges().to_upper()
 

@@ -60,8 +60,16 @@ var wingbeat_dir := 0
 var sealed_lane := -1
 var gate_damage := 0
 const SEAL_BREAK := 6
-## Gate Guardians coming back, in the waves format plus a "return" tag.
-var returning: Array = []
+## Arrivals added mid-fight, in the waves format (Gate Guardians coming back carry a 5th "return" tag).
+var extra_waves: Array = []
+## Hades: the cards he has claimed this fight (oldest first), the damage he took this round, and
+## whether that damage already freed a card this round.
+var claimed: Array = []
+var hades_damage := 0
+var hades_freed := false
+const HADES_FREE := 8
+## Nidhogg stops gnawing once this many of your slots are Rotted.
+const ROT_MAX := 4
 var intents := {}
 var petrified_lane := -1
 var sandstorm_row := -1
@@ -122,7 +130,7 @@ func setup(battle_def: Dictionary, deck_ids: Array, relic_ids: Array, seed_value
 	if has_relic("sacred_hive"):
 		var summoned := 0
 		for lane in [1, 2, 0, 3]:
-			if summoned < 2 and unit_at(PLAYER, BACK, lane) == null:
+			if summoned < 2 and slot_open(PLAYER, BACK, lane):
 				_summon_scarab(PLAYER, BACK, lane, "Sacred Hive")
 				summoned += 1
 	if has_relic("void_touched_heart"):
@@ -181,6 +189,11 @@ func unit_at(side: int, row: int, lane: int):
 	if lane < 0 or lane >= LANES or row < 0 or row > 1:
 		return null
 	return grid[side][row][lane]
+
+
+## Empty and not Rotted: a unit may be placed or moved here.
+func slot_open(side: int, row: int, lane: int) -> bool:
+	return lane >= 0 and lane < LANES and unit_at(side, row, lane) == null and terrain_at(side, row, lane) != "rotted"
 
 
 func units(side: int) -> Array:
@@ -340,7 +353,7 @@ func _wingbeat(dir: int) -> void:
 		if free:
 			for i in u.width:
 				var o = unit_at(PLAYER, u.row, dest + i)
-				if o != null and o != u:
+				if (o != null and o != u) or terrain_at(PLAYER, u.row, dest + i) == "rotted":
 					free = false
 		if free:
 			_remove(u)
@@ -356,13 +369,207 @@ func is_sealed(u) -> bool:
 		and gate_damage < SEAL_BREAK and _has_living(ENEMY, "keeper_of_the_gate")
 
 
+func _living(id: String):
+	for e in units(ENEMY):
+		if e.id == id:
+			return e
+	return null
+
+
+## Helm of Darkness: every 3rd round Hades can't be targeted or damaged.
+func helm_active(u) -> bool:
+	return u.id == "hades" and round_num % 3 == 0
+
+
+func _hades_phase_two(h) -> bool:
+	return h.hp * 2 <= h.max_hp
+
+
+## Hand indices Hades claims when you end planning: the costliest playable cards, leftmost first on ties.
+func claim_preview() -> Array:
+	var h = _living("hades")
+	if h == null:
+		return []
+	var idx: Array = []
+	for i in hand.size():
+		if not is_unplayable(hand[i]):
+			idx.append(i)
+	idx.sort_custom(_claim_before)
+	return idx.slice(0, 2 if _hades_phase_two(h) else 1)
+
+
+func _claim_before(a: int, b: int) -> bool:
+	var ca: int = card_def(hand[a])["cost"]
+	var cb: int = card_def(hand[b])["cost"]
+	return ca > cb or (ca == cb and a < b)
+
+
+func _hades_claim() -> void:
+	var idx := claim_preview()
+	if idx.is_empty():
+		return
+	var taken: Array = []
+	for i in idx:
+		taken.append(hand[i])
+	for card in taken:
+		hand.erase(card)
+		claimed.append(card)
+	_log("Hades claims %s." % " and ".join(taken.map(func(card): return card_def(card)["name"])))
+
+
+func _hades_free_claim() -> void:
+	hades_freed = true
+	var card: Dictionary = claimed.pop_back()
+	if hand.size() < MAX_HAND:
+		hand.append(card)
+		_log("Hades staggers and lets %s go: it returns to your hand." % card_def(card)["name"])
+	else:
+		discard.append(card)
+		_log("Hades staggers and lets %s go: your hand is full, so it goes to your discard pile." % card_def(card)["name"])
+
+
+## Dominion of the Dead: the Core takes 1 per claimed card. A Shade is always on its way across
+## the Styx, arriving two rounds after the last (two Shades in phase 2).
+func _hades_end_of_round(h) -> void:
+	if not claimed.is_empty():
+		_damage_core(claimed.size(), "Dominion of the Dead")
+	if result != "" or extra_waves.any(func(w): return w[1] == "shade" and w[0] > round_num):
+		return
+	var lanes: Array = [_lane_with_most_player_units()]
+	if _hades_phase_two(h):
+		lanes.append(_lane_with_most_player_units(lanes[0]))
+	for lane in lanes:
+		extra_waves.append([round_num + 2, "shade", lane, FRONT])
+		_log("Hades summons a Shade across the Styx: it lands in lane %d in round %d." % [lane + 1, round_num + 2])
+
+
+## Ammit and Nidhogg keep two minions in the front row.
+func _replenish(minion: String, source: String) -> void:
+	if units(ENEMY).filter(func(e): return e.id == minion).size() >= 2:
+		return
+	for lane in [1, 2, 0, 3]:
+		if unit_at(ENEMY, FRONT, lane) == null:
+			var m = _spawn(minion, ENEMY, lane, FRONT)
+			_log("%s answers %s's call." % [_unit_label(m), source])
+			return
+
+
+## Weighing of the Heart: your total ATK in lanes 1-2 against lanes 3-4 (wide units count by their
+## first lane), and the multiplier. Empty while Ammit is gone.
+func weighing() -> Dictionary:
+	var a = _living("ammit")
+	if a == null:
+		return {}
+	var left := 0
+	var right := 0
+	for u in units(PLAYER):
+		if u.lane < 2:
+			left += effective_atk(u)
+		else:
+			right += effective_atk(u)
+	return {"left": left, "right": right, "mult": 3 if a.hp * 2 <= a.max_hp else 2}
+
+
+func _ammit_weigh(boss) -> void:
+	var w := weighing()
+	var diff: int = absi(w["left"] - w["right"]) * w["mult"]
+	if diff == 0:
+		_log("Weighing of the Heart: the scales balance.")
+		return
+	var lanes: Array = [0, 1] if w["left"] > w["right"] else [2, 3]
+	_log("Weighing of the Heart: lanes %d-%d are heavier (%d against %d) and take %d." % [lanes[0] + 1, lanes[1] + 1, maxi(w["left"], w["right"]), mini(w["left"], w["right"]), diff])
+	var fronts: Array = []
+	for l in lanes:
+		var t = unit_at(PLAYER, FRONT, l)
+		if t != null and not fronts.has(t):
+			fronts.append(t)
+	if fronts.is_empty():
+		_damage_core(diff, "The Weighing", true)
+		return
+	var kills := 0
+	for i in fronts.size():
+		var t = fronts[i]
+		_deal_damage(t, diff / fronts.size() + (1 if i < diff % fronts.size() else 0), "effect")
+		if not t.alive:
+			kills += 1
+	if kills > 0 and w["mult"] == 3 and boss.alive:
+		_heal(boss, 4 * kills, "Devouring the hearts")
+
+
+func _rotted_count() -> int:
+	return terrain.values().count("rotted")
+
+
+## The slot Nidhogg gnaws this round: your highest-ATK unit's, else the first free one. [row, lane] or [].
+func _rot_slot() -> Array:
+	if _rotted_count() >= ROT_MAX:
+		return []
+	var best = null
+	for u in units(PLAYER):
+		if not u.wide and terrain_at(PLAYER, u.row, u.lane) != "rotted" and (best == null or effective_atk(u) > effective_atk(best)):
+			best = u
+	if best != null:
+		return [best.row, best.lane]
+	for row in 2:
+		for lane in [1, 2, 0, 3]:
+			if terrain_at(PLAYER, row, lane) != "rotted":
+				return [row, lane]
+	return []
+
+
+func _rot_targets() -> Array:
+	var out: Array = []
+	for e in units(ENEMY):
+		var slot: Array = intents.get(e.uid, {}).get("rot", [])
+		if slot.size() == 2:
+			out.append("%d:%d" % slot)
+	return out
+
+
+func _nidhogg_gnaw(boss) -> void:
+	var slot: Array = intents.get(boss.uid, {}).get("rot", [])
+	if slot.is_empty() and _rotted_count() >= ROT_MAX:
+		_damage_core(2, "Nidhogg gnawing at the Core's roots")
+		return
+	if slot.size() != 2 or terrain_at(PLAYER, slot[0], slot[1]) == "rotted":
+		return
+	var row: int = slot[0]
+	var lane: int = slot[1]
+	terrain[_key(PLAYER, row, lane)] = "rotted"
+	_log("Nidhogg gnaws the roots: your lane %d %s slot is Rotted." % [lane + 1, "front" if row == FRONT else "back"])
+	var u = unit_at(PLAYER, row, lane)
+	if u == null:
+		return
+	if not u.wide and not u.has_kw("immovable"):
+		for dest in [[row, lane - 1], [row, lane + 1], [1 - row, lane]]:
+			if slot_open(PLAYER, dest[0], dest[1]):
+				_remove(u)
+				_place(u, dest[0], dest[1])
+				_log("%s scrambles off the rot to %s." % [u.display_name(), _unit_label(u)])
+				return
+	_log("%s has nowhere to go and takes 4." % _unit_label(u))
+	_deal_damage(u, 4, "effect")
+
+
+func _nidhogg_breath(u) -> void:
+	var lane: int = intents.get(u.uid, {}).get("lane", 0)
+	_log("Nidhogg breathes poison over lane %d!" % (lane + 1))
+	for row in 2:
+		var t = unit_at(PLAYER, row, lane)
+		if t != null and t.alive:
+			if not t.poisoned:
+				t.poisoned = true
+				_log("%s is Poisoned." % _unit_label(t))
+			_deal_damage(t, 3, "effect")
+
+
 ## Ferry arrivals still to come this fight (waves past the round limit never arrive).
 func pending_waves() -> Array:
-	return (battle.get("waves", []) + returning).filter(func(w): return w[0] > round_num and (is_boss or w[0] <= max_rounds))
+	return (battle.get("waves", []) + extra_waves).filter(func(w): return w[0] > round_num and (is_boss or w[0] <= max_rounds))
 
 
 func _arrive_waves() -> void:
-	for w in battle.get("waves", []) + returning:
+	for w in battle.get("waves", []) + extra_waves:
 		if w[0] != round_num:
 			continue
 		var slot := _wave_slot(w[2], w[3])
@@ -474,6 +681,10 @@ func snapshot() -> Dictionary:
 		"sealed_lane": sealed_lane if _has_living(ENEMY, "keeper_of_the_gate") else -1,
 		"seal_broken": gate_damage >= SEAL_BREAK,
 		"wingbeat": wingbeat_dir if _has_living(ENEMY, "hraesvelgr") else 0,
+		"claimed": claimed.map(func(card): return card_def(card)["name"]),
+		"claim_next": claim_preview(),
+		"weighing": weighing(),
+		"rot_targets": _rot_targets(),
 		"void_tide": _void_tide(),
 		"power_uses": power_uses,
 		"power_ready": power.get("ready", true),
@@ -513,6 +724,7 @@ func _unit_snapshot(u) -> Dictionary:
 		"hunted": u.side == PLAYER and u.uid == vengeance_uid and units(ENEMY).any(func(e): return e.has_kw("vengeance")),
 		"ferried": u.side == PLAYER and ferry_target() == u,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
+		"helm": helm_active(u),
 		"spellward": u.side == ENEMY and is_spellwarded(u),
 		"armaments": u.armaments.map(func(card): return card["id"]),
 	}
@@ -601,7 +813,8 @@ func _capture() -> Dictionary:
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
-		"gate_damage": gate_damage, "returning": returning.duplicate(true),
+		"gate_damage": gate_damage, "extra_waves": extra_waves.duplicate(true),
+		"claimed": claimed.duplicate(), "hades_damage": hades_damage, "hades_freed": hades_freed,
 		"power_uses": power_uses, "power_refunded": power_refunded, "power_invoked": power_invoked, "falls": falls,
 	}
 
@@ -643,7 +856,10 @@ func restart_plan() -> String:
 	terrain = s["terrain"]
 	transformed_uid = s["transformed_uid"]
 	gate_damage = s["gate_damage"]
-	returning = s["returning"].duplicate(true)
+	extra_waves = s["extra_waves"].duplicate(true)
+	claimed = s["claimed"].duplicate()
+	hades_damage = s["hades_damage"]
+	hades_freed = s["hades_freed"]
 	power_uses = s["power_uses"]
 	power_refunded = s["power_refunded"]
 	power_invoked = s["power_invoked"]
@@ -698,9 +914,29 @@ func _declare_intents() -> void:
 	wingbeat_dir = 0
 	sealed_lane = -1
 	gate_damage = 0
+	hades_damage = 0
+	hades_freed = false
 	for e in units(ENEMY):
 		var it := {}
 		match e.id:
+			"hades":
+				var claim := "CLAIM your %s" % ("two costliest cards" if _hades_phase_two(e) else "costliest card")
+				if helm_active(e):
+					it = {"type": "claim", "text": "HELM OF DARKNESS (untargetable), %s, attack lane %d" % [claim, e.lane + 1]}
+				else:
+					it = {"type": "claim", "text": "%s, attack lane %d" % [claim, e.lane + 1]}
+			"ammit":
+				it = {"type": "weigh", "text": "WEIGH your lanes, attack your highest-ATK unit"}
+			"nidhogg":
+				var rot := _rot_slot()
+				var gnaw := ", GNAW the Core"
+				if rot.size() == 2:
+					gnaw = ", GNAW lane %d %s" % [rot[1] + 1, "front" if rot[0] == FRONT else "back"]
+				if round_num % 2 == 0:
+					var lane := _lane_with_most_player_units()
+					it = {"type": "breath", "lane": lane, "rot": rot, "text": "POISON BREATH lane %d%s" % [lane + 1, gnaw]}
+				else:
+					it = {"type": "attack", "rot": rot, "text": "Attack lane %d%s" % [e.lane + 1, gnaw]}
 			"charon":
 				it = {"type": "attack", "text": "Attack lane %d, FERRY your weakest back-row unit" % (e.lane + 1)}
 			"erinyes_fury":
@@ -917,7 +1153,7 @@ func _targets_for(def: Dictionary, kind: String) -> Array:
 				return out
 			for row in 2:
 				for lane in LANES:
-					if unit_at(PLAYER, row, lane) == null:
+					if slot_open(PLAYER, row, lane):
 						out.append([PLAYER, row, lane])
 		"ally":
 			for u in units(PLAYER):
@@ -933,11 +1169,11 @@ func _targets_for(def: Dictionary, kind: String) -> Array:
 					out.append([PLAYER, u.row, u.lane])
 		"enemy":
 			for u in units(ENEMY):
-				if not is_spellwarded(u):
+				if not is_spellwarded(u) and not helm_active(u):
 					out.append([ENEMY, u.row, u.lane])
 		"enemy_burning":
 			for u in units(ENEMY):
-				if u.burn > 0 and not is_spellwarded(u):
+				if u.burn > 0 and not is_spellwarded(u) and not helm_active(u):
 					out.append([ENEMY, u.row, u.lane])
 		"enemy_front":
 			for u in units(ENEMY):
@@ -989,6 +1225,8 @@ func play_unit(hand_index: int, lane: int, row: int) -> String:
 		return "Not enough Faith."
 	if unit_at(PLAYER, row, lane) != null:
 		return "That slot is occupied."
+	if not slot_open(PLAYER, row, lane):
+		return "That slot is Rotted."
 	faith -= def["cost"]
 	hand.remove_at(hand_index)
 	var u = _spawn(card["id"], PLAYER, lane, row, card)
@@ -1355,7 +1593,7 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 		"call_of_the_pack":
 			var slot: Array = targets[0]
 			_summon_wolf(PLAYER, slot[1], slot[2], "Call of the Pack")
-			if unit_at(PLAYER, 1 - slot[1], slot[2]) == null:
+			if slot_open(PLAYER, 1 - slot[1], slot[2]):
 				_summon_wolf(PLAYER, 1 - slot[1], slot[2], "Call of the Pack")
 		"blood_scent":
 			var t = _at(targets[0])
@@ -1366,7 +1604,7 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 					_deal_damage(t, effective_atk(w), "effect")
 		"sandswarm":
 			for lane in LANES:
-				if unit_at(PLAYER, FRONT, lane) == null:
+				if slot_open(PLAYER, FRONT, lane):
 					_summon_scarab(PLAYER, FRONT, lane, "Sandswarm")
 		"noon_blaze":
 			_log("Noon Blaze scorches the Sunlit lanes.")
@@ -1448,7 +1686,7 @@ func _summon_wolf_near(u, source: String) -> void:
 	lanes.sort_custom(func(a, b): return absi(a - u.lane) < absi(b - u.lane) or (absi(a - u.lane) == absi(b - u.lane) and a < b))
 	for row in [u.row, 1 - u.row]:
 		for lane in lanes:
-			if unit_at(u.side, row, lane) == null:
+			if slot_open(u.side, row, lane):
 				_summon_wolf(u.side, row, lane, source)
 				return
 
@@ -1582,6 +1820,8 @@ func move_unit(from_lane: int, from_row: int, to_lane: int, to_row: int) -> Stri
 		return "%s can't move: %s." % [u.display_name(), move_block(u).to_lower()]
 	if unit_at(PLAYER, to_row, to_lane) != null:
 		return "Destination is occupied."
+	if not slot_open(PLAYER, to_row, to_lane):
+		return "That slot is Rotted."
 	_remove(u)
 	_place(u, to_row, to_lane)
 	if is_fresh(u):
@@ -1612,6 +1852,7 @@ func end_plan() -> Array:
 	if result != "":
 		_finish_fight()
 		return events.duplicate()
+	_hades_claim()
 	if wingbeat_dir != 0 and _has_living(ENEMY, "hraesvelgr"):
 		_wingbeat(wingbeat_dir)
 
@@ -1674,6 +1915,16 @@ func end_plan() -> Array:
 					_apep_end_of_round(boss)
 				"charon":
 					_ferry(boss)
+				"hades":
+					_hades_end_of_round(boss)
+				"ammit":
+					_ammit_weigh(boss)
+					if boss.alive and result == "":
+						_replenish("soul_eater", "Ammit")
+				"nidhogg":
+					_nidhogg_gnaw(boss)
+					if result == "":
+						_replenish("styx_lamprey", "Nidhogg")
 
 	if result == "":
 		var heads := units(ENEMY).filter(func(e): return e.id == "cerberus_head")
@@ -1731,7 +1982,7 @@ func _start_of_round(u) -> void:
 		var lanes: Array = range(LANES)
 		lanes.sort_custom(func(a, b): return absi(a - u.lane) < absi(b - u.lane) or (absi(a - u.lane) == absi(b - u.lane) and a < b))
 		for lane in lanes:
-			if unit_at(u.side, u.row, lane) == null:
+			if slot_open(u.side, u.row, lane):
 				_summon_scarab(u.side, u.row, lane, "Scarab Queen")
 				break
 	for card in u.armaments:
@@ -1856,7 +2107,7 @@ func _siege_act(u) -> void:
 
 ## Drag: with your front slot in its lane empty, your back unit there is pulled forward.
 func _drag(u) -> void:
-	if unit_at(PLAYER, FRONT, u.lane) != null:
+	if not slot_open(PLAYER, FRONT, u.lane):
 		return
 	var b = unit_at(PLAYER, BACK, u.lane)
 	if b == null or b.has_kw("immovable") or b.wide:
@@ -1889,6 +2140,9 @@ func _act(u) -> void:
 		return
 	if u.id == "apep":
 		_apep_act(u)
+		return
+	if u.id == "nidhogg" and intents.get(u.uid, {}).get("type", "") == "breath":
+		_nidhogg_breath(u)
 		return
 	if u.id == "siege_engine":
 		_siege_act(u)
@@ -2050,7 +2304,7 @@ func _can_target(attacker, t) -> bool:
 		return false
 	if not attacker.has_kw("ranged") and t.has_kw("airborne"):
 		return false
-	return true
+	return not helm_active(t)
 
 
 func _row_order(u) -> Array:
@@ -2087,6 +2341,13 @@ func _pick_target(u, lane: int):
 				best = t
 		return best if best != null else CORE
 
+	if u.id == "ammit":
+		var best = null
+		for t in units(opp):
+			if _can_target(u, t) and (best == null or effective_atk(t) > effective_atk(best)):
+				best = t
+		return best if best != null else CORE
+
 	if u.id in ["hollow_archer", "carrion_harpy"]:
 		for row in [BACK, FRONT]:
 			var t = unit_at(opp, row, lane)
@@ -2112,6 +2373,9 @@ func _pick_target(u, lane: int):
 ## Applies damage and returns the excess beyond what the target could absorb.
 func _deal_damage(t, amount: int, kind: String) -> int:
 	if not t.alive or amount <= 0:
+		return 0
+	if helm_active(t):
+		_log("%s is hidden under the Helm of Darkness." % _unit_label(t))
 		return 0
 	if t.has_kw("veil") and t.veil_round != round_num:
 		t.veil_round = round_num
@@ -2140,10 +2404,14 @@ func _deal_damage(t, amount: int, kind: String) -> int:
 		gate_damage += amount
 		if was_sealed and gate_damage >= SEAL_BREAK and sealed_lane != -1:
 			_log("The Keeper staggers: the Seal on lane %d breaks for this round." % (sealed_lane + 1))
+	if t.id == "hades" and amount > 0:
+		hades_damage += amount
 	if absorbed > 0:
 		_log("%s takes %d (%d blocked by Shield)." % [_unit_label(t), amount, absorbed])
 	else:
 		_log("%s takes %d." % [_unit_label(t), amount])
+	if t.id == "hades" and t.hp > 0 and not hades_freed and hades_damage >= HADES_FREE and not claimed.is_empty():
+		_hades_free_claim()
 	if t.hp <= 0:
 		_kill(t)
 	elif amount > 0 and t.has_kw("frenzy"):
@@ -2227,9 +2495,9 @@ func _kill(u) -> void:
 				h.atk += 2
 				_log("%s howls for its fallen twin (+2 ATK)." % _unit_label(h))
 	if u.id == "gate_guardian" and _has_living(ENEMY, "keeper_of_the_gate"):
-		returning.append([round_num + 2, "gate_guardian", u.lane, u.row, "return"])
-	if u.id == "keeper_of_the_gate" and not returning.is_empty():
-		returning.clear()
+		extra_waves.append([round_num + 2, "gate_guardian", u.lane, u.row, "return"])
+	if u.id == "keeper_of_the_gate" and not extra_waves.is_empty():
+		extra_waves.clear()
 		_log("With the Keeper gone, the Gate Guardians stay down.")
 	if u.side == PLAYER and actor != null and actor.side == ENEMY and actor.alive and actor.has_kw("devour"):
 		actor.atk += 1
@@ -2255,7 +2523,8 @@ func _kill(u) -> void:
 				_log("Toll of the Dead.")
 				_heal(hel, 2, "Toll of the Dead")
 				_damage_core(2, "Toll of the Dead")
-	if u.id in ["hel", "apep"]:
+	if u.id in ["hel", "apep", "hades", "ammit", "nidhogg"]:
+		extra_waves.clear()
 		for minion in units(ENEMY):
 			minion.alive = false
 			_remove(minion)
@@ -2289,7 +2558,7 @@ func _on_death(u) -> void:
 		"scarab_swarm":
 			# A reviving Swarm still holds its slot, so the Scarab takes the other row.
 			for row in [u.row, 1 - u.row]:
-				if unit_at(u.side, row, u.lane) == null:
+				if slot_open(u.side, row, u.lane):
 					var s = _spawn("scarab", u.side, u.lane, row)
 					_log("A Scarab crawls out (%s)." % _unit_label(s))
 					break
@@ -2303,7 +2572,7 @@ func _split(u) -> void:
 	var lanes: Array = []
 	for d in LANES:
 		for lane in ([u.lane] if d == 0 else [u.lane - d, u.lane + d]):
-			if lanes.size() < 2 and lane >= 0 and lane < LANES and unit_at(u.side, u.row, lane) == null:
+			if lanes.size() < 2 and slot_open(u.side, u.row, lane):
 				lanes.append(lane)
 	for lane in lanes:
 		var s = _spawn(into, u.side, lane, u.row)
@@ -2349,7 +2618,7 @@ func _death_triggers(u) -> void:
 
 
 func _reinforce(u) -> void:
-	if u.row != FRONT or unit_at(u.side, FRONT, u.lane) != null:
+	if u.row != FRONT or not slot_open(u.side, FRONT, u.lane):
 		return
 	var b = unit_at(u.side, BACK, u.lane)
 	if b == null or not b.has_kw("reinforce"):
