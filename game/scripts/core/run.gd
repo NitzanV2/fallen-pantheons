@@ -162,6 +162,8 @@ func upgrade_options() -> Array:
 		if node["branch"] == "Pact":
 			if foreign >= Data.PACT_CARDS:
 				out.append(id)
+		elif node["tier"] >= 3 and devotion < Data.TIER3_DEVOTION:
+			continue
 		elif node["tier"] == 1 or power_nodes.any(func(o): return nodes[o]["branch"] == node["branch"] and nodes[o]["tier"] == node["tier"] - 1):
 			out.append(id)
 	return out

@@ -288,7 +288,7 @@ func _powers(page: VBoxContainer) -> void:
 	_heading(page, "glyphs/poseidons_tide.svg", "Upgrades")
 	_grid(page, 2, [
 		["glyphs/sekhmets_plague.svg", "Devotion", "Every card of your main pantheon you [b]add[/b] to your deck (rewards, shop, events) counts. At [b]%s[/b] cards you choose an upgrade on the map, and every act boss you beat grants one more. Removing cards never loses progress." % thresholds],
-		["glyphs/tyrs_oath.svg", "The tree", "Two branches of the god's own pantheon, three tiers each: every tier needs the one below it in its branch. Tier 3 is the branch's big payoff. The [b]Pact[/b] node needs %d cards from [i]other[/i] pantheons, so mixing pays off too." % Data.PACT_CARDS],
+		["glyphs/tyrs_oath.svg", "The tree", "Two branches of the god's own pantheon, three tiers each: every tier needs the one below it in its branch. [b]Tier 3[/b] is a rare payoff: it also needs [b]%d[/b] main-pantheon cards drafted. The [b]Pact[/b] node needs %d cards from [i]other[/i] pantheons, so mixing pays off too." % [Data.TIER3_DEVOTION, Data.PACT_CARDS]],
 	], 52)
 	_tip(page, "Every set of three card rewards includes at least one card from your main pantheon. Click the power in the map sidebar to see your tree and progress.")
 

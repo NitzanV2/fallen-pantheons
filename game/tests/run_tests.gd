@@ -1749,6 +1749,13 @@ func test_power_upgrades() -> void:
 	check(options == ["pact", "undertow_1", "wave_2"], "upgrades: tier 2 and Pact open (%s)" % [options])
 	run.choose_upgrade("pact")
 	check(run.power_state()["nodes"] == ["wave_1", "pact"], "upgrades: passed to fights")
+	run.power_nodes = ["wave_1", "wave_2", "pact"]
+	run.devotion = Data.TIER3_DEVOTION - 1
+	check(not run.upgrade_options().has("wave_3"), "upgrades: tier 3 locked below the devotion gate")
+	run.devotion = Data.TIER3_DEVOTION
+	check(run.upgrade_options().has("wave_3"), "upgrades: tier 3 opens at the devotion gate")
+	run.power_nodes = ["wave_1", "pact"]
+	run.devotion = second
 	var before: int = run.devotion
 	run.deck.append("hoplite")
 	check(run.devotion == before, "upgrades: removing or appending outside add_card doesn't count")

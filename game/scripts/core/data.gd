@@ -409,10 +409,12 @@ const PATRONS := [
 # are not spells (they don't trigger Pythia, Hermes or Oracle's Tripod).
 #
 # Upgrade trees: two branches of tiers 1-3 plus one Pact node. Drafting cards of the power's
-# pantheon earns a pick at each POWER_THRESHOLDS count; each tier needs the one below it.
+# pantheon earns a pick at each POWER_THRESHOLDS count; each tier needs the one below it, and
+# tier 3 also needs TIER3_DEVOTION drafted cards of the pantheon, so it stays a rare payoff.
 # The Pact node needs PACT_CARDS drafted cards from any other pantheon, so new pantheons never
 # change a tree.
-const POWER_THRESHOLDS := [4, 8, 12, 16, 20]
+const TIER3_DEVOTION := 16
+const POWER_THRESHOLDS := [4, 8, 12, TIER3_DEVOTION]
 const PACT_CARDS := 3
 # After a fight where the power was used, it sits out the next POWER_COOLDOWN_FLOORS floors.
 const POWER_COOLDOWN_FLOORS := 3

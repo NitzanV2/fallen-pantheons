@@ -360,6 +360,8 @@ func _tree_node(id: String, node: Dictionary, state: String, pickable: bool) -> 
 func _requirement(node: Dictionary) -> String:
 	if node["branch"] == "Pact":
 		return "NEEDS %d CARDS FROM OTHER PANTHEONS (%d)" % [Data.PACT_CARDS, run.foreign]
+	if node["tier"] >= 3:
+		return "NEEDS TIER 2 AND %d %s CARDS (%d)" % [Data.TIER3_DEVOTION, Data.FACTION_NAMES[run.main_pantheon()].to_upper(), run.devotion]
 	return "NEEDS TIER %d" % (node["tier"] - 1)
 
 

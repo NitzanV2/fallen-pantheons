@@ -67,6 +67,7 @@ func _initialize() -> void:
 	_report_encounters()
 	_report_matchups()
 	_report_runs()
+	_report_devotion()
 	quit()
 
 
@@ -163,6 +164,28 @@ func _report_runs() -> void:
 	print("%-24s win %5.1f%%" % ["OVERALL", 100.0 * total_wins / max(run_stats.size(), 1)])
 
 
+## Main-pantheon cards drafted: at the end of Act 1 (runs that beat its boss) and at the end of the run
+## (runs that reached Act 2), with the share of runs at or above each count.
+func _report_devotion() -> void:
+	print("")
+	print("== DEVOTION (main-pantheon cards drafted) ==")
+	var marks := [8, 10, 12, 14, 16, 18, 20, 22]
+	var header := "%-28s %5s %6s %6s  " % ["", "runs", "avg", "max"]
+	for m in marks:
+		header += "%6s" % (">=%d" % m)
+	print(header)
+	var act1: Array = run_stats.filter(func(r): return r["devotion_act1"] >= 0)
+	var rows := [["end of act 1", act1.map(func(r): return r["devotion_act1"])],
+		["end of run (reached act 2)", act1.map(func(r): return r["devotion"])],
+		["end of run (won)", run_stats.filter(func(r): return r["won"]).map(func(r): return r["devotion"])]]
+	for row in rows:
+		var values: Array = row[1]
+		var line := "%-28s %5d %6.1f %6d  " % [row[0], values.size(), _avg(values), values.max() if not values.is_empty() else 0]
+		for m in marks:
+			line += "%5.0f%%" % (100.0 * values.filter(func(v): return v >= m).size() / max(values.size(), 1))
+		print(line)
+
+
 func _lost(rows: Array) -> Array:
 	return rows.map(func(f): return f["lost"])
 
@@ -203,10 +226,13 @@ func _play_run(seed_value: int, patron: String, power: String) -> Dictionary:
 	boss_hp.resize(Data.ACTS.size())
 	boss_hp.fill(-1)
 	var guard := 0
+	var devotion_act1 := -1
 	while not (run.state in ["victory", "defeat"]) and guard < 400:
 		guard += 1
 		match run.state:
 			"act_complete":
+				if run.act == 1:
+					devotion_act1 = run.devotion
 				run.start_next_act()
 			"map":
 				while run.pending_upgrades() > 0:
@@ -238,7 +264,7 @@ func _play_run(seed_value: int, patron: String, power: String) -> Dictionary:
 				else:
 					run.rest_remove(_worst_card(run))
 	return {"won": run.state == "victory", "act": run.act, "floor": run.floor_number(), "boss_hp": boss_hp, "max_hp": run.max_hp,
-		"upgrades": run.power_nodes.size()}
+		"upgrades": run.power_nodes.size(), "devotion_act1": devotion_act1, "devotion": run.devotion}
 
 
 ## Finishes a branch before starting the next; Pact comes last.
