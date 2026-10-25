@@ -588,6 +588,32 @@ func _evaluate(c, i: int) -> Dictionary:
 				if c.unit_at(P, FRONT, lane) == null and c.unit_at(E, FRONT, lane) != null:
 					empty += 1
 			return {"score": 3.0 * empty if empty >= 2 else 0.0, "action": func(): c.play_spell(i, [])}
+		"death_rite":
+			if c.units(P).size() < 2:
+				return none
+			var victim = null
+			for ally in c.units(P):
+				if not c.valid_targets(i).has([P, ally.row, ally.lane]):
+					continue
+				if victim == null:
+					victim = ally
+					continue
+				var ally_death: bool = str(ally.def.get("text", "")).contains("On-Death")
+				var victim_death: bool = str(victim.def.get("text", "")).contains("On-Death")
+				if ally_death != victim_death:
+					if ally_death:
+						victim = ally
+				elif ally.atk + ally.hp < victim.atk + victim.hp:
+					victim = ally
+			if victim == null:
+				return none
+			var rite_score := 8.0 if str(victim.def.get("text", "")).contains("On-Death") else 4.0
+			return {"score": rite_score, "action": func(): c.play_spell(i, [[P, victim.row, victim.lane]])}
+		"hunting_cry":
+			var wolves: int = c._wolf_count(P)
+			if wolves < 2:
+				return none
+			return {"score": 4.0 + wolves, "action": func(): c.play_spell(i, [])}
 		"plague_of_locusts":
 			var dmg: int = c.units(P).size()
 			var target = null
@@ -655,6 +681,8 @@ func _best_slot(c, id: String) -> Array:
 					score = 12.0 if ally_front != null else 0.0
 				elif ranged:
 					score = 8.0 + (4.0 if ally_front != null else 0.0) + (2.0 if enemy_here else 0.0)
+			if id in ["daedalus", "namesake", "broodwarden"]:
+				score = 14.0 if row == BACK else 3.0
 			if def.get("tribe", "") == "wolf":
 				var flanker: bool = "flank" in kws or c._has_living(P, "skoll_and_hati") or id == "skoll_and_hati"
 				var behind = c.unit_at(P, BACK, lane)

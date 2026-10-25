@@ -58,8 +58,6 @@ var home_box: Control
 var home_stage: Control
 var home_logo: TextureRect
 var play_button: Button
-var continue_box: Control
-var continue_detail: Label
 var continue_row: Button
 var codex_box: Control
 var codex_dismiss: Button
@@ -170,18 +168,6 @@ func _build_menu() -> void:
 	home_stage.add_child(_home_logo())
 	play_button = _play_button()
 	home_stage.add_child(play_button)
-	continue_box = VBoxContainer.new()
-	continue_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	continue_box.add_theme_constant_override("separation", 6)
-	continue_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	continue_box.visible = false
-	home_stage.add_child(continue_box)
-	continue_box.add_child(_continue_button())
-	continue_detail = Label.new()
-	continue_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	continue_detail.add_theme_font_size_override("font_size", 14)
-	continue_detail.add_theme_color_override("font_color", MUTED)
-	continue_box.add_child(continue_detail)
 
 	codex_box = Panel.new()
 	codex_box.visible = false
@@ -195,7 +181,7 @@ func _build_menu() -> void:
 	column.add_theme_constant_override("separation", 4)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	CardWidget.place(codex_box, column, 26, 28, -26, -28)
-	continue_row = _codex_row("opt_card", "Continue", "", _continue_run, true)
+	continue_row = _codex_row("opt_card", "Continue Run", "", _continue_run, true)
 	continue_row.visible = false
 	column.add_child(continue_row)
 	column.add_child(_codex_row("opt_card", "New Run", "Choose a patron", _show_patrons, true))
@@ -395,43 +381,13 @@ func _play_button() -> Button:
 	return b
 
 
-func _continue_button() -> Button:
-	var b := Button.new()
-	b.text = "Continue"
-	b.focus_mode = Control.FOCUS_NONE
-	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.custom_minimum_size = Vector2(220, 46)
-	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	b.add_theme_font_override("font", CardWidget.UI_FONT)
-	b.add_theme_font_size_override("font_size", 18)
-	b.add_theme_color_override("font_color", CREAM)
-	b.add_theme_color_override("font_hover_color", Color(0.16, 0.1, 0.03))
-	b.add_theme_color_override("font_pressed_color", Color(0.16, 0.1, 0.03))
-	b.tooltip_text = "A battle in progress starts again from the beginning."
-	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
-		var sb := StyleBoxFlat.new()
-		var hot: bool = state == "hover" or state == "pressed"
-		sb.bg_color = Color(0.95, 0.78, 0.38, 0.95) if hot else Color(0.05, 0.04, 0.08, 0.45)
-		sb.border_color = GOLD
-		sb.set_border_width_all(1)
-		sb.set_corner_radius_all(23)
-		sb.content_margin_left = 22
-		sb.content_margin_right = 22
-		b.add_theme_stylebox_override(state, sb)
-	b.pressed.connect(_continue_run)
-	return b
-
-
 func _refresh_continue() -> void:
 	var saved = RunSave.read()
 	var has: bool = saved != null
 	continue_row.visible = has
-	continue_box.visible = has and not codex_box.visible
 	if not has:
 		return
-	var text: String = RunSave.describe(saved)
-	continue_detail.text = text
-	continue_row.get_meta("detail").text = text
+	continue_row.get_meta("detail").text = RunSave.describe(saved)
 
 
 func _open_codex() -> void:

@@ -43,6 +43,8 @@ var moves_left := 0
 var longship_active := false
 var spells_this_round := 0
 var armaments_this_round := 0
+## Hunting Cry: Wolves have Flank for this round number.
+var hunt_round := 0
 ## Faith added at the start of the next round (on top of the usual 3).
 var faith_next := 0
 var horus_round := 0
@@ -239,6 +241,11 @@ func _spawn(id: String, side: int, lane: int, row: int, card = null):
 	_next_uid += 1
 	u.card = card
 	u.deployed_round = round_num
+	if id == "scarab" and side == PLAYER:
+		var wards := _count_living(PLAYER, "broodwarden")
+		if wards > 0:
+			u.shield += 2 * wards
+			_log("Broodwarden shields the Scarab (+%d)." % (2 * wards))
 	if side == PLAYER and is_wolf(u) and has_relic("gleipnir_fragment"):
 		u.max_hp += 1
 		u.hp += 1
@@ -262,7 +269,8 @@ func effective_atk(u) -> int:
 	if u.id == "scarab" and _has_living(u.side, "khepri"):
 		a += 1
 	if u.has_kw("pack"):
-		a += mini(PACK_MAX, _wolf_count(u.side) - (1 if is_wolf(u) else 0))
+		var others := _wolf_count(u.side) - (1 if is_wolf(u) and u.alive else 0)
+		a += mini(PACK_MAX, others)
 	for card in u.armaments:
 		a += Data.CARDS[card["id"]]["arm"].get("atk", 0) + (1 if u.id == "talos" else 0)
 	if u.side == PLAYER and has_relic("dragon_prow") and u.moved_round == round_num:
@@ -271,6 +279,8 @@ func effective_atk(u) -> int:
 		a += 2
 	if is_sunlit(u.side, u.row, u.lane):
 		a += 1
+		if u.side == PLAYER:
+			a += _count_living(PLAYER, "high_noon")
 	if terrain_at(u.side, u.row, u.lane) == "flooded":
 		a -= 1
 	if u.side == PLAYER:
@@ -303,6 +313,10 @@ func is_sunlit(side: int, row: int, lane: int) -> bool:
 		if b != null and b.id == "benben_stone":
 			return true
 	return false
+
+
+func _any_sunlit() -> bool:
+	return _lane_sunlit(0, LANES)
 
 
 ## True if any of your slots in the lanes this (possibly wide) unit spans is Sunlit.
@@ -644,7 +658,13 @@ func _wolf_count(side: int) -> int:
 
 
 func has_flank(u) -> bool:
-	return u.has_kw("flank") or (is_wolf(u) and _has_living(u.side, "skoll_and_hati"))
+	if u.has_kw("flank"):
+		return true
+	if not is_wolf(u):
+		return false
+	if _has_living(u.side, "skoll_and_hati"):
+		return true
+	return u.side == PLAYER and hunt_round == round_num
 
 
 func effective_spd(u) -> int:
@@ -835,6 +855,7 @@ func _capture() -> Dictionary:
 		"grid": g, "deck": deck.duplicate(true), "hand": hand.duplicate(true), "discard": discard.duplicate(true),
 		"exhausted": exhausted.duplicate(true), "core_hp": core_hp, "faith": faith, "result": result,
 		"moves_left": moves_left, "longship_active": longship_active, "spells_this_round": spells_this_round, "armaments_this_round": armaments_this_round,
+		"hunt_round": hunt_round,
 		"faith_next": faith_next, "horus_round": horus_round, "drowned_lanes": drowned_lanes.duplicate(),
 		"intents": intents.duplicate(true), "petrified_lane": petrified_lane, "sandstorm_row": sandstorm_row,
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
@@ -868,6 +889,7 @@ func restart_plan() -> String:
 	longship_active = s["longship_active"]
 	spells_this_round = s["spells_this_round"]
 	armaments_this_round = s["armaments_this_round"]
+	hunt_round = s["hunt_round"]
 	faith_next = s["faith_next"]
 	horus_round = s["horus_round"]
 	drowned_lanes = s["drowned_lanes"]
@@ -1158,8 +1180,13 @@ func card_cost(card: Dictionary) -> int:
 		return 0
 	if def["type"] == "armament" and armaments_played == 0 and has_relic("anvil_of_lemnos"):
 		return 0
-	if def["type"] == "armament" and armaments_this_round == 0 and _has_living(PLAYER, "forge_apprentice"):
-		return maxi(0, def["cost"] - 1)
+	if def["type"] == "armament" and armaments_this_round == 0:
+		var cost: int = def["cost"]
+		if _has_living(PLAYER, "forge_apprentice"):
+			cost -= 1
+		if _has_living(PLAYER, "daedalus"):
+			cost -= 1
+		return maxi(0, cost)
 	return def["cost"]
 
 
@@ -1640,6 +1667,19 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 				var t = unit_at(ENEMY, row, lane)
 				if t != null:
 					_deal_damage(t, dmg, "effect")
+		"death_rite":
+			var rite = _at(targets[0])
+			var extra: bool = str(rite.def.get("text", "")).contains("On-Death")
+			_log("Death Rite claims %s." % rite.display_name())
+			rite.hp = 0
+			_kill(rite)
+			_draw(2 if extra else 1)
+		"hunting_cry":
+			hunt_round = round_num
+			for w in units(PLAYER):
+				if is_wolf(w):
+					w.temp_atk += 1
+			_log("Your Wolves answer the Hunting Cry.")
 		"book_of_the_dead":
 			var fallen: Dictionary = last_dead_ally
 			discard.erase(fallen)
@@ -1716,6 +1756,15 @@ func _summon_scarab(side: int, row: int, lane: int, source: String) -> void:
 	_log("%s summons a Scarab (%s)." % [source, _unit_label(s)])
 
 
+## The dying unit still holds its slot when it Revives, so the Scarab takes the other row.
+func _scarab_on_death(u) -> void:
+	for row in [u.row, 1 - u.row]:
+		if slot_open(u.side, row, u.lane):
+			var s = _spawn("scarab", u.side, u.lane, row)
+			_log("A Scarab crawls out (%s)." % _unit_label(s))
+			return
+
+
 ## A unit holds one Armament (Talos any number); a new one sends the old card to the discard pile.
 func _attach(u, card: Dictionary) -> void:
 	var arm: Dictionary = Data.CARDS[card["id"]]["arm"]
@@ -1765,8 +1814,13 @@ func _restore_body(u) -> void:
 ## When an armed unit dies for good, its Armaments shuffle into the draw pile.
 func _return_armaments(u) -> void:
 	for card in u.armaments:
-		deck.insert(rng.randi_range(0, deck.size()), card)
-		_log("The %s falls from %s and returns to your draw pile." % [Data.CARDS[card["id"]]["name"], u.display_name()])
+		var name: String = Data.CARDS[card["id"]]["name"]
+		if card["id"] == "whetstone" and hand.size() < MAX_HAND:
+			hand.append(card)
+			_log("The %s returns to your hand." % name)
+		else:
+			deck.insert(rng.randi_range(0, deck.size()), card)
+			_log("The %s falls from %s and returns to your draw pile." % [name, u.display_name()])
 	u.armaments.clear()
 
 
@@ -1820,6 +1874,27 @@ func _on_spell_cast() -> void:
 			u.effect_used = true
 			u.shield += 1
 			_log("Hermes gains Shield 1.")
+		if u.id == "daedalus":
+			u.effect_used = true
+			var foe = _first_enemy_in_lane(u.lane)
+			if foe != null:
+				_log("Daedalus's device strikes %s." % foe.display_name())
+				_deal_damage(foe, 1, "effect")
+		if u.id == "sybil" and spells_this_round == 1:
+			u.effect_used = true
+			var before := hand.size()
+			_draw(1)
+			if hand.size() > before:
+				_log("Sybil draws a card.")
+		if u.id == "chorus_of_delphi":
+			u.effect_used = true
+			var inspired := 0
+			for ally in units(PLAYER):
+				if ally.row == u.row and ally.def.get("faction") == "greek":
+					ally.temp_atk += 1
+					inspired += 1
+			if inspired > 0:
+				_log("Chorus of Delphi lifts its row (+1 ATK this round).")
 	for e in units(ENEMY):
 		if e.has_kw("spellward"):
 			e.shield += 2
@@ -1843,6 +1918,17 @@ func _on_moved(u, from_lane: int) -> void:
 			if u.lane != from_lane and t != null:
 				_log("Ulfhednar pounces on %s." % t.display_name())
 				_deal_damage(t, effective_atk(u), "effect")
+		"shield_raid":
+			u.shield += 2
+			_log("Shield Raid: %s gains Shield 2." % u.display_name())
+		"reckless_charge":
+			_log("Reckless Charge spends itself.")
+			_deal_damage(u, 1, "effect")
+		"packrunner":
+			var front = unit_at(PLAYER, FRONT, u.lane)
+			if u.row == BACK and front != null and is_wolf(front) and not u.bonus_kw.has("flank"):
+				u.bonus_kw.append("flank")
+				_log("Packrunner takes the flank.")
 	for i in _count_living(PLAYER, "loki"):
 		if not u.alive:
 			break
@@ -2117,6 +2203,8 @@ func _start_of_round(u) -> void:
 			elif u.id == "priest_of_ra":
 				_heal(front, 2, "Priest of Ra")
 	var rally: int = u.def.get("rally", 0)
+	for card in u.armaments:
+		rally += int(Data.CARDS[card["id"]]["arm"].get("rally", 0))
 	if rally > 0:
 		if u.side == PLAYER and has_relic("laurel_wreath"):
 			rally *= 2
@@ -2377,7 +2465,14 @@ func _attack(u, target, atk: int) -> void:
 		target.poisoned = true
 		_log("%s is Poisoned." % _unit_label(target))
 	if target.side != u.side:
-		_add_burn(target, u.def.get("burn", 0) + (1 if is_sunlit(u.side, u.row, u.lane) else 0))
+		var burn_amt := int(u.def.get("burn", 0))
+		if u.id == "mummy_of_aten":
+			burn_amt = 2 if is_sunlit(u.side, u.row, u.lane) else 0
+		elif is_sunlit(u.side, u.row, u.lane):
+			burn_amt += 1
+		if u.id == "scarab" and u.side == PLAYER and _any_sunlit():
+			burn_amt += _count_living(PLAYER, "solar_scarab")
+		_add_burn(target, burn_amt)
 
 	if u.has_kw("pierce") and excess > 0 and behind != null and behind.alive:
 		_deal_damage(behind, excess, "pierce")
@@ -2618,6 +2713,10 @@ func _kill(u) -> void:
 			u.atk += 2
 		else:
 			u.hp = 1
+		for namer in units(PLAYER):
+			if namer.id == "namesake":
+				u.atk += 1
+				_log("Namesake blesses %s (+1 ATK)." % u.display_name())
 		_log("%s revives with %d HP!" % [_unit_label(u), u.hp])
 		if u.side == PLAYER and has_relic("ankh_of_eternity"):
 			_damage_core(2, "Ankh of Eternity")
@@ -2721,13 +2820,19 @@ func _on_death(u) -> void:
 		"raven_of_odin":
 			_draw(1)
 			_log("The Raven brings you a card.")
-		"scarab_swarm":
-			# A reviving Swarm still holds its slot, so the Scarab takes the other row.
-			for row in [u.row, 1 - u.row]:
-				if slot_open(u.side, row, u.lane):
-					var s = _spawn("scarab", u.side, u.lane, row)
-					_log("A Scarab crawls out (%s)." % _unit_label(s))
-					break
+		"scarab_swarm", "undying_host", "solar_scarab":
+			_scarab_on_death(u)
+		"carrion_wolf":
+			for w in units(u.side):
+				if w != u and is_wolf(w):
+					w.atk += 1
+					_log("Carrion Wolf feeds %s (+1 ATK)." % w.display_name())
+		"reckless_charge":
+			var blast := effective_atk(u)
+			for row in 2:
+				var foe = unit_at(ENEMY, row, u.lane)
+				if foe != null:
+					_deal_damage(foe, blast, "effect")
 
 
 ## Split: two copies appear in its own slot and the nearest empty slot in its row (left first).

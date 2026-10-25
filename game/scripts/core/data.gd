@@ -51,6 +51,13 @@ const CARDS := {
 	"freki": {"name": "Freki", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 4, "spd": 4, "keywords": ["pack", "flank"], "tribe": "wolf", "text": "Wolf. Pack. Flank. End of round: if Freki attacked this round, summon a Wolf in the nearest empty slot."},
 	"blood_scent": {"name": "Blood Scent", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "enemy", "text": "Each of your Wolves deals damage equal to its ATK to an enemy."},
 	"skoll_and_hati": {"name": "Skoll and Hati", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 4, "hp": 5, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. Your Wolves have Flank. Start of round: summon a Wolf if you have fewer than 4 Wolves."},
+	# Norse fusion cards. No new rules: they deepen one archetype, or pay off two of them together.
+	"death_rite": {"name": "Death Rite", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "ally", "text": "Destroy an ally. Draw 1. If that ally's card has an On-Death effect, draw 1 more."},
+	"shield_raid": {"name": "Shield Raid", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 4, "spd": 4, "keywords": [], "text": "Whenever you move it, it gains Shield 2."},
+	"hunting_cry": {"name": "Hunting Cry", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "none", "text": "Your Wolves have Flank and +1 ATK this round."},
+	"reckless_charge": {"name": "Reckless Charge", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 4, "spd": 4, "keywords": [], "text": "Whenever you move it, it takes 1 damage. On-Death: deal its ATK to every enemy in its lane."},
+	"carrion_wolf": {"name": "Carrion Wolf", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 4, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. On-Death: your other Wolves gain +1 ATK."},
+	"packrunner": {"name": "Packrunner", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 4, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. The first time you move it behind a Wolf, it gains Flank for the fight."},
 
 	# Greek - The Olympians
 	"hoplite": {"name": "Hoplite", "faction": "greek", "rarity": "Common", "type": "unit", "cost": 1, "atk": 2, "hp": 4, "spd": 2, "keywords": [], "rally": 1, "text": "Rally 1."},
@@ -74,6 +81,13 @@ const CARDS := {
 	"golden_cuirass": {"name": "Golden Cuirass", "faction": "greek", "rarity": "Uncommon", "type": "armament", "cost": 2, "target": "ally", "arm": {"hp": 4, "kw": ["taunt"]}, "text": "Armament. +4 HP and Taunt."},
 	"talos": {"name": "Talos", "faction": "greek", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 8, "spd": 1, "keywords": ["immovable"], "text": "Immovable. Can hold any number of Armaments, and each one also gives him +1 ATK. When he dies, they all shuffle into your draw pile."},
 	"hermes": {"name": "Hermes", "faction": "greek", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 4, "spd": 5, "keywords": ["ranged"], "text": "Ranged. Your first spell each round costs 0. Whenever you cast a spell, Hermes gains Shield 1."},
+	# Greek fusion cards.
+	"line_captain": {"name": "Line Captain", "faction": "greek", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 5, "spd": 2, "keywords": [], "rally": 2, "text": "Rally 2."},
+	"sybil": {"name": "Sybil", "faction": "greek", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 4, "spd": 3, "keywords": ["ranged"], "text": "Ranged. The first time you cast a spell each round, draw 1."},
+	"whetstone": {"name": "Whetstone", "faction": "greek", "rarity": "Uncommon", "type": "armament", "cost": 1, "target": "ally", "arm": {"atk": 1}, "text": "Armament. +1 ATK. When the bearer dies, this returns to your hand instead of the draw pile."},
+	"chorus_of_delphi": {"name": "Chorus of Delphi", "faction": "greek", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 2, "keywords": ["ranged"], "rally": 1, "text": "Ranged. Rally 1. Whenever you cast a spell, Greek allies in this row gain +1 ATK this round."},
+	"ash_spear": {"name": "Ash Spear", "faction": "greek", "rarity": "Rare", "type": "armament", "cost": 2, "target": "ally", "arm": {"atk": 2, "rally": 1}, "text": "Armament. +2 ATK. The bearer has Rally 1."},
+	"daedalus": {"name": "Daedalus", "faction": "greek", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 2, "keywords": [], "text": "Whenever you cast a spell, deal 1 to the first enemy in his lane. Your first Armament each round costs 1 less."},
 
 	# Egyptian - The Eternal
 	"mummy_guardian": {"name": "Mummy Guardian", "faction": "egypt", "rarity": "Common", "type": "unit", "cost": 2, "atk": 2, "hp": 5, "spd": 1, "keywords": ["taunt", "revive"], "text": "Taunt. Revive."},
@@ -97,6 +111,13 @@ const CARDS := {
 	"benben_stone": {"name": "Benben Stone", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 1, "atk": 0, "hp": 6, "spd": 1, "keywords": ["immovable"], "text": "Immovable. Doesn't attack. Its slot and the slots left and right of it are Sunlit while it lives."},
 	"eye_of_ra": {"name": "Eye of Ra", "faction": "egypt", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "enemy_burning", "text": "Double the Burn on an enemy."},
 	"horus": {"name": "Horus", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 5, "spd": 4, "keywords": ["ranged", "airborne"], "text": "Ranged. Airborne. Deals +2 damage to Burning enemies. Once per round, when a Burning enemy dies, gain 1 Faith next round."},
+	# Egyptian fusion cards.
+	"namesake": {"name": "Namesake", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 1, "hp": 4, "spd": 2, "keywords": [], "text": "Whenever one of your units Revives, it gains +1 ATK."},
+	"broodwarden": {"name": "Broodwarden", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 1, "hp": 5, "spd": 2, "keywords": [], "text": "Whenever you summon a Scarab, it gains Shield 2."},
+	"high_noon": {"name": "High Noon", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 4, "spd": 2, "keywords": ["ranged"], "text": "Ranged. Your units on Sunlit slots have +1 ATK."},
+	"undying_host": {"name": "Undying Host", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 5, "spd": 2, "keywords": ["revive"], "text": "Revive. On-Death: Summon a Scarab in its slot (if it Revives, in the other row of its lane)."},
+	"mummy_of_aten": {"name": "Mummy of Aten", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 6, "spd": 1, "keywords": ["taunt", "revive"], "text": "Taunt. Revive. While Sunlit, its attacks apply Burn 2."},
+	"solar_scarab": {"name": "Solar Scarab", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 2, "atk": 2, "hp": 3, "spd": 3, "keywords": [], "text": "On-Death: Summon a Scarab. While you have a Sunlit slot, your Scarabs' attacks apply Burn 1."},
 
 	# Tokens
 	"scarab": {"name": "Scarab", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 1, "spd": 4, "keywords": [], "token": true, "text": "Summoned token."},
@@ -124,7 +145,9 @@ const CARD_SHORT := {
 	"book_of_the_dead": "Return the last fallen ally", "sandswarm": "Scarabs fill the front row",
 	"plague_of_locusts": "Damage = your unit count", "call_of_the_pack": "Summon two Wolves", "bronze_spear": "+2 ATK", "hoplon": "Shield 2 each round",
 	"dawn_ritual": "Create a Sunlit slot", "noon_blaze": "Burn 3 in Sunlit lanes", "eye_of_ra": "Double an enemy's Burn",
-	"harpe": "+1 ATK and Cleave", "golden_cuirass": "+4 HP and Taunt", "blood_scent": "Each Wolf hits for its ATK", "void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
+	"harpe": "+1 ATK and Cleave", "golden_cuirass": "+4 HP and Taunt", "blood_scent": "Each Wolf hits for its ATK",
+	"death_rite": "Sacrifice an ally, draw", "hunting_cry": "Wolves Flank and +1 ATK", "whetstone": "+1 ATK, returns to hand", "ash_spear": "+2 ATK and Rally 1",
+	"void_taint": "Unplayable", "void_rot": "Unplayable, Core -2",
 	"void_web": "Unplayable", "hex": "Unplayable, Faith -1", "ashes": "Unplayable, Core -1", "drowned": "Unplayable, a lane -1 ATK",
 }
 

@@ -67,6 +67,7 @@ func _initialize() -> void:
 	fuzz_runs()
 	test_continue_run()
 	test_economy()
+	test_fusion_cards()
 	print("")
 	print("%d checks, %d failures" % [checks, failures])
 	quit(1 if failures > 0 else 0)
@@ -2762,6 +2763,182 @@ func test_economy() -> void:
 	check(run.remove_price() == 50 and run.buy_remove(0) == "" and run.remove_price() == 75, "economy: removal costs 25 more each time")
 	check(run.heal_price() == 40 and run.buy_heal() == "" and run.core_hp == 30 and run.heal_price() == 60, "economy: healing costs 20 more each time")
 	check(run.can_buy_remove() and run.can_buy_heal(), "economy: both services stay available")
+
+
+func test_fusion_cards() -> void:
+	var c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.debug_place("line_captain", P, 1, F)
+	var left = c.debug_place("peltast", P, 0, F)
+	var right = c.debug_place("peltast", P, 2, F)
+	c.end_plan()
+	check(left.atk == 4 and right.atk == 4, "fusion: Line Captain rallies Greek neighbours for 2")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var bearer = c.debug_place("ark_sentinel", P, 1, F)
+	var kin = c.debug_place("ark_sentinel", P, 2, F)
+	var outsider = c.debug_place("peltast", P, 0, F)
+	c.hand = [c._new_card("ash_spear")]
+	c.faith = 5
+	check(c.play_spell(0, [[P, F, 1]]) == "", "fusion: Ash Spear attaches")
+	c.end_plan()
+	check(kin.atk == 3 and outsider.atk == 2 and bearer.atk == 2, "fusion: Ash Spear gives the bearer Rally 1 for its own faction")
+	check(c.effective_atk(bearer) == 4, "fusion: Ash Spear still grants +2 ATK")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.deck = [c._new_card("ark_sentinel"), c._new_card("ark_sentinel")]
+	c.hand = [c._new_card("sybil"), c._new_card("warding"), c._new_card("divine_favor")]
+	c.discard = []
+	c.faith = 5
+	check(c.play_unit(0, 0, B) == "", "fusion: Sybil deploys")
+	var sybil = c.unit_at(P, B, 0)
+	check(c.play_spell(0, [[P, B, 0]]) == "" and c.hand.size() == 2, "fusion: Sybil draws on the first spell")
+	check(sybil.effect_used and not c.can_reposition(sybil), "fusion: Sybil's draw locks a fresh deployment")
+	check(c.hand[0]["id"] == "divine_favor" and c.play_spell(0, [[P, B, 0]]) == "" and c.hand.size() == 1, "fusion: Sybil draws only once each round")
+
+	c = fresh()
+	var foe = c.debug_place("hollowed_zealot", E, 1, F)
+	c.debug_place("daedalus", P, 1, B)
+	c.hand = [c._new_card("divine_favor"), c._new_card("bronze_spear")]
+	c.faith = 5
+	check(c.card_cost(c.hand[1]) == 0, "fusion: Daedalus discounts the first Armament")
+	check(c.play_spell(0, [[P, B, 1]]) == "" and foe.hp == 4, "fusion: Daedalus strikes the first enemy in his lane")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var chorus = c.debug_place("chorus_of_delphi", P, 1, B)
+	var singer = c.debug_place("peltast", P, 2, B)
+	var norse = c.debug_place("berserker", P, 0, B)
+	c.hand = [c._new_card("divine_favor")]
+	c.faith = 5
+	check(c.play_spell(0, [[P, B, 0]]) == "", "fusion: Chorus hears a spell")
+	check(chorus.temp_atk == 1 and singer.temp_atk == 1 and norse.temp_atk == 2, "fusion: Chorus buffs Greek allies in its row this round")
+
+	c = fresh()
+	c.deck = [c._new_card("ark_sentinel"), c._new_card("ark_sentinel"), c._new_card("ark_sentinel")]
+	c.hand = [c._new_card("death_rite")]
+	c.discard = []
+	c.faith = 5
+	c.debug_place("raven_of_odin", P, 0, F)
+	check(c.play_spell(0, [[P, F, 0]]) == "" and c.hand.size() == 3, "fusion: Death Rite draws 2 when the ally has On-Death")
+	c = fresh()
+	c.deck = [c._new_card("ark_sentinel"), c._new_card("ark_sentinel")]
+	c.hand = [c._new_card("death_rite")]
+	c.discard = []
+	c.faith = 5
+	c.debug_place("ark_sentinel", P, 0, F)
+	check(c.play_spell(0, [[P, F, 0]]) == "" and c.hand.size() == 1, "fusion: Death Rite draws 1 otherwise")
+
+	c = fresh()
+	var raid = c.debug_place("shield_raid", P, 0, F)
+	check(c.move_unit(0, F, 1, F) == "" and raid.shield == 2, "fusion: Shield Raid gains Shield 2 when it moves")
+
+	c = fresh()
+	var charge = c.debug_place("reckless_charge", P, 0, F)
+	check(c.move_unit(0, F, 1, F) == "" and charge.hp == 3, "fusion: Reckless Charge takes 1 when it moves")
+	var front_foe = c.debug_place("hollowed_bulwark", E, 1, F)
+	var back_foe = c.debug_place("hollowed_bulwark", E, 1, B)
+	c._deal_damage(charge, 99, "effect")
+	check(front_foe.hp == 5 and back_foe.hp == 5, "fusion: Reckless Charge blasts its lane for its ATK")
+
+	c = fresh()
+	var wolf = c.debug_place("wolf", P, 0, F)
+	var carrion = c.debug_place("carrion_wolf", P, 1, F)
+	c._deal_damage(carrion, 99, "effect")
+	check(wolf.atk == 2, "fusion: Carrion Wolf gives other Wolves +1 ATK")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.debug_place("wolf", P, 1, F)
+	var runner = c.debug_place("packrunner", P, 0, F)
+	c.moves_left = 2
+	check(c.move_unit(0, F, 1, B) == "" and runner.has_kw("flank"), "fusion: Packrunner gains Flank behind a Wolf")
+	check(c.move_unit(1, B, 2, B) == "" and runner.bonus_kw.size() == 1, "fusion: Packrunner gains Flank only once")
+
+	c = fresh()
+	var hunted = c.debug_place("hollowed_zealot", E, 0, F)
+	hunted.hp = 30
+	hunted.max_hp = 30
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.debug_place("wolf", P, 0, F)
+	var back_wolf = c.debug_place("wolf", P, 0, B)
+	c.hand = [c._new_card("hunting_cry")]
+	c.faith = 5
+	check(c.play_spell(0, []) == "", "fusion: Hunting Cry resolves")
+	c.end_plan()
+	check(back_wolf.attacked_round == 1 and hunted.hp == 24, "fusion: Hunting Cry gives Wolves Flank and +1 ATK")
+
+	c = fresh()
+	var named = c.debug_place("mummy_guardian", P, 0, F)
+	c.debug_place("namesake", P, 2, F)
+	c._deal_damage(named, 99, "effect")
+	check(named.alive and named.hp == 1 and named.atk == 3, "fusion: Namesake gives +1 ATK on Revive")
+
+	c = fresh()
+	c.debug_place("broodwarden", P, 0, B)
+	var bug = c._spawn("scarab", P, 1, F)
+	check(bug.shield == 2, "fusion: Broodwarden gives a summoned Scarab Shield 2")
+
+	c = fresh()
+	c.terrain[c._key(P, F, 0)] = "sunlit"
+	var sunner = c.debug_place("ark_sentinel", P, 0, F)
+	var shaded = c.debug_place("ark_sentinel", P, 1, F)
+	c.debug_place("high_noon", P, 2, B)
+	check(c.effective_atk(sunner) == 4 and c.effective_atk(shaded) == 2, "fusion: High Noon adds ATK on Sunlit slots")
+
+	c = fresh()
+	var host = c.debug_place("undying_host", P, 0, F)
+	c._deal_damage(host, 99, "effect")
+	var hatched = c.unit_at(P, B, 0)
+	check(host.alive and host.hp == 1 and hatched != null and hatched.id == "scarab", "fusion: Undying Host revives and leaves a Scarab behind")
+
+	c = fresh()
+	var mummy = c.debug_place("mummy_of_aten", P, 0, F)
+	var burned = c.debug_place("hollowed_bulwark", E, 0, F)
+	c._attack(mummy, burned, 3)
+	check(burned.burn == 0, "fusion: Mummy of Aten does not Burn off Sunlit")
+	c.terrain[c._key(P, F, 0)] = "sunlit"
+	var burned2 = c.debug_place("hollowed_bulwark", E, 1, F)
+	c._attack(mummy, burned2, 3)
+	check(burned2.burn == 2, "fusion: Mummy of Aten applies Burn 2 while Sunlit")
+
+	c = fresh()
+	c.terrain[c._key(P, F, 3)] = "sunlit"
+	c.debug_place("solar_scarab", P, 1, F)
+	var scarab = c.debug_place("scarab", P, 0, F)
+	var target = c.debug_place("hollowed_bulwark", E, 0, F)
+	c._attack(scarab, target, 1)
+	check(target.burn == 1, "fusion: Solar Scarab makes Scarabs Burn while a slot is Sunlit")
+	var body = c.unit_at(P, F, 1)
+	c._deal_damage(body, 99, "effect")
+	check(c.unit_at(P, F, 1) != null and c.unit_at(P, F, 1).id == "scarab", "fusion: Solar Scarab summons a Scarab when it dies")
+
+	c = fresh()
+	var armed = c.debug_place("ark_sentinel", P, 0, F)
+	c.hand = [c._new_card("whetstone")]
+	c.deck = []
+	c.discard = []
+	c.faith = 5
+	check(c.play_spell(0, [[P, F, 0]]) == "", "fusion: Whetstone attaches")
+	c._deal_damage(armed, 99, "effect")
+	check(c.hand.size() == 1 and c.hand[0]["id"] == "whetstone" and c.deck.is_empty(), "fusion: Whetstone returns to hand")
+	c = fresh()
+	armed = c.debug_place("ark_sentinel", P, 0, F)
+	armed.armaments.append(c._new_card("whetstone"))
+	c.hand = []
+	for i in 7:
+		c.hand.append(c._new_card("ark_sentinel"))
+	c.deck = []
+	c._deal_damage(armed, 99, "effect")
+	check(c.hand.size() == 7 and c.deck.size() == 1 and c.deck[0]["id"] == "whetstone", "fusion: a full hand sends Whetstone to the draw pile")
+
+	var run = Run.new()
+	run.setup(1, "shieldmaiden")
+	check(run._card_pool("Rare", ["norse"], []).has("packrunner"), "fusion: the new cards are in the draft")
+	check("flank" in CardWidget.glossary_icons(Data.CARDS["hunting_cry"], "hunting_cry"), "fusion: Hunting Cry explains Flank")
+	check("rally" in CardWidget.glossary_icons(Data.CARDS["ash_spear"], "ash_spear"), "fusion: Ash Spear explains Rally")
 
 
 func _map_sig(run) -> String:
