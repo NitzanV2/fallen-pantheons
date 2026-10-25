@@ -5,6 +5,7 @@ signal exit_requested
 
 const Data = preload("res://scripts/core/data.gd")
 const Run = preload("res://scripts/core/run.gd")
+const RunSave = preload("res://scripts/core/run_save.gd")
 const BattleView = preload("res://scripts/ui/battle_view.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const MapCanvas = preload("res://scripts/ui/map_canvas.gd")
@@ -50,6 +51,14 @@ var sandbox_mode := false
 func start(seed_value: int, patron: String, power := "") -> void:
 	run = Run.new()
 	run.setup(seed_value, patron, power)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_build()
+	_show()
+
+
+## Resumes a run loaded from the save file.
+func start_saved(saved) -> void:
+	run = saved
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build()
 	_show()
@@ -146,10 +155,12 @@ func _build() -> void:
 	sidebar.add_child(spacer)
 	abandon_confirm = ConfirmationDialog.new()
 	abandon_confirm.title = "Abandon run?"
-	abandon_confirm.dialog_text = "Are you sure you want to abandon this run?\nAll progress will be lost."
+	abandon_confirm.dialog_text = "Are you sure you want to abandon this run?\nThe saved run will be deleted."
 	abandon_confirm.ok_button_text = "Abandon"
 	abandon_confirm.cancel_button_text = "Keep playing"
-	abandon_confirm.confirmed.connect(func(): exit_requested.emit())
+	abandon_confirm.confirmed.connect(func():
+		RunSave.clear()
+		exit_requested.emit())
 	add_child(abandon_confirm)
 	_button("Back to sandbox" if sandbox_mode else "Abandon run", _confirm_abandon, sidebar)
 
@@ -379,6 +390,7 @@ func _show() -> void:
 	if sandbox_mode and run.state == "map":
 		exit_requested.emit()
 		return
+	_persist()
 	for child in content.get_children():
 		child.queue_free()
 	_update_sidebar()
@@ -404,6 +416,15 @@ func _show() -> void:
 			_show_end()
 	if run.state != "combat":
 		_fade_in(content)
+
+
+func _persist() -> void:
+	if sandbox_mode:
+		return
+	if run.state == "victory" or run.state == "defeat":
+		RunSave.clear()
+	else:
+		RunSave.write(run)
 
 
 func _fade_in(c: CanvasItem, duration := 0.3) -> void:
@@ -793,9 +814,9 @@ func _show_shop() -> void:
 	services.add_theme_constant_override("separation", 10)
 	box.add_child(services)
 	for b in [
-		_option("Remove a card: %d gold" % Run.REMOVE_PRICE, "opt_remove", func():
+		_option("Remove a card: %d gold" % run.remove_price(), "opt_remove", func():
 			_open_deck("Choose a card to remove", func(i): _shop_result(run.buy_remove(i))), services, run.can_buy_remove()),
-		_option("Heal %d Core HP: %d gold" % [Run.HEAL_AMOUNT, Run.HEAL_PRICE], "opt_heal", func(): _shop_result(run.buy_heal()), services, run.can_buy_heal()),
+		_option("Heal %d Core HP: %d gold" % [Run.HEAL_AMOUNT, run.heal_price()], "opt_heal", func(): _shop_result(run.buy_heal()), services, run.can_buy_heal()),
 		_option("Leave the market.", "opt_leave", func():
 			run.leave_node()
 			_show(), services),

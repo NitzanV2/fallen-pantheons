@@ -5,6 +5,7 @@ extends SceneTree
 const Combat = preload("res://scripts/core/combat.gd")
 const Data = preload("res://scripts/core/data.gd")
 const Run = preload("res://scripts/core/run.gd")
+const RunSave = preload("res://scripts/core/run_save.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 
 const P := 0
@@ -64,6 +65,8 @@ func _initialize() -> void:
 	test_event_data()
 	fuzz_shrines()
 	fuzz_runs()
+	test_continue_run()
+	test_economy()
 	print("")
 	print("%d checks, %d failures" % [checks, failures])
 	quit(1 if failures > 0 else 0)
@@ -2650,3 +2653,132 @@ func _check_invariants(c, total_cards: int, tag: String) -> void:
 				statuses += 1
 				check(not c.discard.has(card), "%s: a status card reached the discard pile" % tag)
 	check(cids.size() - statuses == total_cards, "%s: card count %d != %d" % [tag, cids.size() - statuses, total_cards])
+
+
+func test_continue_run() -> void:
+	var saved_path := RunSave.path
+	RunSave.path = "user://run_save_test.save"
+	RunSave.clear()
+	var run = Run.new()
+	run.setup(42, "myrmidon", "zeus_lightning_bolt")
+	RunSave.write(run)
+	var loaded = RunSave.read()
+	check(loaded != null and RunSave.describe(loaded) == "Greek · Act 1 · The Reliquary", "continue: a new run resumes at the Reliquary")
+	check(typeof(loaded.nodes[0]["id"]) == TYPE_INT, "continue: node ids stay integers")
+	check(_map_sig(loaded) == _map_sig(run), "continue: the map is unchanged")
+	var roll_state: int = run.reward_rng.state
+	var expected_roll := int(run.reward_rng.randi())
+	run.reward_rng.state = roll_state
+	RunSave.write(run)
+	loaded = RunSave.read()
+	check(loaded.reward_rng.randi() == expected_roll, "continue: reward rolls resume where they stopped")
+	check(run.enter_node(run.available_nodes()[0]) == "" and run.state == "combat", "continue: the first node is a fight")
+	RunSave.write(run)
+	loaded = RunSave.read()
+	check(loaded.state == "combat" and loaded.battle_id == run.battle_id and loaded.current == run.current, "continue: a fight saves its battle")
+	check(RunSave.describe(loaded).ends_with("battle restarts"), "continue: a saved fight says the battle restarts")
+	check(_board_sig(run.make_combat()) == _board_sig(loaded.make_combat()), "continue: the battle is rebuilt the same way")
+	var shop_run = Run.new()
+	shop_run.setup(9, "shieldmaiden", "tyrs_oath")
+	shop_run.gold = 200
+	shop_run.core_hp = 40
+	shop_run._generate_shop()
+	shop_run.state = "shop"
+	check(shop_run.buy_card(0) == "", "continue: the shop sale is legal")
+	var shop_state: int = shop_run.shop_rng.state
+	var shop_roll := int(shop_run.shop_rng.randi())
+	shop_run.shop_rng.state = shop_state
+	RunSave.write(shop_run)
+	loaded = RunSave.read()
+	check(loaded.gold == shop_run.gold and loaded.deck == shop_run.deck and loaded.devotion == shop_run.devotion, "continue: a shop purchase is kept")
+	check(loaded.shop["cards"][0]["sold"] and loaded.core_hp == 40, "continue: sold stock and Core HP are kept")
+	check(loaded.shop_rng.randi() == shop_roll, "continue: shop rolls resume where they stopped")
+	var shrine_run = Run.new()
+	shrine_run.setup(11, "mummy_guardian", "osiris_return")
+	shrine_run._pick_event()
+	shrine_run.state = "shrine"
+	RunSave.write(shrine_run)
+	loaded = RunSave.read()
+	check(loaded.shrine["event"] == shrine_run.shrine["event"] and loaded.seen_events == shrine_run.seen_events, "continue: the shrine event is kept")
+	var bad: Dictionary = run.to_save()
+	bad["deck"] = ["not_a_card"]
+	var f := FileAccess.open(RunSave.path, FileAccess.WRITE)
+	f.store_var(bad)
+	f.close()
+	check(RunSave.read() == null, "continue: an unknown card rejects the save")
+	f = FileAccess.open(RunSave.path, FileAccess.WRITE)
+	f.store_var({"version": 9})
+	f.close()
+	check(RunSave.read() == null, "continue: a future save version is ignored")
+	f = FileAccess.open(RunSave.path, FileAccess.WRITE)
+	f.store_string("not a save")
+	f.close()
+	check(RunSave.read() == null, "continue: a damaged file is ignored")
+	RunSave.clear()
+	check(RunSave.read() == null, "continue: clearing the save removes it")
+	RunSave.path = saved_path
+
+
+func test_economy() -> void:
+	var run = Run.new()
+	run.setup(3, "myrmidon", "zeus_lightning_bolt")
+	check(run.enter_node(run.available_nodes()[0]) == "", "economy: the first node is a fight")
+	var c = run.make_combat()
+	c.result = "win"
+	c.round_num = 1
+	c.max_rounds = 3
+	run.finish_combat(c)
+	check(run.reward["gold"] == 25, "economy: a round-1 win pays 15 plus 5 for each of 2 spare rounds")
+	run = Run.new()
+	run.setup(4, "shieldmaiden", "tyrs_oath")
+	run.enter_node(run.available_nodes()[0])
+	run.nodes[run.current]["type"] = "elite"
+	c = run.make_combat()
+	c.result = "win"
+	c.round_num = 2
+	c.max_rounds = 4
+	run.finish_combat(c)
+	check(run.reward["gold"] == 40, "economy: an elite finished with 2 rounds spare pays 30 plus 10")
+	run = Run.new()
+	run.setup(5, "mummy_guardian", "osiris_return")
+	run.enter_node(run.available_nodes()[0])
+	c = run.make_combat()
+	c.result = "timeout"
+	c.round_num = 3
+	c.max_rounds = 3
+	run.finish_combat(c)
+	check(run.reward["gold"] == 0, "economy: a timeout pays nothing")
+	run = Run.new()
+	run.setup(6, "myrmidon", "zeus_lightning_bolt")
+	run.gold = 400
+	run.core_hp = 20
+	run.act = 2
+	check(run.card_price("augury") == 29 and run.card_price("athena") == 46 and run.card_price("thor") == 69, "economy: Act 2 card prices follow rarity")
+	check(run.relic_price("pilgrims_pouch") == 57 and run.relic_price("laurel_wreath") == 81 and run.relic_price("golden_fleece") == 115, "economy: Act 2 relic prices follow rarity")
+	run.act = 1
+	run._generate_shop()
+	run.state = "shop"
+	check(run.card_price("augury") == 25 and run.relic_price("golden_fleece") == 100, "economy: Act 1 keeps the base rarity prices")
+	check(run.remove_price() == 50 and run.buy_remove(0) == "" and run.remove_price() == 75, "economy: removal costs 25 more each time")
+	check(run.heal_price() == 40 and run.buy_heal() == "" and run.core_hp == 30 and run.heal_price() == 60, "economy: healing costs 20 more each time")
+	check(run.can_buy_remove() and run.can_buy_heal(), "economy: both services stay available")
+
+
+func _map_sig(run) -> String:
+	var parts: PackedStringArray = []
+	for n in run.nodes:
+		var edges := ""
+		for e in n["edges"]:
+			edges += str(e) + ","
+		parts.append("%s:%s" % [n["type"], edges])
+	return "|".join(parts)
+
+
+func _board_sig(c) -> String:
+	var parts: PackedStringArray = []
+	for side in 2:
+		for row in 2:
+			for lane in 4:
+				var u = c.grid[side][row][lane]
+				parts.append("-" if u == null else "%s%d" % [u.id, u.hp])
+	return "|".join(parts)

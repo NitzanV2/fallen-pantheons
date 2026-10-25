@@ -142,6 +142,12 @@ func _basics(page: VBoxContainer) -> void:
 			roundi((act2["price_mult"] - 1.0) * 100), Data.EVENTS.values().filter(func(e): return e.get("act", 1) > 1).size(),
 			", ".join(Data.RELICS.keys().filter(func(id): return Data.RELICS[id].get("act", 1) > 1).map(func(id): return Data.RELICS[id]["name"]))]],
 	])
+	_tip(page, "Leaving a run saves it. Continue on the title screen resumes that run. Abandoning, winning, or losing deletes the save. A battle in progress starts again from the beginning.")
+	_tip(page, "The market sells Common, Uncommon and Rare cards for %d, %d and %d gold, and relics for %d, %d and %d. Removing a card starts at %d gold and healing %d Core HP starts at %d; each time you buy that service during the run, it costs %d or %d more. Act 2 raises every shop price by %d%%." % [
+		Run.CARD_PRICES["Common"], Run.CARD_PRICES["Uncommon"], Run.CARD_PRICES["Rare"],
+		Run.RELIC_PRICES["Common"], Run.RELIC_PRICES["Uncommon"], Run.RELIC_PRICES["Rare"],
+		Data.BALANCE["remove_price"], Data.BALANCE["shop_heal_amount"], Data.BALANCE["shop_heal_price"],
+		Data.BALANCE["remove_step"], Data.BALANCE["shop_heal_step"], roundi((Data.ACTS[1]["price_mult"] - 1.0) * 100)])
 
 	_heading(page, "battle/tile_player.jpg", "The battlefield")
 	var row := HBoxContainer.new()
@@ -166,7 +172,7 @@ An enemy whose lane is empty on your side hits your %s [b]Core[/b] instead.""" %
 	_tip(page, "Press [b]END PLANNING[/b] to finish step 1. Steps 2 to 4 then play out automatically.")
 
 	_heading(page, "map/void.png", "Round limit")
-	page.add_child(_rich("Normal and elite fights last [b]3 rounds[/b]. Deeper floors add rounds (noted in the fight title), and Golden Fleece adds 1. The boss fight has no limit, but its Void Tide hits your Core every round."))
+	page.add_child(_rich("Normal and elite fights last [b]3 rounds[/b]. Deeper floors add rounds (noted in the fight title), and Golden Fleece adds 1. The boss fight has no limit, but its Void Tide hits your Core every round. Winning pays [b]%d gold[/b] ([b]%d[/b] for an elite), plus [b]%d gold[/b] for each round still left. Running out of time pays nothing, and bosses pay no gold." % [Data.BALANCE["win_gold"], Data.BALANCE["elite_gold"], Data.BALANCE["spare_round_gold"]]))
 
 
 func _attacking(page: VBoxContainer) -> void:
@@ -212,16 +218,16 @@ func _keywords(page: VBoxContainer) -> void:
 		["ranged", "Ranged", "Can attack from the back row. Can't target units on Ruins."],
 		["cleave", "Cleave", "Also hits the units in the lanes on both sides of the target, in the same row, for full damage."],
 		["pierce", "Pierce", "Damage beyond what kills a front unit carries to the unit behind it. It never reaches the Core."],
-		["rally", "Rally X", "Start of round: row neighbours of its own faction gain +X ATK for the rest of the fight. Hoplite and Forge Apprentice only buff other Greek units. Stacks every round."],
+		["rally", "Rally X", "Start of round: row neighbours of its own faction gain +X ATK for the rest of the fight. Stacks every round."],
 		["support", "Support", "Start of round: helps the ally directly in front of it (same lane). Works from the back row."],
 		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot."],
 		["on_death", "On-Death", "Triggers when the unit dies (and also when it Revives)."],
-		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP. Ankh of Eternity gives this to every ally, including summoned Scarabs and Wolves, and the Core takes 2 each time one Revives. Book of the Dead instead returns the last ally that died for good, at full HP, keeping ATK and HP it had gained (not Armaments)."],
+		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP. Ankh of Eternity gives this to every ally, and the Core takes 2 each time one Revives. Book of the Dead instead returns the last ally that died for good, at full HP, keeping ATK and HP it had gained (not Armaments)."],
 		["growth", "Growth", "End of round: gains the listed stats."],
-		["summon", "Summon", "Creates a token (like a 1/1 Scarab or a 1/2 Wolf) in an empty slot. Tokens never join your deck."],
+		["summon", "Summon", "Creates a token in an empty slot. Tokens never join your deck."],
 		["pack", "Wolf and Pack", "Wolves are a Norse tribe (the card text starts with \"Wolf\"). Pack: gains +1 ATK for each of your other Wolves, up to +%d. Wolf tokens count." % Combat.PACK_MAX],
-		["armament", "Armament", "Play it on one of your units to attach it for the fight. A unit holds one (a new one replaces the old); Talos holds any number. When the unit dies, its Armaments shuffle into your draw pile. Forge Apprentice makes your first Armament each round cost 1 less."],
-		["flank", "Flank", "A Wolf with Flank in the back row attacks right after the Wolf in front of it, hitting the same target (or that Wolf's next target if the first one fell). With no Wolf in front, it doesn't attack. Skoll and Hati give all your Wolves Flank."],
+		["armament", "Armament", "Play it on one of your units to attach it for the fight. A unit holds one (a new one replaces the old); Talos holds any number. When the unit dies, its Armaments shuffle into your draw pile."],
+		["flank", "Flank", "A Wolf with Flank in the back row attacks right after the Wolf in front of it, hitting the same target (or that Wolf's next target if the first one fell). With no Wolf in front, it doesn't attack."],
 		["exhaust", "Exhaust", "After you cast it, the card is gone for the rest of this fight."],
 		["immovable", "Immovable", "Can't be pushed or swapped and takes no collision damage."],
 		["hp", "Threat", "Damage the enemy deals to your Core if it survives until time runs out."],
@@ -236,7 +242,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["split", "Split", "When it dies, two smaller copies appear in its slot and the nearest empty slot in its row (left first)."],
 		["frenzy", "Frenzy", "Gains +1 ATK each time it takes damage and survives. Kill it in one burst."],
 		["poison", "Poison", "Units it hits are Poisoned: they take 1 damage at the end of every round. Any heal cures it, even at full HP."],
-		["burn", "Burn", "Burn X: at the end of the round (after Poison) the unit takes X damage, then Burn drops by 1. More Burn adds to it. Heals don't cure it; Revive clears it. Sunlit slots, Priestess of Aten and Noon Blaze apply it, Eye of Ra doubles it, and Horus hits Burning enemies for +2."],
+		["burn", "Burn", "Burn X: at the end of the round (after Poison) the unit takes X damage, then Burn drops by 1. More Burn adds to it. Heals don't cure it; Revive clears it. Sunlit slots apply it."],
 		["spellward", "Spellward", "Your spells can't target it or the enemies next to it (left, right, in front, behind). It gains Shield 2 whenever you cast a spell."],
 		["incorporeal", "Incorporeal", "Act 2. Melee attacks (and Cleave splash) deal it half damage, rounded down, minimum 1. Ranged attacks, spells and Burn hit it in full."],
 		["drown", "Drown", "Act 2. When it dies, your front slot in its lane becomes [b]Flooded[/b] (if that slot has no terrain yet)."],

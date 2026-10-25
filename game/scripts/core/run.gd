@@ -21,7 +21,7 @@ const MAX_HP: int = Data.BALANCE["core_hp"]
 const MIN_DECK := 5
 const REST_HEAL: int = Data.BALANCE["rest_heal"]
 const CARD_PRICES := {"Common": 25, "Uncommon": 40, "Rare": 60}
-const RELIC_PRICE: int = Data.BALANCE["relic_price"]
+const RELIC_PRICES := {"Common": 50, "Uncommon": 70, "Rare": 100}
 const REMOVE_PRICE: int = Data.BALANCE["remove_price"]
 const HEAL_PRICE: int = Data.BALANCE["shop_heal_price"]
 const HEAL_AMOUNT: int = Data.BALANCE["shop_heal_amount"]
@@ -43,6 +43,9 @@ var relics: Array = []
 var core_hp := MAX_HP
 var max_hp := MAX_HP
 var gold := 0
+## How many times this run has paid a shop to remove a card, or to heal.
+var removes_bought := 0
+var heals_bought := 0
 var nodes: Array = []
 var floors: Array = []
 var current := -1
@@ -488,6 +491,11 @@ func finish_combat(c) -> void:
 		if has_relic("healing_ampoule"):
 			reward["notes"].append("Healing Ampoule: healed %d." % _heal(3))
 		reward["cards"] = _card_choices(act_def()["elite_odds" if type == "elite" else "normal_odds"], reward_rng)
+		var spare := maxi(0, c.max_rounds - c.round_num)
+		if spare > 0:
+			var bonus := spare * Data.BALANCE["spare_round_gold"]
+			reward["gold"] += bonus
+			reward["notes"].append("Finished with %d %s to spare: +%d gold." % [spare, "round" if spare == 1 else "rounds", bonus])
 		if type == "elite":
 			var relic := _random_relic(reward_rng)
 			if relic != "":
@@ -584,14 +592,23 @@ func card_price(id: String) -> int:
 	return roundi(CARD_PRICES[Data.CARDS[id]["rarity"]] * act_def()["price_mult"])
 
 
-func relic_price() -> int:
-	return roundi(RELIC_PRICE * act_def()["price_mult"])
+func relic_price(id: String) -> int:
+	return roundi(RELIC_PRICES[Data.RELICS[id]["rarity"]] * act_def()["price_mult"])
+
+
+## Card removal and healing can be bought again in the same shop. Each purchase this run costs more.
+func remove_price() -> int:
+	return roundi((REMOVE_PRICE + removes_bought * Data.BALANCE["remove_step"]) * act_def()["price_mult"])
+
+
+func heal_price() -> int:
+	return roundi((HEAL_PRICE + heals_bought * Data.BALANCE["shop_heal_step"]) * act_def()["price_mult"])
 
 
 # ---------------------------------------------------------------- shop
 
 func _generate_shop() -> void:
-	shop = {"cards": [], "relics": [], "remove_used": false, "heal_used": false}
+	shop = {"cards": [], "relics": []}
 	var picked: Array = []
 	for i in 3:
 		var id := _roll_card(act_def()["shop_odds"], [], picked, shop_rng)
@@ -602,7 +619,7 @@ func _generate_shop() -> void:
 		var relic := _random_relic(shop_rng, listed)
 		if relic != "":
 			listed.append(relic)
-			shop["relics"].append({"id": relic, "price": relic_price(), "sold": false})
+			shop["relics"].append({"id": relic, "price": relic_price(relic), "sold": false})
 
 
 func buy_card(i: int) -> String:
@@ -630,27 +647,27 @@ func buy_relic(i: int) -> String:
 
 
 func can_buy_remove() -> bool:
-	return not shop["remove_used"] and gold >= REMOVE_PRICE and deck.size() > MIN_DECK
+	return state == "shop" and gold >= remove_price() and deck.size() > MIN_DECK
 
 
 func buy_remove(deck_index: int) -> String:
 	if not can_buy_remove():
 		return "You cannot remove a card right now."
-	gold -= REMOVE_PRICE
-	shop["remove_used"] = true
+	gold -= remove_price()
+	removes_bought += 1
 	deck.remove_at(deck_index)
 	return ""
 
 
 func can_buy_heal() -> bool:
-	return not shop["heal_used"] and gold >= HEAL_PRICE and core_hp < max_hp
+	return state == "shop" and gold >= heal_price() and core_hp < max_hp
 
 
 func buy_heal() -> String:
 	if not can_buy_heal():
 		return "You cannot heal right now."
-	gold -= HEAL_PRICE
-	shop["heal_used"] = true
+	gold -= heal_price()
+	heals_bought += 1
 	_heal(HEAL_AMOUNT)
 	return ""
 
@@ -888,3 +905,151 @@ func rest_remove(deck_index: int) -> String:
 	deck.remove_at(deck_index)
 	state = "map"
 	return ""
+
+
+# ---------------------------------------------------------------- save
+
+const SAVE_VERSION := 1
+const SAVE_STATES := ["map", "combat", "reward", "shop", "shrine", "rest", "act_complete", "victory", "defeat"]
+
+
+## Everything needed to resume between nodes. A fight itself is not stored:
+## continuing during a battle starts that battle again.
+func to_save() -> Dictionary:
+	return {
+		"version": SAVE_VERSION,
+		"seed_value": seed_value,
+		"patron": patron,
+		"power": power,
+		"power_nodes": power_nodes.duplicate(),
+		"deck": deck.duplicate(),
+		"relics": relics.duplicate(),
+		"core_hp": core_hp,
+		"max_hp": max_hp,
+		"gold": gold,
+		"removes_bought": removes_bought,
+		"heals_bought": heals_bought,
+		"nodes": nodes.duplicate(true),
+		"floors": floors.duplicate(true),
+		"current": current,
+		"path": path.duplicate(),
+		"state": state,
+		"battle_id": battle_id,
+		"last_battle_id": last_battle_id,
+		"battle_pool": battle_pool,
+		"reward": reward.duplicate(true),
+		"shop": shop.duplicate(true),
+		"shrine": shrine.duplicate(true),
+		"seen_events": seen_events.duplicate(),
+		"fights_won": fights_won,
+		"act": act,
+		"boss_id": boss_id,
+		"boss_ids": boss_ids.duplicate(),
+		"bonus_upgrades": bonus_upgrades,
+		"act_summary": act_summary.duplicate(true),
+		"devotion": devotion,
+		"foreign": foreign,
+		"power_ready_floor": power_ready_floor,
+		"map_rng": map_rng.state,
+		"reward_rng": reward_rng.state,
+		"shop_rng": shop_rng.state,
+		"event_rng": event_rng.state,
+		"encounter_rng": encounter_rng.state,
+	}
+
+
+## Restores a run from `to_save`. Returns false when the save cannot be trusted.
+func apply_save(data: Dictionary) -> bool:
+	if int(data.get("version", 0)) != SAVE_VERSION:
+		return false
+	var p := str(data.get("patron", ""))
+	var pw := str(data.get("power", ""))
+	if Data.patron(p).is_empty() or not Data.GOD_POWERS.has(pw):
+		return false
+	var loaded_nodes = data.get("nodes", [])
+	var loaded_floors = data.get("floors", [])
+	if typeof(loaded_nodes) != TYPE_ARRAY or loaded_nodes.is_empty():
+		return false
+	if typeof(loaded_floors) != TYPE_ARRAY or loaded_floors.size() != FLOORS:
+		return false
+	var bosses = data.get("boss_ids", [])
+	if typeof(bosses) != TYPE_ARRAY or bosses.size() != Data.ACTS.size():
+		return false
+	for id in bosses:
+		if typeof(id) != TYPE_STRING or Data.battle(id).is_empty():
+			return false
+	var st := str(data.get("state", ""))
+	if not SAVE_STATES.has(st):
+		return false
+	if st == "combat" and Data.battle(str(data.get("battle_id", ""))).is_empty():
+		return false
+	for key in ["map_rng", "reward_rng", "shop_rng", "event_rng", "encounter_rng"]:
+		if typeof(data.get(key)) != TYPE_INT:
+			return false
+	var act_n := int(data.get("act", 0))
+	if act_n < 1 or act_n > Data.ACTS.size():
+		return false
+	var cur := int(data.get("current", -1))
+	if cur < -1 or cur >= loaded_nodes.size():
+		return false
+	var loaded_deck = data.get("deck", [])
+	if typeof(loaded_deck) != TYPE_ARRAY or loaded_deck.is_empty():
+		return false
+	for id in loaded_deck:
+		if typeof(id) != TYPE_STRING or not Data.CARDS.has(id):
+			return false
+	var loaded_relics = data.get("relics", [])
+	if typeof(loaded_relics) != TYPE_ARRAY:
+		return false
+	for id in loaded_relics:
+		if typeof(id) != TYPE_STRING or not Data.RELICS.has(id):
+			return false
+	var tree: Dictionary = Data.GOD_POWERS[pw]["nodes"]
+	var loaded_nodes_owned = data.get("power_nodes", [])
+	if typeof(loaded_nodes_owned) != TYPE_ARRAY:
+		return false
+	for id in loaded_nodes_owned:
+		if typeof(id) != TYPE_STRING or not tree.has(id):
+			return false
+	seed_value = int(data.get("seed_value", 0))
+	patron = p
+	power = pw
+	power_nodes = loaded_nodes_owned.duplicate()
+	deck = loaded_deck.duplicate()
+	relics = loaded_relics.duplicate()
+	core_hp = int(data.get("core_hp", 0))
+	max_hp = int(data.get("max_hp", MAX_HP))
+	gold = int(data.get("gold", 0))
+	removes_bought = int(data.get("removes_bought", 0))
+	heals_bought = int(data.get("heals_bought", 0))
+	nodes = loaded_nodes.duplicate(true)
+	floors = loaded_floors.duplicate(true)
+	current = cur
+	path = data.get("path", []).duplicate()
+	state = st
+	battle_id = str(data.get("battle_id", ""))
+	last_battle_id = str(data.get("last_battle_id", ""))
+	battle_pool = str(data.get("battle_pool", ""))
+	reward = _dict(data.get("reward", {}))
+	shop = _dict(data.get("shop", {}))
+	shrine = _dict(data.get("shrine", {}))
+	seen_events = data.get("seen_events", []).duplicate()
+	fights_won = int(data.get("fights_won", 0))
+	act = act_n
+	boss_ids = bosses.duplicate()
+	boss_id = str(data.get("boss_id", boss_ids[act - 1]))
+	bonus_upgrades = int(data.get("bonus_upgrades", 0))
+	act_summary = _dict(data.get("act_summary", {}))
+	devotion = int(data.get("devotion", 0))
+	foreign = int(data.get("foreign", 0))
+	power_ready_floor = int(data.get("power_ready_floor", 0))
+	map_rng.state = data["map_rng"]
+	reward_rng.state = data["reward_rng"]
+	shop_rng.state = data["shop_rng"]
+	event_rng.state = data["event_rng"]
+	encounter_rng.state = data["encounter_rng"]
+	return true
+
+
+func _dict(value) -> Dictionary:
+	return value.duplicate(true) if typeof(value) == TYPE_DICTIONARY else {}

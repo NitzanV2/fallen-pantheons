@@ -9,6 +9,7 @@ const PlaytestOverlay = preload("res://scripts/ui/playtest_overlay.gd")
 const CardPreview = preload("res://scripts/ui/card_preview.gd")
 const RulesPanel = preload("res://scripts/ui/rules_panel.gd")
 const Music = preload("res://scripts/ui/music.gd")
+const RunSave = preload("res://scripts/core/run_save.gd")
 
 const PATRON_TILE := Vector2(332, 544)
 const PATRON_ART_BOTTOM := 322
@@ -47,16 +48,6 @@ const BG_RECT := Rect2(-60, -125, 1720, 968)
 const GOLD := Color(0.95, 0.78, 0.35)
 const CREAM := Color(0.94, 0.9, 0.82)
 const MUTED := Color(0.7, 0.68, 0.76)
-const TITLE_CROP := Rect2(0.02, 0.28, 0.96, 0.48)
-## Drops the black behind a logo so the menu art shows through.
-const LOGO_KEY_SHADER := "shader_type canvas_item;
-void fragment() {
-	vec4 col = texture(TEXTURE, UV);
-	float luma = max(col.r, max(col.g, col.b));
-	col.a *= smoothstep(0.05, 0.22, luma);
-	COLOR = col;
-}
-"
 const LIST_GROUPS := {"neutral": "Neutral", "norse": "Norse", "greek": "Greek", "egypt": "Egyptian", "divine": "Divine (shrines only)", "other": "Tokens, curses and statuses"}
 const RARITY_ORDER := ["Starter", "Common", "Uncommon", "Rare"]
 const PATRON_SHORT := {"norse": "Norse", "greek": "Greek", "egypt": "Egyptian"}
@@ -67,6 +58,9 @@ var home_box: Control
 var home_stage: Control
 var home_logo: TextureRect
 var play_button: Button
+var continue_box: Control
+var continue_detail: Label
+var continue_row: Button
 var codex_box: Control
 var codex_dismiss: Button
 var patron_box: Control
@@ -126,26 +120,19 @@ func _ready() -> void:
 	Music.play("theme")
 
 
-## The logo sits on pure black, so additive blending makes its background disappear.
+## The title mark already has a transparent background, so it draws the same on every machine.
 func _title(height: float) -> Control:
-	for pattern in CardWidget.ART_PATHS:
-		var path: String = pattern % ["ui", "title_logo"]
-		if ResourceLoader.exists(path):
-			var tex: Texture2D = load(path)
-			var atlas := AtlasTexture.new()
-			atlas.atlas = tex
-			var size := tex.get_size()
-			atlas.region = Rect2(size * TITLE_CROP.position, size * TITLE_CROP.size)
-			var logo := TextureRect.new()
-			logo.texture = atlas
-			logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-			logo.custom_minimum_size = Vector2(0, height)
-			var blend := CanvasItemMaterial.new()
-			blend.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-			logo.material = blend
-			return logo
+	var path := "res://art/ui/title_logo.png"
+	if ResourceLoader.exists(path):
+		var logo := TextureRect.new()
+		logo.texture = load(path)
+		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		logo.custom_minimum_size = Vector2(0, height)
+		logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		return logo
 	var title := Label.new()
 	title.text = "Fallen Pantheons"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -183,6 +170,18 @@ func _build_menu() -> void:
 	home_stage.add_child(_home_logo())
 	play_button = _play_button()
 	home_stage.add_child(play_button)
+	continue_box = VBoxContainer.new()
+	continue_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	continue_box.add_theme_constant_override("separation", 6)
+	continue_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	continue_box.visible = false
+	home_stage.add_child(continue_box)
+	continue_box.add_child(_continue_button())
+	continue_detail = Label.new()
+	continue_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	continue_detail.add_theme_font_size_override("font_size", 14)
+	continue_detail.add_theme_color_override("font_color", MUTED)
+	continue_box.add_child(continue_detail)
 
 	codex_box = Panel.new()
 	codex_box.visible = false
@@ -196,6 +195,9 @@ func _build_menu() -> void:
 	column.add_theme_constant_override("separation", 4)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	CardWidget.place(codex_box, column, 26, 28, -26, -28)
+	continue_row = _codex_row("opt_card", "Continue", "", _continue_run, true)
+	continue_row.visible = false
+	column.add_child(continue_row)
 	column.add_child(_codex_row("opt_card", "New Run", "Choose a patron", _show_patrons, true))
 	column.add_child(_codex_row("rulebook", "Rulebook", "How battles work", _toggle_rules, false))
 	var close_gap := Control.new()
@@ -230,6 +232,7 @@ func _build_menu() -> void:
 	power_row.add_theme_constant_override("separation", 28)
 	power_box.add_child(power_row)
 	_add_sandbox_link()
+	_refresh_continue()
 
 
 func _centered_column(separation: int) -> VBoxContainer:
@@ -281,7 +284,9 @@ func _codex_row(icon: String, title: String, detail: String, callback: Callable,
 	text.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(text)
 	text.add_child(CardWidget.heading(title, 20, CREAM if primary else Color(0.9, 0.88, 0.84)))
-	text.add_child(CardWidget._label(detail, 13, MUTED, false))
+	var detail_label := CardWidget._label(detail, 13, MUTED, false)
+	text.add_child(detail_label)
+	b.set_meta("detail", detail_label)
 	return b
 
 
@@ -317,23 +322,11 @@ func _home_logo() -> TextureRect:
 	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	logo.custom_minimum_size = Vector2(920, 250)
+	logo.custom_minimum_size = Vector2(920, 220)
 	logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var mat := ShaderMaterial.new()
-	var shader := Shader.new()
-	shader.code = LOGO_KEY_SHADER
-	mat.shader = shader
-	logo.material = mat
+	logo.texture = load("res://art/ui/title_logo.png")
 	home_logo = logo
-	for pattern in CardWidget.ART_PATHS:
-		var path: String = pattern % ["ui", "title_logo"]
-		if ResourceLoader.exists(path):
-			var image: Image = load(path).get_image()
-			var size := Vector2(image.get_size())
-			var region := Rect2i(Vector2i(size * TITLE_CROP.position), Vector2i(size * TITLE_CROP.size))
-			logo.texture = ImageTexture.create_from_image(image.get_region(region))
-			break
 	return logo
 
 
@@ -342,6 +335,13 @@ func set_home_logo(path: String) -> void:
 	var image := Image.new()
 	if image.load(path) != OK:
 		return
+	image.convert(Image.FORMAT_RGBA8)
+	for y in image.get_height():
+		for x in image.get_width():
+			var pixel := image.get_pixel(x, y)
+			var luma := maxf(pixel.r, maxf(pixel.g, pixel.b))
+			pixel.a = 1.0 if luma >= 0.22 else (0.0 if luma <= 0.05 else (luma - 0.05) / 0.17)
+			image.set_pixel(x, y, pixel)
 	var region := _logo_bounds(image)
 	home_logo.texture = ImageTexture.create_from_image(image.get_region(region))
 
@@ -395,10 +395,50 @@ func _play_button() -> Button:
 	return b
 
 
+func _continue_button() -> Button:
+	var b := Button.new()
+	b.text = "Continue"
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.custom_minimum_size = Vector2(220, 46)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	b.add_theme_font_override("font", CardWidget.UI_FONT)
+	b.add_theme_font_size_override("font_size", 18)
+	b.add_theme_color_override("font_color", CREAM)
+	b.add_theme_color_override("font_hover_color", Color(0.16, 0.1, 0.03))
+	b.add_theme_color_override("font_pressed_color", Color(0.16, 0.1, 0.03))
+	b.tooltip_text = "A battle in progress starts again from the beginning."
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var sb := StyleBoxFlat.new()
+		var hot: bool = state == "hover" or state == "pressed"
+		sb.bg_color = Color(0.95, 0.78, 0.38, 0.95) if hot else Color(0.05, 0.04, 0.08, 0.45)
+		sb.border_color = GOLD
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(23)
+		sb.content_margin_left = 22
+		sb.content_margin_right = 22
+		b.add_theme_stylebox_override(state, sb)
+	b.pressed.connect(_continue_run)
+	return b
+
+
+func _refresh_continue() -> void:
+	var saved = RunSave.read()
+	var has: bool = saved != null
+	continue_row.visible = has
+	continue_box.visible = has and not codex_box.visible
+	if not has:
+		return
+	var text: String = RunSave.describe(saved)
+	continue_detail.text = text
+	continue_row.get_meta("detail").text = text
+
+
 func _open_codex() -> void:
 	codex_box.visible = true
 	codex_dismiss.visible = true
 	play_button.visible = false
+	_refresh_continue()
 	_place_stage(true)
 
 
@@ -406,6 +446,7 @@ func _close_codex() -> void:
 	codex_box.visible = false
 	codex_dismiss.visible = false
 	play_button.visible = true
+	_refresh_continue()
 	_place_stage(false)
 
 
@@ -1334,6 +1375,18 @@ func _refresh_builder_deck() -> void:
 		empty.text = "Empty. A custom deck needs at least one card."
 		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65))
 		builder_deck_box.add_child(empty)
+
+
+func _continue_run() -> void:
+	var saved = RunSave.read()
+	if saved == null:
+		_refresh_continue()
+		return
+	_hide_menus()
+	run_view = RunView.new()
+	add_child(run_view)
+	run_view.exit_requested.connect(_back_to_menu)
+	run_view.start_saved(saved)
 
 
 func _start_run(patron: String, power := "") -> void:
