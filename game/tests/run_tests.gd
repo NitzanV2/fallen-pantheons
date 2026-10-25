@@ -34,6 +34,8 @@ func _initialize() -> void:
 	test_charger_charges()
 	test_spells()
 	test_raiders()
+	test_plan_adjust()
+	test_rally()
 	test_oracle()
 	test_swarm()
 	test_pack()
@@ -349,6 +351,290 @@ func test_revive() -> void:
 	c._deal_damage(berserker, 10, "effect")
 	check(berserker.alive and berserker.atk == 5, "revive watchers: a reviving berserker doesn't feed itself")
 
+	c = fresh()
+	mummy = c.debug_place("mummy_guardian", P, 0, F)
+	c._deal_damage(mummy, 20, "effect")
+	check(mummy.alive and mummy.hp == 1 and c.core_hp == 50, "revive: keyword Revive does not damage the Core")
+
+	c = fresh(50, false, ["ankh_of_eternity"])
+	mummy = c.debug_place("mummy_guardian", P, 0, F)
+	var plain = c.debug_place("ark_sentinel", P, 1, F)
+	c._deal_damage(mummy, 20, "effect")
+	check(mummy.alive and mummy.hp == 1 and c.core_hp == 48, "ankh: a keyword Revive damages the Core once")
+	c._deal_damage(mummy, 20, "effect")
+	check(not mummy.alive and c.core_hp == 48, "ankh: the second death does not Revive or damage the Core")
+	c._deal_damage(plain, 20, "effect")
+	check(plain.alive and plain.hp == 1 and c.core_hp == 46, "ankh: a unit without the keyword Revives and the Core takes 2")
+	c._deal_damage(plain, 20, "effect")
+	check(not plain.alive and c.core_hp == 46, "ankh: that unit's second death stays dead")
+
+	c = fresh(50, false, ["ankh_of_eternity"])
+	scarab = c._spawn("scarab", P, 0, F)
+	var wolf = c._spawn("wolf", P, 1, F)
+	check(c.snapshot()["grid"][P][F][0]["revive"], "ankh: a Scarab shows Revive ready")
+	c._deal_damage(scarab, 5, "effect")
+	check(scarab.alive and scarab.hp == 1 and scarab.revive_used and c.core_hp == 48, "ankh: a Scarab Revives and the Core takes 2")
+	check(not c.snapshot()["grid"][P][F][0]["revive"], "ankh: a spent Revive is no longer shown")
+	c._deal_damage(scarab, 5, "effect")
+	check(not scarab.alive and c.core_hp == 48 and c.last_dead_ally == null, "ankh: a Scarab's second death stays dead and is not a Book target")
+	c._deal_damage(wolf, 5, "effect")
+	check(wolf.alive and wolf.hp == 1 and c.core_hp == 46, "ankh: a Wolf token Revives and the Core takes 2")
+
+	c = fresh(50, false, ["ankh_of_eternity"])
+	swarm = c.debug_place("scarab_swarm", P, 0, F)
+	c._deal_damage(swarm, 10, "effect")
+	scarab = c.unit_at(P, B, 0)
+	check(swarm.alive and swarm.hp == 1 and scarab != null and scarab.id == "scarab" and c.core_hp == 48,
+		"ankh: a Swarm Revives, leaves a Scarab, and the Core takes 2")
+	c._deal_damage(scarab, 5, "effect")
+	check(scarab.alive and scarab.hp == 1 and c.core_hp == 46, "ankh: the Swarm's Scarab Revives and the Core takes 2")
+	c._deal_damage(scarab, 5, "effect")
+	check(not scarab.alive and c.core_hp == 46, "ankh: that Scarab then stays dead")
+
+	c = fresh(50, false, ["ankh_of_eternity"])
+	c.debug_place("khepri", P, 1, F)
+	scarab = c._spawn("scarab", P, 0, F)
+	c.core_hp = 40
+	c._deal_damage(scarab, 5, "effect")
+	check(scarab.alive and c.core_hp == 39, "ankh: Khepri heals 1 and the Ankh still deals 2")
+
+	c = fresh(50, false, ["ankh_of_eternity"])
+	c.terrain[c._key(P, F, 0)] = "flooded"
+	var sunk = c.debug_place("ark_sentinel", P, 0, F)
+	c._deal_damage(sunk, 20, "effect")
+	check(not sunk.alive and c.core_hp == 50, "ankh: Flooded blocks Revive and the Core is not damaged")
+
+	c = fresh(50, false, ["ankh_of_eternity", "charons_lantern"])
+	c.terrain[c._key(P, F, 0)] = "flooded"
+	sunk = c.debug_place("ark_sentinel", P, 0, F)
+	c._deal_damage(sunk, 20, "effect")
+	check(sunk.alive and sunk.hp == 1 and c.core_hp == 48, "ankh: Charon's Lantern lets the Revive happen, and the Core takes 2")
+
+	c = fresh(50, false, ["ankh_of_eternity"])
+	var unmade = c.debug_place("mummy_guardian", P, 0, F)
+	c._unmaking = true
+	c._deal_damage(unmade, 20, "effect")
+	check(not unmade.alive and c.core_hp == 50, "ankh: Apep's unmaking blocks Revive and the Core is not damaged")
+
+	c = fresh(50, false, ["ankh_of_eternity", "aegis_fragment"])
+	var saved = c.debug_place("ark_sentinel", P, 0, F)
+	c._deal_damage(saved, 20, "effect")
+	check(saved.alive and saved.hp == 1 and not saved.revive_used and c.core_hp == 50, "ankh: Aegis is not a Revive, so the Core is untouched")
+	c._deal_damage(saved, 20, "effect")
+	check(saved.alive and saved.revive_used and c.core_hp == 48, "ankh: the next death Revives and the Core takes 2")
+	c._deal_damage(saved, 20, "effect")
+	check(not saved.alive and c.core_hp == 48, "ankh: after Revive is spent, the Core is not damaged again")
+
+	c = fresh(50, false, ["ankh_of_eternity"])
+	c.debug_place("osiris", P, 3, B)
+	var risen = c.debug_place("ark_sentinel", P, 0, F)
+	c._deal_damage(risen, 20, "effect")
+	check(risen.alive and risen.hp == risen.max_hp and risen.atk == 4 and c.core_hp == 48, "ankh: Osiris returns it at full HP and the Core still takes 2")
+
+	c = fresh(50, false, ["ankh_of_eternity", "styx_water"])
+	wolf = c._spawn("wolf", P, 0, F)
+	c._deal_damage(wolf, 5, "effect")
+	check(wolf.alive and wolf.hp == 1 and not wolf.has_kw("incorporeal") and not c.styx_used and c.core_hp == 48,
+		"ankh: a token Revives through the Ankh, and Styx Water stays unused")
+
+	c = fresh(2, false, ["ankh_of_eternity"])
+	var doomed = c.debug_place("ark_sentinel", P, 0, F)
+	c._deal_damage(doomed, 20, "effect")
+	check(doomed.alive and doomed.hp == 1 and c.core_hp == 0 and c.result == "defeat", "ankh: Core damage from a Revive can lose the fight")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var anubis = c.debug_place("anubis", P, 0, F)
+	c._deal_damage(c.debug_place("ark_sentinel", P, 1, F), 20, "effect")
+	check(anubis.atk == 4 and anubis.max_hp == 6, "book: Anubis keeps the +1/+1 from a death")
+	anubis.temp_atk = 3
+	c._attach(anubis, c._new_card("bronze_spear"))
+	check(c.effective_atk(anubis) == 9, "book: spear ATK and temp ATK apply while it lives")
+	c._attach(anubis, c._new_card("golden_cuirass"))
+	check(anubis.max_hp == 10 and anubis.armaments.size() == 1 and anubis.armaments[0]["id"] == "golden_cuirass",
+		"book: the cuirass adds HP and replaces the spear")
+	c._deal_damage(anubis, 99, "effect")
+	var kept = c.last_dead_ally
+	check(kept["id"] == "anubis" and kept["kept_atk"] == 4 and kept["kept_max_hp"] == 6, "book: the saved body excludes Armament HP and temp ATK")
+	check(c.deck.any(func(card): return card["id"] == "golden_cuirass"), "book: the cuirass returns to the deck")
+	c.hand = [c._new_card("book_of_the_dead")]
+	c.faith = 3
+	check(c.play_spell(0, [[P, F, 2]]) == "", "book: cast")
+	risen = c.unit_at(P, F, 2)
+	check(risen != null and risen.id == "anubis" and risen.atk == 4 and risen.max_hp == 6 and risen.hp == 6,
+		"book: Anubis returns at full gained HP and ATK")
+	check(risen.temp_atk == 0 and risen.armaments.is_empty(), "book: temp ATK and Armaments are not returned")
+	check(not c.is_fresh(risen) and c.move_unit(2, F, 3, F) != "", "book: the returned unit can't move this round")
+
+	c = fresh()
+	var sphinx = c.debug_place("sphinx", P, 0, F)
+	sphinx.atk = 5
+	sphinx.max_hp = 8
+	sphinx.hp = 3
+	c._attach(sphinx, c._new_card("golden_cuirass"))
+	c._deal_damage(sphinx, 99, "effect")
+	c.hand = [c._new_card("book_of_the_dead")]
+	c.faith = 3
+	check(c.play_spell(0, [[P, B, 1]]) == "", "book: return the sphinx")
+	risen = c.unit_at(P, B, 1)
+	check(risen.atk == 5 and risen.max_hp == 8 and risen.hp == 8 and risen.armaments.is_empty(),
+		"book: Sphinx growth returns at full HP, without the cuirass")
+
+	c = _with_power(fresh(), "osiris_return")
+	var dead = c.debug_place("anubis", P, 0, F)
+	dead.atk = 6
+	dead.max_hp = 9
+	dead.hp = 9
+	c._attach(dead, c._new_card("bronze_spear"))
+	c._deal_damage(dead, 99, "effect")
+	check(c.use_power([[P, B, 2]]) == "", "osiris: return the buffed body")
+	risen = c.unit_at(P, B, 2)
+	check(risen.atk == 6 and risen.max_hp == 9 and risen.hp == 1 and risen.armaments.is_empty(),
+		"osiris: keeps gained ATK and max HP, still at 1 HP, without the spear")
+	c = _with_power(fresh(), "osiris_return", ["life_1"])
+	dead = c.debug_place("sphinx", P, 0, F)
+	dead.atk = 5
+	dead.max_hp = 8
+	dead.hp = 8
+	c._deal_damage(dead, 99, "effect")
+	c.use_power([[P, F, 1]])
+	risen = c.unit_at(P, F, 1)
+	check(risen.atk == 5 and risen.max_hp == 8 and risen.hp == 8, "osiris: Breath of Life returns the grown body at full HP")
+
+
+func test_plan_adjust() -> void:
+	var c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.hand = [c._new_card("pythia"), c._new_card("divine_favor"), c._new_card("ark_sentinel")]
+	c.faith = 3
+	c._plan_start = c._capture()
+	check(c.play_unit(0, 0, B) == "", "plan: deploy Pythia")
+	var pythia = c.unit_at(P, B, 0)
+	check(c.move_unit(0, B, 1, B) == "" and c.moves_left == 1, "plan: Pythia can move before her effect, for free")
+	check(c.play_spell(0, [[P, B, 1]]) == "", "plan: a spell with no enemy in her lane")
+	check(pythia.effect_used and c.move_unit(1, B, 2, B) != "" and c.recall_unit(B, 1) != "",
+		"plan: Pythia locks after a spell, even when there was nothing to hit")
+	check(c.unit_at(P, B, 1) == pythia, "plan: locked Pythia stays put")
+	check(c.play_unit(0, 0, F) == "", "plan: deploy a sentinel beside her")
+	var sentinel = c.unit_at(P, F, 0)
+	check(c.move_unit(0, F, 1, B) != "" and sentinel.lane == 0, "plan: a fresh unit can't swap onto a locked one")
+	check(c.move_unit(0, F, 2, F) == "" and not sentinel.effect_used, "plan: being the spell's target does not lock the sentinel")
+	check(c.restart_plan() == "" and c.units(P).is_empty() and c.faith == 3 and c.hand.size() == 3,
+		"plan: restart undoes the locked Pythia and refunds nothing extra")
+
+	c = fresh()
+	c.hand = [c._new_card("ark_sentinel")]
+	c.faith = 2
+	c._plan_start = c._capture()
+	check(c.play_unit(0, 0, F) == "", "plan: deploy")
+	check(c.move_unit(0, F, 2, B) == "", "plan: reposition")
+	check(c.recall_unit(B, 2) == "", "plan: drag back to hand")
+	check(c.faith == 2 and c.units(P).is_empty() and c.hand.size() == 1 and c.hand[0]["id"] == "ark_sentinel",
+		"plan: the card and its Faith are returned")
+	check(c.play_unit(0, 3, F) == "" and c.faith == 1 and c.unit_at(P, F, 3) != null, "plan: the refunded card can be played again")
+	check(c.restart_plan() == "" and c.faith == 2 and c.units(P).is_empty() and c.hand.size() == 1,
+		"plan: restart still restores the start of planning")
+
+	c = fresh()
+	c.hand = [c._new_card("ark_sentinel")]
+	for _i in 6:
+		c.hand.append(c._new_card("warding"))
+	c.faith = 3
+	check(c.play_unit(0, 0, F) == "", "plan: deploy with a crowded hand")
+	c.hand.append(c._new_card("warding"))
+	check(c.hand.size() == 7 and c.recall_unit(F, 0) != "" and c.unit_at(P, F, 0) != null and c.faith == 2,
+		"plan: a full hand refuses the return")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.hand = [c._new_card("ark_sentinel"), c._new_card("bronze_spear"), c._new_card("raider")]
+	c.faith = 5
+	check(c.play_unit(0, 0, F) == "" and c.play_spell(0, [[P, F, 0]]) == "" and c.play_unit(0, 3, F) == "", "plan: arm one of two fresh units")
+	var armed = c.unit_at(P, F, 0)
+	var raider = c.unit_at(P, F, 3)
+	check(c.move_unit(0, F, 3, F) == "" and armed.lane == 3 and raider.lane == 0 and raider.atk == 2 and c.moves_left == 1,
+		"plan: two fresh units swap, and the swap is not a Raider move")
+	check(c.recall_unit(F, 3) != "" and armed.lane == 3 and c.faith == 2, "plan: an armed unit can't return to hand")
+	check(c.recall_unit(F, 0) == "" and c.faith == 3 and c.unit_at(P, F, 0) == null, "plan: the unarmed one can")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.hand = [c._new_card("ark_sentinel"), c._new_card("sandswarm")]
+	c.faith = 3
+	check(c.play_unit(0, 0, B) == "" and c.play_spell(0, []) == "", "plan: deploy, then summon Scarabs")
+	var scarab_lane = c.unit_at(P, F, 1)
+	check(scarab_lane != null and scarab_lane.id == "scarab" and c.move_unit(0, B, 1, F) != "" and c.unit_at(P, B, 0) != null,
+		"plan: a fresh unit can't swap with a Scarab summoned this round")
+
+	c = fresh()
+	c.hand = [c._new_card("loki")]
+	c.faith = 3
+	check(c.play_unit(0, 0, B) == "", "plan: deploy Loki")
+	check(c.moves_left == 2 and c.recall_unit(B, 0) != "" and c.faith == 0 and c.unit_at(P, B, 0) != null,
+		"plan: Loki's extra move locks him, and recalling him can't grant it again")
+
+	c = fresh()
+	c.hand = [c._new_card("cyclops_smith")]
+	c.faith = 3
+	check(c.play_unit(0, 0, F) == "", "plan: deploy the Cyclops")
+	check(c.hand.size() == 1 and c.hand[0].get("forged", false) and c.recall_unit(F, 0) != "" and c.hand.size() == 1,
+		"plan: the forge locks the Cyclops, so he can't be replayed for a second Armament")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.hand = [c._new_card("hermes"), c._new_card("warding"), c._new_card("ark_sentinel")]
+	c.faith = 6
+	check(c.play_unit(0, 0, B) == "" and c.recall_unit(B, 0) == "" and c.faith == 6 and c.units(P).is_empty(),
+		"plan: Hermes can be returned before a spell is cast")
+	var hermes_index := 0
+	for i in c.hand.size():
+		if c.hand[i]["id"] == "hermes":
+			hermes_index = i
+	check(c.play_unit(hermes_index, 0, B) == "", "plan: deploy Hermes again")
+	var hermes = c.unit_at(P, B, 0)
+	var sentinel_index := 0
+	for i in c.hand.size():
+		if c.hand[i]["id"] == "ark_sentinel":
+			sentinel_index = i
+	check(c.play_unit(sentinel_index, 1, F) == "", "plan: deploy a sentinel")
+	check(c.play_spell(0, [[P, F, 1]]) == "" and c.faith == 2, "plan: the free Warding is cast on the sentinel")
+	check(hermes.effect_used and hermes.shield == 1 and c.move_block(hermes) == "Its effect has already triggered" and c.recall_unit(B, 0) != "",
+		"plan: the shield trigger locks Hermes")
+	check(c.move_unit(1, F, 2, F) == "" and not c.unit_at(P, F, 2).effect_used, "plan: the unit Warding was cast on is not locked")
+
+	c = fresh()
+	var foe = c.debug_place("hollowed_zealot", E, 1, F)
+	c.hand = [c._new_card("loki"), c._new_card("ark_sentinel"), c._new_card("raider")]
+	c.faith = 6
+	check(c.play_unit(0, 0, B) == "" and c.play_unit(0, 0, F) == "" and c.play_unit(0, 2, F) == "", "plan: Loki plus two fresh units")
+	var zealot_hp: int = foe.hp
+	check(c.move_unit(0, F, 2, F) == "" and foe.hp == zealot_hp, "plan: swapping two fresh units does not trigger Loki")
+
+
+func test_rally() -> void:
+	var c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var hoplite = c.debug_place("hoplite", P, 1, F)
+	var neutral = c.debug_place("ark_sentinel", P, 0, F)
+	var greek = c.debug_place("peltast", P, 2, F)
+	c.end_plan()
+	check(greek.atk == 3 and neutral.atk == 2 and hoplite.atk == 2, "rally: Hoplite buffs the Greek neighbour only")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.debug_place("hoplite", P, 0, F)
+	var scarab = c._spawn("scarab", P, 1, F)
+	c.end_plan()
+	check(scarab.atk == 1, "rally: a summoned Scarab is not Greek, so it is skipped")
+
+	c = fresh(50, false, ["laurel_wreath"])
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.debug_place("hoplite", P, 1, F)
+	greek = c.debug_place("peltast", P, 2, F)
+	neutral = c.debug_place("ark_sentinel", P, 0, F)
+	c.end_plan()
+	check(greek.atk == 4 and neutral.atk == 2, "rally: Laurel Wreath doubles the Greek buff and still skips other factions")
+
 
 func test_achilles() -> void:
 	var c = fresh()
@@ -608,6 +894,48 @@ func test_oracle() -> void:
 	check(not c.free_spell_active() and c.card_cost(c.hand[0]) == 1, "hermes: second spell costs full")
 	check(c.play_spell(0, [[P, B, 0]]) == "", "tripod: second warding")
 	check(c.faith == 1, "tripod: +1 Faith on the second spell")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.deck = [c._new_card("warding"), c._new_card("rebuke"), c._new_card("ark_sentinel")]
+	c.hand = [c._new_card("augury")]
+	c.faith = 1
+	check(c.play_spell(0, []) == "" and c.faith == 0, "augury: costs 1")
+	check(c.hand.size() == 2 and c.deck.size() == 1 and c.discard.size() == 1 and c.discard[0]["id"] == "augury",
+		"augury: draws 2, then goes to the discard")
+
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	c.deck = [c._new_card("warding"), c._new_card("rebuke"), c._new_card("ark_sentinel")]
+	c.hand = [c._new_card("augury")]
+	for n in 6:
+		c.hand.append(c._new_card("warding"))
+	c.faith = 1
+	check(c.hand.size() == 7 and c.play_spell(0, []) == "", "augury: cast from a full hand")
+	check(c.hand.size() == 7 and c.deck.size() == 2, "augury: a full hand draws only until 7")
+
+	c = fresh(50, false, ["oracles_tripod"])
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var pythia = c.debug_place("pythia", P, 0, B)
+	hermes = c.debug_place("hermes", P, 1, B)
+	var zealot = c.debug_place("hollowed_zealot", E, 0, F)
+	c.deck = [c._new_card("ark_sentinel"), c._new_card("ark_sentinel"), c._new_card("rebuke"), c._new_card("rebuke")]
+	c.hand = [c._new_card("augury"), c._new_card("warding")]
+	c.faith = 1
+	check(c.card_cost(c.hand[0]) == 0 and c.play_spell(0, []) == "", "augury: Hermes makes the first one free")
+	check(c.faith == 1 and zealot.hp == 4 and hermes.shield == 1 and pythia.effect_used, "augury: Pythia pings and Hermes gains Shield")
+	check(c.hand.size() == 3, "augury: the free cast still draws 2")
+	var warding := 0
+	for i in c.hand.size():
+		if c.hand[i]["id"] == "warding":
+			warding = i
+	check(c.play_spell(warding, [[P, B, 0]]) == "" and c.faith == 1, "augury: the Tripod refunds the spell cast after it")
+
+	var run = Run.new()
+	run.setup(1, "myrmidon")
+	check(run._card_pool("Common", ["neutral"], []).has("augury"), "augury: a neutral Common")
+	check(not run._card_pool("Common", ["greek"], []).has("augury"), "augury: the Greek reward slot does not include it")
+	check(run._card_pool("Common", [], []).has("augury"), "augury: shops and off-pantheon rewards can offer it")
 
 
 func test_swarm() -> void:

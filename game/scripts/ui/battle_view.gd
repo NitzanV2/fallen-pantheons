@@ -160,6 +160,8 @@ func _build() -> void:
 	hand_box.add_theme_constant_override("separation", 8)
 	hand_box.position = Vector2(10, 650)
 	hand_box.size = Vector2(BOARD_RECT.size.x - 20, CardWidget.CARD_SIZE.y)
+	hand_box.mouse_filter = Control.MOUSE_FILTER_STOP
+	hand_box.set_drag_forwarding(_no_drag, _recall_can_drop, _recall_drop)
 	add_child(hand_box)
 
 	var rules_button := _button("Rulebook (H)", _toggle_help, self)
@@ -565,7 +567,7 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 		if u.get("move_block", "") != "":
 			out.append(["", "Can't move", u["move_block"], Color(0.7, 0.7, 0.8)])
 		if u.get("fresh", false):
-			out.append(["", "Not locked in", "Deployed this round: move it freely, without using a move, until you end planning.", Color(0.6, 0.85, 1.0)])
+			out.append(["", "Not locked in", "Deployed this round: move it freely, without using a move, until you end planning. Drag it onto another unlocked unit to swap, or back to your hand to refund its Faith. An armed unit can't return to hand.", Color(0.6, 0.85, 1.0)])
 	var terrain: String = combat.terrain_at(side, row, lane)
 	if terrain != "":
 		out.append(["", Data.TERRAIN[terrain]["name"], Data.TERRAIN[terrain]["text"], TERRAIN_COLORS[terrain]])
@@ -751,7 +753,7 @@ func _render_hand(snap: Dictionary) -> void:
 		var cost: int = snap["hand_costs"][i] if snap.has("hand_costs") else def["cost"]
 		var button := CardWidget.card_button(cards[i]["id"], i == sel_hand, cost)
 		button.pressed.connect(_on_hand_pressed.bind(i))
-		button.set_drag_forwarding(_hand_drag.bind(i), Callable(), Callable())
+		button.set_drag_forwarding(_hand_drag.bind(i), _recall_can_drop, _recall_drop)
 		var affordable: bool = not animating and snap["phase"] == "plan" and not def["type"] in Combat.UNPLAYABLE and cost <= snap["faith"]
 		button.modulate = Color(1, 1, 1, 1.0 if affordable else 0.45)
 		if i in snap.get("claim_next", []) and snap["phase"] == "plan":
@@ -775,11 +777,16 @@ func _current_targets() -> Array:
 			return targets.filter(func(t): return t[1] == pair_first[1] and t != pair_first)
 		return targets
 	if sel_move != null:
+		var mover = combat.unit_at(P, sel_move[0], sel_move[1])
 		var out: Array = []
 		for row in 2:
 			for lane in 4:
 				if combat.slot_open(P, row, lane):
 					out.append([P, row, lane])
+				elif mover != null and combat.can_reposition(mover):
+					var other = combat.unit_at(P, row, lane)
+					if other != null and other != mover and combat.can_reposition(other):
+						out.append([P, row, lane])
 		return out
 	return []
 
@@ -830,6 +837,23 @@ func _board_drag(pos: Vector2) -> Variant:
 	return {"move": true}
 
 
+func _no_drag(_pos: Vector2) -> Variant:
+	return null
+
+
+func _recall_can_drop(_pos: Vector2, data: Variant) -> bool:
+	if not (data is Dictionary) or not data.has("move") or sel_move == null:
+		return false
+	var u = combat.unit_at(P, sel_move[0], sel_move[1])
+	return u != null and combat.can_recall(u)
+
+
+func _recall_drop(_pos: Vector2, _data: Variant) -> void:
+	if sel_move == null:
+		return
+	_apply(combat.recall_unit(sel_move[0], sel_move[1]))
+
+
 func _board_can_drop(pos: Vector2, data) -> bool:
 	var slot = board.slot_at(pos)
 	board.set_hover(slot)
@@ -858,7 +882,7 @@ func _clear_selection() -> void:
 
 func _set_hint(text: String) -> void:
 	if text == "":
-		text = "Drag a card onto a highlighted tile (or click the card, then the tile). Drag one of your units to an empty tile to move it. Hover over anything for details."
+		text = "Drag a card onto a highlighted tile (or click the card, then the tile). Drag one of your units to an empty tile to move it. A unit you just deployed can be swapped with another, or dragged back to your hand. Hover over anything for details."
 	hint_label.text = text
 
 
@@ -937,7 +961,13 @@ func _on_slot_pressed(side: int, row: int, lane: int) -> void:
 			_set_hint("%s can't move: %s." % [u.display_name(), combat.move_block(u).to_lower()])
 		else:
 			sel_move = [row, lane]
-			_set_hint("Move %s: drag or click it to an empty tile on your side." % u.display_name())
+			if combat.can_reposition(u):
+				var extra := " Drag it onto another unit you deployed this round to swap, or back to your hand to refund its Faith."
+				if not u.armaments.is_empty():
+					extra = " Drag it onto another unit you deployed this round to swap. It is armed, so it can't return to your hand."
+				_set_hint("Move %s: drag or click an empty tile.%s" % [u.display_name(), extra])
+			else:
+				_set_hint("Move %s: drag or click it to an empty tile on your side." % u.display_name())
 		_refresh()
 		return
 	if u == null:
@@ -945,8 +975,12 @@ func _on_slot_pressed(side: int, row: int, lane: int) -> void:
 	elif sel_move[0] == row and sel_move[1] == lane:
 		_on_cancel_pressed()
 	else:
-		sel_move = [row, lane]
-		_refresh()
+		var mover = combat.unit_at(P, sel_move[0], sel_move[1])
+		if mover != null and combat.can_reposition(mover) and combat.can_reposition(u):
+			_apply(combat.move_unit(sel_move[1], sel_move[0], lane, row))
+		else:
+			sel_move = [row, lane]
+			_refresh()
 
 
 func _target_with_card(slot: Array) -> void:

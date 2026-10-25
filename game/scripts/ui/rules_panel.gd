@@ -212,11 +212,11 @@ func _keywords(page: VBoxContainer) -> void:
 		["ranged", "Ranged", "Can attack from the back row. Can't target units on Ruins."],
 		["cleave", "Cleave", "Also hits the units in the lanes on both sides of the target, in the same row, for full damage."],
 		["pierce", "Pierce", "Damage beyond what kills a front unit carries to the unit behind it. It never reaches the Core."],
-		["rally", "Rally X", "Start of round: its row neighbours gain +X ATK for the rest of the fight. Stacks every round."],
+		["rally", "Rally X", "Start of round: row neighbours of its own faction gain +X ATK for the rest of the fight. Hoplite and Forge Apprentice only buff other Greek units. Stacks every round."],
 		["support", "Support", "Start of round: helps the ally directly in front of it (same lane). Works from the back row."],
 		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot."],
 		["on_death", "On-Death", "Triggers when the unit dies (and also when it Revives)."],
-		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP."],
+		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP. Ankh of Eternity gives this to every ally, including summoned Scarabs and Wolves, and the Core takes 2 each time one Revives. Book of the Dead instead returns the last ally that died for good, at full HP, keeping ATK and HP it had gained (not Armaments)."],
 		["growth", "Growth", "End of round: gains the listed stats."],
 		["summon", "Summon", "Creates a token (like a 1/1 Scarab or a 1/2 Wolf) in an empty slot. Tokens never join your deck."],
 		["pack", "Wolf and Pack", "Wolves are a Norse tribe (the card text starts with \"Wolf\"). Pack: gains +1 ATK for each of your other Wolves, up to +%d. Wolf tokens count." % Combat.PACK_MAX],
@@ -269,10 +269,11 @@ func _cards(page: VBoxContainer) -> void:
 		["cards/divine_favor.jpg", "Spells", "Go to the discard pile after casting, unless they [b]Exhaust[/b]."],
 		["cards/bronze_spear.jpg", "Armaments", "Greek Forge gear. Play one on one of your units: it stays attached for the fight and its bonus is shown on the unit. A unit holds one Armament - a new one replaces the old (which goes to the discard pile). Talos can hold any number. When the unit dies, its Armaments shuffle into your draw pile. Armaments aren't spells (no Hermes, Pythia or Tripod)."],
 	], 64)
+	_tip(page, "Augury is a neutral Common spell: spend 1 Faith to draw 2 cards. It counts as a spell for Pythia, Hermes and the Oracle's Tripod.")
 	_tip(page, "Dimmed cards can't be played right now: not enough Faith, or no legal target.")
 	_tip(page, "Your god power isn't a card: it has its own button in the sidebar. See the God powers chapter.")
 	_heading(page, "push_right", "Moving units")
-	page.add_child(_rich("Once per round, click one of your units, then an empty slot on your grid, to move it (or drag it there). Some cards give extra moves (Loki, Longship). The status panel shows your moves left.\n\nUnits you deployed from your hand this round aren't locked in yet: until you end planning you can move them freely, as often as you like, without using a move (this doesn't count as moving for Raider, Ulfhednar, Loki or Longship). Units that arrived any other way during planning - summoned (Call of the Pack, Sandswarm, Osiris's Return) or returned by Book of the Dead - can't move at all that round. Other units on Quicksand can't move at all."))
+	page.add_child(_rich("Once per round, click one of your units, then an empty slot on your grid, to move it (or drag it there). Some cards give extra moves (Loki, Longship). The status panel shows your moves left.\n\nUnits you deployed from your hand this round aren't locked in yet. Until you end planning you can move them freely, as often as you like, without using a move (this doesn't count as moving for Raider, Ulfhednar, Loki or Longship). Drag one onto another unlocked unit you deployed this round to swap them, or drag it back to your hand to take the play back: the card returns and its Faith is refunded. Once that unit's own effect has triggered (Pythia's prophecy, Hermes's shield, Loki's extra move, the Cyclops's forge), it is locked in place for the rest of planning. Being the target of a spell does not lock a unit. An armed unit can still be moved, but it can't return to your hand. Units that arrived any other way during planning - summoned (Call of the Pack, Sandswarm, Osiris's Return) or returned by Book of the Dead - can't move at all that round. Other units on Quicksand can't move at all."))
 	_heading(page, "opt_curse", "Curses and statuses")
 	page.add_child(_rich("They can't be played and just take up space. They leave your hand at the start of the next round: curses go to the discard pile, statuses are exhausted. Some also cost Faith or Core HP - read the card.\nEnemies marked [color=#ff9a9a](+Void Web)[/color] or similar shuffle a status card into your draw pile each time they attack. The Gjoll Wraith's [b]Drowned[/b] gives your units in a random lane -1 ATK for the round it's drawn (that lane glows teal)."))
 

@@ -22,6 +22,7 @@ const CARDS := {
 	"faith_surge": {"name": "Faith Surge", "faction": "neutral", "rarity": "Uncommon", "type": "spell", "cost": 0, "target": "none", "exhaust": true, "text": "Gain 2 Faith. Exhaust."},
 	"channel_ley_line": {"name": "Channel Ley Line", "faction": "neutral", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "ally_slot", "terrain": "ley_line", "row": 0, "exhaust": true, "text": "Turn one of your front slots without terrain into a Ley Line for this fight (+2 ATK there). Exhaust."},
 	"raise_ruins": {"name": "Raise Ruins", "faction": "neutral", "rarity": "Common", "type": "spell", "cost": 1, "target": "ally_slot", "terrain": "ruins", "row": 1, "exhaust": true, "text": "Turn one of your back slots without terrain into Ruins for this fight (Ranged attacks can't target it). Exhaust."},
+	"augury": {"name": "Augury", "faction": "neutral", "rarity": "Common", "type": "spell", "cost": 1, "target": "none", "text": "Draw 2 cards."},
 
 	# Divine - never offered as rewards or in shops. Only rare shrine events grant them.
 	"divine_insight": {"name": "Divine Insight", "faction": "divine", "rarity": "Divine", "type": "spell", "cost": 0, "target": "none", "text": "Draw 2 cards."},
@@ -80,7 +81,7 @@ const CARDS := {
 	"priest_of_ra": {"name": "Priest of Ra", "faction": "egypt", "rarity": "Common", "type": "unit", "cost": 1, "atk": 0, "hp": 3, "spd": 2, "keywords": [], "text": "Support: heal the ally in front by 2."},
 	"sphinx": {"name": "Sphinx", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 2, "hp": 6, "spd": 1, "keywords": [], "text": "Growth: +1 ATK / +1 HP."},
 	"anubis": {"name": "Anubis", "faction": "egypt", "rarity": "Uncommon", "type": "unit", "cost": 3, "atk": 3, "hp": 5, "spd": 3, "keywords": [], "text": "Whenever any unit dies (either side), gain +1 ATK / +1 HP."},
-	"book_of_the_dead": {"name": "Book of the Dead", "faction": "egypt", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "empty_ally_slot", "needs_fallen": true, "text": "Return the last ally that died this fight to an empty slot at full HP."},
+	"book_of_the_dead": {"name": "Book of the Dead", "faction": "egypt", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "empty_ally_slot", "needs_fallen": true, "text": "Return the last ally that died this fight to an empty slot at full HP, keeping the ATK and HP it had gained. Armaments are not returned."},
 	"ra": {"name": "Ra", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 6, "spd": 2, "keywords": ["ranged"], "text": "Ranged. Growth: +2 ATK."},
 	"osiris": {"name": "Osiris", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 6, "spd": 2, "keywords": [], "text": "Allies that Revive return at full HP and gain +2 ATK."},
 	# Egyptian Swarm - Scarabs
@@ -115,7 +116,7 @@ const CARDS := {
 
 ## One-line effect shown on compact non-unit cards; the full text appears on hover.
 const CARD_SHORT := {
-	"rebuke": "Push 1 lane, 3 on impact", "warding": "Shield 4", "transposition": "Swap two enemies",
+	"rebuke": "Push 1 lane, 3 on impact", "warding": "Shield 4", "transposition": "Swap two enemies", "augury": "Draw 2",
 	"faith_surge": "+2 Faith", "channel_ley_line": "Create a Ley Line", "raise_ruins": "Create Ruins",
 	"divine_insight": "Draw 2", "ambrosia": "+2 Faith", "aegis_of_olympus": "All allies Shield 3",
 	"thread_of_fate": "Return a unit to hand", "ragnarok": "Sacrifice: blast its lane", "longship": "+2 moves, Shield 2",
@@ -464,7 +465,7 @@ const GOD_POWERS := {
 			"pact": {"branch": "Pact", "tier": 1, "name": "Sea Spray", "text": "Draw a card."},
 		}},
 	"osiris_return": {"name": "Osiris's Return", "short": "Return", "god": "Osiris", "pantheon": "egypt", "target": "empty_ally_slot", "needs_fallen": true,
-		"text": "Return the last ally that died this fight to an empty tile with 1 HP.",
+		"text": "Return the last ally that died this fight to an empty tile with 1 HP, keeping the ATK and max HP it had gained. Armaments are not returned.",
 		"nodes": {
 			"life_1": {"branch": "Life", "tier": 1, "name": "Breath of Life", "text": "It returns at full HP."},
 			"life_2": {"branch": "Life", "tier": 2, "name": "Embalmed", "text": "It also gains Shield 3."},

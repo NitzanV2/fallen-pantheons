@@ -309,6 +309,8 @@ func _card_value(run, id: String) -> float:
 		v += 1.5
 	if def["type"] == "spell":
 		v -= 1.0
+	if id == "augury":
+		v += 3.0
 	if archetype != "" and id in ARCHETYPES[archetype]:
 		v += 4.0
 	return v
@@ -535,6 +537,10 @@ func _evaluate(c, i: int) -> Dictionary:
 			return {"score": 9.0, "action": func(): c.play_spell(i, [[P, slot[1], slot[0]]])}
 		"divine_insight":
 			return {"score": 90.0, "action": func(): c.play_spell(i, [])}
+		"augury":
+			if c.deck.is_empty() and c.discard.is_empty():
+				return none
+			return {"score": 8.0, "action": func(): c.play_spell(i, [])}
 		"ambrosia":
 			return {"score": 95.0, "action": func(): c.play_spell(i, [])}
 		"aegis_of_olympus":

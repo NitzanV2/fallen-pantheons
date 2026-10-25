@@ -59,7 +59,7 @@ void fragment() {
 "
 const LIST_GROUPS := {"neutral": "Neutral", "norse": "Norse", "greek": "Greek", "egypt": "Egyptian", "divine": "Divine (shrines only)", "other": "Tokens, curses and statuses"}
 const RARITY_ORDER := ["Starter", "Common", "Uncommon", "Rare"]
-const PATRON_SHORT := {"norse": "Norse", "greek": "Greek", "egypt": "Egypt"}
+const PATRON_SHORT := {"norse": "Norse", "greek": "Greek", "egypt": "Egyptian"}
 
 var menu: Control
 var veil: ColorRect
@@ -75,6 +75,7 @@ var patron_row: HBoxContainer
 var power_row: HBoxContainer
 var help_panel: ColorRect
 var sandbox: Control
+var sandbox_link: Button
 var card_list: Control = null
 var battle_view: Control
 var run_view: Control
@@ -197,7 +198,6 @@ func _build_menu() -> void:
 	CardWidget.place(codex_box, column, 26, 28, -26, -28)
 	column.add_child(_codex_row("opt_card", "New Run", "Choose a patron", _show_patrons, true))
 	column.add_child(_codex_row("rulebook", "Rulebook", "How battles work", _toggle_rules, false))
-	column.add_child(_codex_row("ui_map", "Sandbox", "Single test battles", _show_sandbox.bind(true), false))
 	var close_gap := Control.new()
 	close_gap.custom_minimum_size = Vector2(0, 18)
 	close_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -229,6 +229,7 @@ func _build_menu() -> void:
 	power_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	power_row.add_theme_constant_override("separation", 28)
 	power_box.add_child(power_row)
+	_add_sandbox_link()
 
 
 func _centered_column(separation: int) -> VBoxContainer:
@@ -1031,9 +1032,40 @@ func _card_before(a: String, b: String) -> bool:
 	return da["name"] < db["name"]
 
 
+func _add_sandbox_link() -> void:
+	sandbox_link = Button.new()
+	sandbox_link.text = "Sandbox"
+	sandbox_link.tooltip_text = "Single test battles."
+	sandbox_link.focus_mode = Control.FOCUS_NONE
+	sandbox_link.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	sandbox_link.anchor_left = 0.0
+	sandbox_link.anchor_right = 0.0
+	sandbox_link.anchor_top = 1.0
+	sandbox_link.anchor_bottom = 1.0
+	sandbox_link.offset_left = 214
+	sandbox_link.offset_right = 286
+	sandbox_link.offset_top = -26
+	sandbox_link.offset_bottom = -6
+	sandbox_link.grow_horizontal = Control.GROW_DIRECTION_END
+	sandbox_link.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		sandbox_link.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	sandbox_link.add_theme_font_size_override("font_size", 12)
+	sandbox_link.add_theme_color_override("font_color", Color(0.55, 0.55, 0.62))
+	sandbox_link.add_theme_color_override("font_hover_color", GOLD)
+	sandbox_link.add_theme_color_override("font_pressed_color", GOLD)
+	sandbox_link.pressed.connect(_show_sandbox.bind(true))
+	add_child(sandbox_link)
+
+
+func _set_menu_shown(shown: bool) -> void:
+	menu.visible = shown
+	sandbox_link.visible = shown
+
+
 func _show_sandbox(show: bool) -> void:
 	sandbox.visible = show
-	menu.visible = not show
+	_set_menu_shown(not show)
 	if not show:
 		_show_home(true)
 
@@ -1046,7 +1078,7 @@ func _heading(text: String) -> Label:
 
 
 func _hide_menus() -> void:
-	menu.visible = false
+	_set_menu_shown(false)
 	sandbox.visible = false
 	if help_panel != null:
 		help_panel.visible = false
@@ -1328,5 +1360,5 @@ func _back_to_menu() -> void:
 		_show_sandbox(true)
 	else:
 		sandbox.visible = false
-		menu.visible = true
+		_set_menu_shown(true)
 		_show_home(false)

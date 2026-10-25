@@ -743,10 +743,10 @@ func _unit_snapshot(u) -> Dictionary:
 		"uid": u.uid, "id": u.id, "name": u.display_name(), "side": u.side,
 		"atk": effective_atk(u), "hp": u.hp, "max_hp": u.max_hp, "spd": effective_spd(u),
 		"shield": u.shield, "threat": u.threat, "token": u.is_token, "empowered": u.empowered,
-		"revive": (u.has_kw("revive") or (u.side == PLAYER and has_relic("ankh_of_eternity"))) and not u.revive_used,
+		"revive": _has_revive(u) and not u.revive_used,
 		"text": u.def["text"], "intent": intent.get("text", ""), "intent_type": intent.get("type", ""), "width": u.width,
 		"move_block": move_block(u) if phase == "plan" and u.side == PLAYER else "",
-		"fresh": is_fresh(u),
+		"fresh": can_reposition(u),
 		"poisoned": u.poisoned, "burn": u.burn, "judged": u.side == PLAYER and u.uid == judged_uid, "swine": u.uid == transformed_uid,
 		"hunted": u.side == PLAYER and u.uid == vengeance_uid and units(ENEMY).any(func(e): return e.has_kw("vengeance")),
 		"ferried": u.side == PLAYER and ferry_target() == u,
@@ -832,17 +832,17 @@ func _capture() -> Dictionary:
 			rows.append(cells)
 		g.append(rows)
 	return {
-		"grid": g, "deck": deck.duplicate(), "hand": hand.duplicate(), "discard": discard.duplicate(),
-		"exhausted": exhausted.duplicate(), "core_hp": core_hp, "faith": faith, "result": result,
+		"grid": g, "deck": deck.duplicate(true), "hand": hand.duplicate(true), "discard": discard.duplicate(true),
+		"exhausted": exhausted.duplicate(true), "core_hp": core_hp, "faith": faith, "result": result,
 		"moves_left": moves_left, "longship_active": longship_active, "spells_this_round": spells_this_round, "armaments_this_round": armaments_this_round,
 		"faith_next": faith_next, "horus_round": horus_round, "drowned_lanes": drowned_lanes.duplicate(),
 		"intents": intents.duplicate(true), "petrified_lane": petrified_lane, "sandstorm_row": sandstorm_row,
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"styx_used": styx_used, "obol_used": obol_used, "armaments_played": armaments_played,
-		"last_dead_ally": last_dead_ally, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
+		"last_dead_ally": last_dead_ally.duplicate(true) if last_dead_ally != null else null, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
 		"gate_damage": gate_damage, "extra_waves": extra_waves.duplicate(true),
-		"claimed": claimed.duplicate(), "hades_damage": hades_damage, "hades_freed": hades_freed,
+		"claimed": claimed.duplicate(true), "hades_damage": hades_damage, "hades_freed": hades_freed,
 		"power_uses": power_uses, "power_refunded": power_refunded, "power_invoked": power_invoked, "falls": falls,
 	}
 
@@ -1269,6 +1269,7 @@ func play_unit(hand_index: int, lane: int, row: int) -> String:
 	_log("Deployed %s." % _unit_label(u))
 	if u.id == "loki":
 		moves_left += 1
+		u.effect_used = true
 		_log("Loki grants an extra move this round.")
 	if u.id == "cyclops_smith":
 		var commons: Array = Data.CARDS.keys().filter(func(id): return Data.CARDS[id]["type"] == "armament" and Data.CARDS[id]["rarity"] == "Common")
@@ -1281,6 +1282,7 @@ func play_unit(hand_index: int, lane: int, row: int) -> String:
 		else:
 			discard.append(forged)
 			_log("The Cyclops forges a %s, but your hand is full." % Data.CARDS[forged["id"]]["name"])
+		u.effect_used = true
 	return ""
 
 
@@ -1550,6 +1552,7 @@ func _resolve_power(targets: Array, direction: int) -> void:
 			var fallen: Dictionary = last_dead_ally
 			discard.erase(fallen)
 			var u = _spawn(fallen["id"], PLAYER, targets[0][2], targets[0][1], fallen)
+			_restore_body(u)
 			last_dead_ally = null
 			if not _up("life_1"):
 				u.hp = 1
@@ -1641,6 +1644,7 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 			var fallen: Dictionary = last_dead_ally
 			discard.erase(fallen)
 			var u = _spawn(fallen["id"], PLAYER, targets[0][2], targets[0][1], fallen)
+			_restore_body(u)
 			last_dead_ally = null
 			_log("Book of the Dead returns %s." % _unit_label(u))
 		"longship":
@@ -1687,7 +1691,7 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 			_log("A plague of locusts descends on %s." % _unit_label(t))
 			if dmg > 0:
 				_deal_damage(t, dmg, "effect")
-		"divine_insight":
+		"divine_insight", "augury":
 			_draw(2)
 			_log("Drew 2 cards.")
 		"ambrosia":
@@ -1731,6 +1735,31 @@ func _detach_stats(u, card: Dictionary) -> void:
 	var hp: int = Data.CARDS[card["id"]]["arm"].get("hp", 0)
 	u.max_hp -= hp
 	u.hp = clampi(u.hp, 1, u.max_hp)
+
+
+## The Ankh grants Revive to every ally, tokens included. The keyword does the same on its own.
+func _has_revive(u) -> bool:
+	return u.has_kw("revive") or (u.side == PLAYER and has_relic("ankh_of_eternity"))
+
+
+## ATK and max HP earned in the fight, without Armament bonuses, so a later return can restore them.
+func _remember_body(u) -> void:
+	if u.card == null:
+		return
+	var arm_hp := 0
+	for card in u.armaments:
+		arm_hp += int(Data.CARDS[card["id"]]["arm"].get("hp", 0))
+	u.card["kept_atk"] = u.atk
+	u.card["kept_max_hp"] = maxi(1, u.max_hp - arm_hp)
+
+
+func _restore_body(u) -> void:
+	var card = u.card
+	if card == null or not card.has("kept_atk"):
+		return
+	u.atk = card["kept_atk"]
+	u.max_hp = card["kept_max_hp"]
+	u.hp = u.max_hp
 
 
 ## When an armed unit dies for good, its Armaments shuffle into the draw pile.
@@ -1782,11 +1811,13 @@ func _on_spell_cast() -> void:
 		if not u.alive:
 			continue
 		if u.id == "pythia":
+			u.effect_used = true
 			var t = _first_enemy_in_lane(u.lane)
 			if t != null:
 				_log("Pythia's prophecy strikes %s." % t.display_name())
 				_deal_damage(t, 1, "effect")
 		elif u.id == "hermes":
+			u.effect_used = true
 			u.shield += 1
 			_log("Hermes gains Shield 1.")
 	for e in units(ENEMY):
@@ -1863,8 +1894,19 @@ func is_fresh(u) -> bool:
 	return _entered_this_plan(u) and u.from_hand
 
 
+## A hand-deployed unit whose effect has not fired can still be moved, swapped, or returned.
+func can_reposition(u) -> bool:
+	return is_fresh(u) and not u.effect_used
+
+
+func can_recall(u) -> bool:
+	return can_reposition(u) and u.card != null and u.armaments.is_empty()
+
+
 ## Why a unit can't move right now, or "" if it can.
 func move_block(u) -> String:
+	if is_fresh(u) and u.effect_used:
+		return "Its effect has already triggered"
 	if is_fresh(u):
 		return ""
 	if _entered_this_plan(u):
@@ -1884,7 +1926,17 @@ func move_unit(from_lane: int, from_row: int, to_lane: int, to_row: int) -> Stri
 		return "No moves left this round."
 	if not can_move(u):
 		return "%s can't move: %s." % [u.display_name(), move_block(u).to_lower()]
-	if unit_at(PLAYER, to_row, to_lane) != null:
+	var dest = unit_at(PLAYER, to_row, to_lane)
+	if dest != null:
+		if dest != u and can_reposition(u) and can_reposition(dest):
+			_remove(u)
+			_remove(dest)
+			_place(u, to_row, to_lane)
+			_place(dest, from_row, from_lane)
+			acted_this_plan = true
+			events.clear()
+			_log("Swapped %s and %s." % [u.display_name(), dest.display_name()])
+			return ""
 		return "Destination is occupied."
 	if not slot_open(PLAYER, to_row, to_lane):
 		return "That slot is Rotted."
@@ -1903,6 +1955,33 @@ func move_unit(from_lane: int, from_row: int, to_lane: int, to_row: int) -> Stri
 	_check_enemies_cleared()
 	if result != "":
 		_finish_fight()
+	return ""
+
+
+## Drag a unit deployed this planning phase back to hand. Refunds the Faith its card cost.
+func recall_unit(row: int, lane: int) -> String:
+	if phase != "plan":
+		return "Not in the plan phase."
+	var u = unit_at(PLAYER, row, lane)
+	if u == null:
+		return "No unit there."
+	if is_fresh(u) and u.effect_used:
+		return "%s is locked in place." % u.display_name()
+	if is_fresh(u) and not u.armaments.is_empty():
+		return "%s is armed and can't return to your hand." % u.display_name()
+	if not can_recall(u):
+		return "%s can't return to your hand." % u.display_name()
+	if hand.size() >= MAX_HAND:
+		return "Your hand is full."
+	var card: Dictionary = u.card
+	var cost: int = u.def["cost"]
+	_remove(u)
+	u.alive = false
+	hand.append(card)
+	faith += cost
+	acted_this_plan = true
+	events.clear()
+	_log("Returned %s to your hand." % card_def(card)["name"])
 	return ""
 
 
@@ -2041,9 +2120,14 @@ func _start_of_round(u) -> void:
 	if rally > 0:
 		if u.side == PLAYER and has_relic("laurel_wreath"):
 			rally *= 2
+		var rallied := 0
 		for n in _row_neighbors(u):
+			if n.def.get("faction") != u.def.get("faction"):
+				continue
 			n.atk += rally
-		_log("%s rallies its neighbors (+%d ATK)." % [_unit_label(u), rally])
+			rallied += 1
+		if rallied > 0:
+			_log("%s rallies its %s neighbors (+%d ATK)." % [_unit_label(u), u.def.get("faction", "allied"), rally])
 	if u.id == "scarab_queen":
 		var lanes: Array = range(LANES)
 		lanes.sort_custom(func(a, b): return absi(a - u.lane) < absi(b - u.lane) or (absi(a - u.lane) == absi(b - u.lane) and a < b))
@@ -2516,7 +2600,7 @@ func _kill(u) -> void:
 		_log("Aegis Fragment saves %s at 1 HP." % u.display_name())
 		return
 
-	var can_revive: bool = u.has_kw("revive") or (u.side == PLAYER and not u.is_token and has_relic("ankh_of_eternity"))
+	var can_revive: bool = _has_revive(u)
 	if can_revive and not u.revive_used and _unmaking:
 		_log("Apep unmakes %s - it cannot Revive." % u.display_name())
 	elif can_revive and not u.revive_used and terrain_at(u.side, u.row, u.lane) == "flooded" and not (u.side == PLAYER and has_relic("charons_lantern")):
@@ -2557,6 +2641,8 @@ func _kill(u) -> void:
 	u.alive = false
 	_remove(u)
 	_log("%s dies." % _unit_label(u))
+	if u.side == PLAYER and not u.is_token:
+		_remember_body(u)
 	_return_armaments(u)
 	if u.side == ENEMY and u.poisoned and _up("hunt_2"):
 		_heal_core(2, "Feast")

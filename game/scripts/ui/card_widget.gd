@@ -76,7 +76,7 @@ const KEYWORD_INFO := {
 	"on_death": ["On-Death", "Triggers when the unit dies (and when it Revives)."],
 	"growth": ["Growth", "End of round: gains the listed stats."],
 	"support": ["Support", "Start of round: helps the ally directly in front of it."],
-	"rally": ["Rally", "Start of round: its row neighbours gain ATK for the rest of the fight."],
+	"rally": ["Rally", "Start of round: row neighbours of its own faction gain ATK for the rest of the fight. Hoplite and Forge Apprentice only buff other Greek units."],
 	"summon": ["Summon", "Creates a token in an empty slot. Tokens never join your deck."],
 	"exhaust": ["Exhaust", "After you cast it, the card is gone for the rest of this fight."],
 	"start_round": ["Start of round", "Triggers at the start of each Resolve phase."],
