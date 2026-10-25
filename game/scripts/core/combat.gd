@@ -1894,7 +1894,7 @@ func _on_spell_cast() -> void:
 					ally.temp_atk += 1
 					inspired += 1
 			if inspired > 0:
-				_log("Chorus of Delphi lifts its row (+1 ATK this round).")
+				_log("Line Chanter lifts its row (+1 ATK this round).")
 	for e in units(ENEMY):
 		if e.has_kw("spellward"):
 			e.shield += 2
@@ -1920,9 +1920,9 @@ func _on_moved(u, from_lane: int) -> void:
 				_deal_damage(t, effective_atk(u), "effect")
 		"shield_raid":
 			u.shield += 2
-			_log("Shield Raid: %s gains Shield 2." % u.display_name())
+			_log("Shieldthane: %s gains Shield 2." % u.display_name())
 		"reckless_charge":
-			_log("Reckless Charge spends itself.")
+			_log("Doomrunner spends itself.")
 			_deal_damage(u, 1, "effect")
 		"packrunner":
 			var front = unit_at(PLAYER, FRONT, u.lane)

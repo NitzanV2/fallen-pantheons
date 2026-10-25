@@ -2833,15 +2833,15 @@ func test_fusion_cards() -> void:
 
 	c = fresh()
 	var raid = c.debug_place("shield_raid", P, 0, F)
-	check(c.move_unit(0, F, 1, F) == "" and raid.shield == 2, "fusion: Shield Raid gains Shield 2 when it moves")
+	check(c.move_unit(0, F, 1, F) == "" and raid.shield == 2, "fusion: Shieldthane gains Shield 2 when it moves")
 
 	c = fresh()
 	var charge = c.debug_place("reckless_charge", P, 0, F)
-	check(c.move_unit(0, F, 1, F) == "" and charge.hp == 3, "fusion: Reckless Charge takes 1 when it moves")
+	check(c.move_unit(0, F, 1, F) == "" and charge.hp == 3, "fusion: Doomrunner takes 1 when it moves")
 	var front_foe = c.debug_place("hollowed_bulwark", E, 1, F)
 	var back_foe = c.debug_place("hollowed_bulwark", E, 1, B)
 	c._deal_damage(charge, 99, "effect")
-	check(front_foe.hp == 5 and back_foe.hp == 5, "fusion: Reckless Charge blasts its lane for its ATK")
+	check(front_foe.hp == 5 and back_foe.hp == 5, "fusion: Doomrunner blasts its lane for its ATK")
 
 	c = fresh()
 	var wolf = c.debug_place("wolf", P, 0, F)
@@ -2886,7 +2886,7 @@ func test_fusion_cards() -> void:
 	var sunner = c.debug_place("ark_sentinel", P, 0, F)
 	var shaded = c.debug_place("ark_sentinel", P, 1, F)
 	c.debug_place("high_noon", P, 2, B)
-	check(c.effective_atk(sunner) == 4 and c.effective_atk(shaded) == 2, "fusion: High Noon adds ATK on Sunlit slots")
+	check(c.effective_atk(sunner) == 4 and c.effective_atk(shaded) == 2, "fusion: Noon Sentinel adds ATK on Sunlit slots")
 
 	c = fresh()
 	var host = c.debug_place("undying_host", P, 0, F)
