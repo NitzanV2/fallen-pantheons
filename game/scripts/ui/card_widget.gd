@@ -43,7 +43,7 @@ const KEYWORD_INFO := {
 	"cleave": ["Cleave", "Also hits the units in the lanes on both sides of the target, in the same row."],
 	"pierce": ["Pierce", "Damage beyond what kills the target carries to the unit behind it."],
 	"revive": ["Revive", "Once per fight: when it dies, it returns in the same slot with 1 HP."],
-	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot."],
+	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot and attacks, if it has not already attacked this round."],
 	"immovable": ["Immovable", "Can't be pushed or swapped and takes no collision damage."],
 	"airborne": ["Airborne", "Melee attacks can't target it."],
 	"pack": ["Pack", "Wolf. Gains +1 ATK for each of your other Wolves (max +4)."],
@@ -98,8 +98,11 @@ const ENEMY_COLORS := {"enemy": Color(0.55, 0.25, 0.6), "elite": Color(0.8, 0.3,
 ## Art for a card, enemy, relic, or patron (`kind` is the folder under res://art).
 ## Draws a tinted placeholder with the name's initials until the image file exists.
 static func art(kind: String, id: String, display_name: String, tint: Color, font_size := 28) -> Control:
+	var art_id := id
+	if kind == "cards" and id.begins_with("amalgam_"):
+		art_id = "amalgam"
 	for pattern in ART_PATHS:
-		var path: String = pattern % [kind, id]
+		var path: String = pattern % [kind, art_id]
 		if ResourceLoader.exists(path):
 			var tex := TextureRect.new()
 			tex.texture = load(path)

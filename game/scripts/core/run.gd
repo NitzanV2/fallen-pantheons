@@ -553,7 +553,7 @@ func _card_pool(rarity: String, factions: Array, exclude: Array) -> Array:
 	var out: Array = []
 	for id in Data.CARDS:
 		var def: Dictionary = Data.CARDS[id]
-		if def.get("token", false) or def["rarity"] == "Starter" or exclude.has(id):
+		if def.get("token", false) or def.get("amalgam", false) or def["rarity"] == "Starter" or exclude.has(id):
 			continue
 		if (def["rarity"] == "Divine") != (rarity == "Divine"):
 			continue
@@ -805,11 +805,19 @@ func _apply_fx(fx: Dictionary) -> Array:
 		var id := ""
 		if fx["card"] == "Divine":
 			id = _divine_cards(1)[0]
+		elif fx["card"] == "amalgam":
+			id = _roll_amalgam()
 		else:
 			var odds: Array = act_def()["normal_odds"] if fx["card"] == "any" else RARITY_ONLY[fx["card"]]
 			id = _roll_card(odds, [], [], event_rng)
 		add_card(id)
-		notes.append("%s joins your deck." % Data.CARDS[id]["name"])
+		if Data.CARDS[id].get("amalgam", false):
+			var words: PackedStringArray = PackedStringArray()
+			for word in Data.CARDS[id]["keywords"]:
+				words.append(str(word).capitalize())
+			notes.append("Amalgam joins your deck: %s." % ", ".join(words))
+		else:
+			notes.append("%s joins your deck." % Data.CARDS[id]["name"])
 	if fx.has("relic"):
 		var relic := _random_relic(event_rng)
 		if relic == "":
@@ -845,6 +853,15 @@ func _apply_fx(fx: Dictionary) -> Array:
 		shrine["cards"] = cards
 		shrine["pending"] = "choose"
 	return notes
+
+
+## One Amalgam. Each of the twenty keyword trios is equally likely.
+func _roll_amalgam() -> String:
+	var pool: Array = []
+	for id in Data.CARDS:
+		if Data.CARDS[id].get("amalgam", false):
+			pool.append(id)
+	return pool[event_rng.randi_range(0, pool.size() - 1)]
 
 
 ## Up to n different Divine cards.

@@ -1659,7 +1659,7 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 		"ragnarok":
 			var u = _at(targets[0])
 			var lane: int = u.lane
-			var dmg: int = u.hp
+			var dmg: int = effective_atk(u)
 			_log("Ragnarok consumes %s for %d damage." % [_unit_label(u), dmg])
 			u.hp = 0
 			_kill(u)
@@ -2364,6 +2364,8 @@ func _first_empty_enemy_slot() -> Array:
 
 
 func _act(u) -> void:
+	if u.attacked_round == round_num:
+		return
 	if u.side == PLAYER and u.lane == petrified_lane:
 		_log("%s is petrified and cannot act." % _unit_label(u))
 		return
@@ -2901,6 +2903,12 @@ func _reinforce(u) -> void:
 	if has_relic("gjallarhorn") and b.side == PLAYER:
 		b.shield += 4
 	_log("%s steps forward to reinforce lane %d." % [b.display_name(), u.lane + 1])
+	if b.attacked_round == round_num:
+		return
+	var prev = actor
+	actor = b
+	_act(b)
+	actor = prev
 
 
 func _check_enemies_cleared() -> void:

@@ -588,6 +588,33 @@ func _evaluate(c, i: int) -> Dictionary:
 				if c.unit_at(P, FRONT, lane) == null and c.unit_at(E, FRONT, lane) != null:
 					empty += 1
 			return {"score": 3.0 * empty if empty >= 2 else 0.0, "action": func(): c.play_spell(i, [])}
+		"ragnarok":
+			if c.units(P).size() < 2:
+				return none
+			var victim = null
+			var best_score := 0.0
+			for ally in c.units(P):
+				if not c.valid_targets(i).has([P, ally.row, ally.lane]):
+					continue
+				var blast: int = c.effective_atk(ally)
+				var hits := 0
+				var kill := false
+				for row in 2:
+					var foe = c.unit_at(E, row, ally.lane)
+					if foe == null:
+						continue
+					hits += 1
+					if foe.hp + foe.shield <= blast:
+						kill = true
+				if hits == 0:
+					continue
+				var score := blast * hits * 0.8 + (4.0 if kill else 0.0) - ally.hp * 0.4
+				if score > best_score:
+					best_score = score
+					victim = ally
+			if victim == null or best_score < 4.0:
+				return none
+			return {"score": best_score, "action": func(): c.play_spell(i, [[P, victim.row, victim.lane]])}
 		"death_rite":
 			if c.units(P).size() < 2:
 				return none

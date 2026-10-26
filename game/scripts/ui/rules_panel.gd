@@ -143,6 +143,7 @@ func _basics(page: VBoxContainer) -> void:
 			", ".join(Data.RELICS.keys().filter(func(id): return Data.RELICS[id].get("act", 1) > 1).map(func(id): return Data.RELICS[id]["name"]))]],
 	])
 	_tip(page, "Leaving a run saves it. Continue Run, above New Run in the menu, resumes that run. Abandoning, winning, or losing deletes the save. A battle in progress starts again from the beginning.")
+	_tip(page, "The Shrine of the Amalgam wakes one neutral beast. Its three keywords are rolled from Frenzy, Revive, Cleave, Taunt, Ranged and Pierce. It never appears in rewards or shops.")
 	_tip(page, "The market sells Common, Uncommon and Rare cards for %d, %d and %d gold, and relics for %d, %d and %d. Removing a card starts at %d gold and healing %d Core HP starts at %d; each time you buy that service during the run, it costs %d or %d more. Act 2 raises every shop price by %d%%." % [
 		Run.CARD_PRICES["Common"], Run.CARD_PRICES["Uncommon"], Run.CARD_PRICES["Rare"],
 		Run.RELIC_PRICES["Common"], Run.RELIC_PRICES["Uncommon"], Run.RELIC_PRICES["Rare"],
@@ -220,7 +221,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["pierce", "Pierce", "Damage beyond what kills a front unit carries to the unit behind it. It never reaches the Core."],
 		["rally", "Rally X", "Start of round: row neighbours of its own faction gain +X ATK for the rest of the fight. Stacks every round."],
 		["support", "Support", "Start of round: helps the ally directly in front of it (same lane). Works from the back row."],
-		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot."],
+		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot and attacks, if it has not already attacked this round."],
 		["on_death", "On-Death", "Triggers when the unit dies (and also when it Revives)."],
 		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP. Ankh of Eternity gives this to every ally, and the Core takes 2 each time one Revives. Book of the Dead instead returns the last ally that died for good, at full HP, keeping ATK and HP it had gained (not Armaments)."],
 		["growth", "Growth", "End of round: gains the listed stats."],

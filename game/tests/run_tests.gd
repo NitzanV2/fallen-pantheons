@@ -68,6 +68,7 @@ func _initialize() -> void:
 	test_continue_run()
 	test_economy()
 	test_fusion_cards()
+	test_amalgam_shrine()
 	print("")
 	print("%d checks, %d failures" % [checks, failures])
 	quit(1 if failures > 0 else 0)
@@ -299,6 +300,37 @@ func test_valkyrie_reinforce() -> void:
 	c._deal_damage(lead, 99, "effect")
 	check(hunter.row == F and hunter.lane == 2, "reinforce: Ulfr Hunter steps forward")
 	check(hunter.atk == 2 and hunter.shield == 4, "reinforce: Gjallarhorn shields Ulfr Hunter, no ATK gain")
+
+	# The step is the attack, so a unit whose turn already passed still swings, and only once.
+	c = fresh()
+	var foe = c.debug_place("hollowed_zealot", E, 0, F)
+	c.debug_place("ark_sentinel", P, 0, F)
+	valk = c.debug_place("valkyrie", P, 0, B)
+	c._deal_damage(c.unit_at(P, F, 0), 99, "effect")
+	check(valk.row == F and foe.hp == 2, "reinforce: the step attacks for the fallen ally's ATK")
+	var hp_after: int = foe.hp
+	c._act(valk)
+	check(foe.hp == hp_after, "reinforce: that attack counts for the round")
+
+	c = fresh()
+	foe = c.debug_place("hollowed_zealot", E, 0, F)
+	c.debug_place("ark_sentinel", P, 0, F)
+	valk = c.debug_place("valkyrie", P, 0, B)
+	valk.attacked_round = c.round_num
+	c._deal_damage(c.unit_at(P, F, 0), 99, "effect")
+	check(valk.row == F and valk.atk == 3 and foe.hp == 5, "reinforce: no second attack if it already attacked")
+
+	c = fresh()
+	var front_foe = c.debug_place("hollowed_bulwark", E, 0, F)
+	var back_foe = c.debug_place("hollowed_bulwark", E, 0, B)
+	var body = c.debug_place("berserker", P, 0, F)
+	body.atk += 2
+	body.hp = 1
+	c.hand = [c._new_card("ragnarok")]
+	c.faith = 5
+	check(c.play_spell(0, [[P, F, 0]]) == "", "ragnarok: casts")
+	check(front_foe.hp == 3 and back_foe.hp == 3, "ragnarok: blasts the lane for ATK, not remaining HP")
+	check(c.unit_at(P, F, 0) == null, "ragnarok: the ally is destroyed")
 
 
 func test_revive() -> void:
@@ -1624,6 +1656,42 @@ func test_divine() -> void:
 	check(run.deck.has(pick), "hall: Divine card joins the deck")
 
 
+func test_amalgam_shrine() -> void:
+	var ids: Array = []
+	for id in Data.CARDS:
+		if Data.CARDS[id].get("amalgam", false):
+			ids.append(id)
+	check(ids.size() == 20, "amalgam: 20 keyword trios")
+	var seen_kw := {}
+	for id in ids:
+		var words: Array = Data.CARDS[id]["keywords"]
+		check(words.size() == 3, "amalgam: %s has three keywords" % id)
+		for word in words:
+			seen_kw[word] = true
+	check(seen_kw.size() == 6, "amalgam: the pool is Frenzy, Revive, Cleave, Taunt, Ranged and Pierce")
+	var run = Run.new()
+	run.setup(3, "myrmidon")
+	for id in ids:
+		check(not run._card_pool("Rare", [], []).has(id), "amalgam: %s is not a reward or shop card" % id)
+	var before: int = run.max_hp
+	var deck_before: int = run.deck.size()
+	run.start_event("shrine_of_the_amalgam")
+	check(run.choose_option(0) == "", "amalgam: offer vitality")
+	check(run.max_hp == before - 10, "amalgam: vitality costs 10 max Core HP")
+	check(run.shrine["done"] and run.shrine["pending"] == "", "amalgam: the shrine ends without a draft")
+	check(run.deck.size() == deck_before + 1, "amalgam: one card joins the deck")
+	var pick: String = run.deck[run.deck.size() - 1]
+	check(Data.CARDS[pick].get("amalgam", false) and run.devotion == 0 and run.foreign == 0, "amalgam: it joins the deck and counts for no pantheon")
+	var seen := {}
+	for i in 40:
+		var other = Run.new()
+		other.setup(i + 11, "myrmidon")
+		other.start_event("shrine_of_the_amalgam")
+		other.choose_option(0)
+		seen[other.deck[other.deck.size() - 1]] = true
+	check(seen.size() > 1, "amalgam: different visits roll different beasts")
+
+
 func test_terrain_cards() -> void:
 	var c = fresh()
 	c.debug_place("hollowed_bulwark", E, 3, B)
@@ -2417,7 +2485,7 @@ func test_event_data() -> void:
 						check(Data.CARDS.get(fx["curse"], {}).get("type", "") == "curse", "event %s: %s is a curse" % [ev_id, fx["curse"]])
 					for key in ["card", "choose"]:
 						if fx.has(key):
-							check(fx[key] in ["any", "pantheon", "Divine"] or Run.RARITY_ONLY.has(fx[key]), "event %s: %s pool" % [ev_id, key])
+							check(fx[key] in ["any", "pantheon", "Divine", "amalgam"] or Run.RARITY_ONLY.has(fx[key]), "event %s: %s pool" % [ev_id, key])
 
 
 ## Plays every event many times with random choices and checks the run stays valid.

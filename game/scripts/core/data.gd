@@ -31,12 +31,12 @@ const CARDS := {
 	"thread_of_fate": {"name": "Thread of Fate", "faction": "divine", "rarity": "Divine", "type": "spell", "cost": 0, "target": "ally_card", "text": "Return one of your units to your hand. Redeploy it later at full HP."},
 
 	# Norse - The Doomed
-	"einherjar": {"name": "Einherjar", "faction": "norse", "rarity": "Common", "type": "unit", "cost": 1, "atk": 3, "hp": 2, "spd": 3, "keywords": [], "text": "On-Death: allies in its lane gain +2 ATK."},
+	"einherjar": {"name": "Einherjar", "faction": "norse", "rarity": "Common", "type": "unit", "cost": 1, "atk": 3, "hp": 2, "spd": 3, "keywords": [], "text": "On-Death: the other ally in its lane gains +2 ATK."},
 	"shieldmaiden": {"name": "Shieldmaiden", "faction": "norse", "rarity": "Common", "type": "unit", "cost": 2, "atk": 2, "hp": 5, "spd": 2, "keywords": ["taunt"], "text": "Taunt. On-Death: row-adjacent allies gain Shield 3."},
 	"raven_of_odin": {"name": "Raven of Odin", "faction": "norse", "rarity": "Common", "type": "unit", "cost": 1, "atk": 1, "hp": 1, "spd": 5, "keywords": ["ranged"], "text": "Ranged. On-Death: draw 1 card."},
 	"berserker": {"name": "Berserker", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 4, "keywords": [], "text": "Gains +1 ATK whenever an ally dies."},
-	"valkyrie": {"name": "Valkyrie", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 1, "hp": 4, "spd": 3, "keywords": ["reinforce"], "text": "Reinforce. When she steps forward, she gains the fallen ally's ATK."},
-	"ragnarok": {"name": "Ragnarok", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "ally", "text": "Destroy one of your units. Deal damage equal to its current HP to every enemy in its lane."},
+	"valkyrie": {"name": "Valkyrie", "faction": "norse", "rarity": "Uncommon", "type": "unit", "cost": 2, "atk": 1, "hp": 4, "spd": 3, "keywords": ["reinforce"], "text": "Reinforce. When she steps forward, she gains the fallen ally's ATK before that attack."},
+	"ragnarok": {"name": "Ragnarok", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "ally", "text": "Destroy one of your units. Deal damage equal to its ATK to every enemy in its lane."},
 	"thor": {"name": "Thor", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 4, "hp": 6, "spd": 3, "keywords": ["cleave"], "text": "Cleave."},
 	"odin": {"name": "Odin", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 2, "keywords": ["ranged"], "text": "Ranged. Whenever an ally dies, deal 2 damage to the enemy front unit in that ally's lane."},
 	# Norse Raiders - moving units
@@ -122,6 +122,28 @@ const CARDS := {
 	# Tokens
 	"scarab": {"name": "Scarab", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 1, "spd": 4, "keywords": [], "token": true, "text": "Summoned token."},
 	"wolf": {"name": "Wolf", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 2, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "token": true, "text": "Wolf. Pack. Summoned token."},
+
+	# Amalgams - shrine only. Same body, every trio of the keyword pool. Never drafted or sold.
+	"amalgam_cleave_frenzy_pierce": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "frenzy", "pierce"], "amalgam": true, "text": "Cleave. Frenzy. Pierce."},
+	"amalgam_cleave_frenzy_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "frenzy", "ranged"], "amalgam": true, "text": "Cleave. Frenzy. Ranged."},
+	"amalgam_cleave_frenzy_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "frenzy", "revive"], "amalgam": true, "text": "Cleave. Frenzy. Revive."},
+	"amalgam_cleave_frenzy_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "frenzy", "taunt"], "amalgam": true, "text": "Cleave. Frenzy. Taunt."},
+	"amalgam_cleave_pierce_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "pierce", "ranged"], "amalgam": true, "text": "Cleave. Pierce. Ranged."},
+	"amalgam_cleave_pierce_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "pierce", "revive"], "amalgam": true, "text": "Cleave. Pierce. Revive."},
+	"amalgam_cleave_pierce_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "pierce", "taunt"], "amalgam": true, "text": "Cleave. Pierce. Taunt."},
+	"amalgam_cleave_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "ranged", "revive"], "amalgam": true, "text": "Cleave. Ranged. Revive."},
+	"amalgam_cleave_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "ranged", "taunt"], "amalgam": true, "text": "Cleave. Ranged. Taunt."},
+	"amalgam_cleave_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "revive", "taunt"], "amalgam": true, "text": "Cleave. Revive. Taunt."},
+	"amalgam_frenzy_pierce_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "pierce", "ranged"], "amalgam": true, "text": "Frenzy. Pierce. Ranged."},
+	"amalgam_frenzy_pierce_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "pierce", "revive"], "amalgam": true, "text": "Frenzy. Pierce. Revive."},
+	"amalgam_frenzy_pierce_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "pierce", "taunt"], "amalgam": true, "text": "Frenzy. Pierce. Taunt."},
+	"amalgam_frenzy_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "ranged", "revive"], "amalgam": true, "text": "Frenzy. Ranged. Revive."},
+	"amalgam_frenzy_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "ranged", "taunt"], "amalgam": true, "text": "Frenzy. Ranged. Taunt."},
+	"amalgam_frenzy_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "revive", "taunt"], "amalgam": true, "text": "Frenzy. Revive. Taunt."},
+	"amalgam_pierce_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["pierce", "ranged", "revive"], "amalgam": true, "text": "Pierce. Ranged. Revive."},
+	"amalgam_pierce_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["pierce", "ranged", "taunt"], "amalgam": true, "text": "Pierce. Ranged. Taunt."},
+	"amalgam_pierce_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["pierce", "revive", "taunt"], "amalgam": true, "text": "Pierce. Revive. Taunt."},
+	"amalgam_ranged_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["ranged", "revive", "taunt"], "amalgam": true, "text": "Ranged. Revive. Taunt."},
 
 	# Curses - only added by shrines. They can't be played and leave the hand at the start of the next round.
 	"void_taint": {"name": "Void Taint", "faction": "curse", "rarity": "Curse", "type": "curse", "cost": 0, "token": true, "text": "Unplayable. Discarded at the start of the next round."},
@@ -552,7 +574,7 @@ const ACT_HEAL := 0.75
 #   max_hp: raise or lower max Core HP.   card: add a random card ("Common", "Uncommon", "Rare", "Divine", "any").
 #   curse: add that curse card.   relic: add a random relic (40 gold if none are left).
 #   remove: choose a card to remove.   remove_random: remove that many random cards.   lose_relic: lose a random relic.
-#   choose: pick 1 of 3 cards ("pantheon" or a rarity; "Divine" offers 2).   goto: continue to another stage of the event.
+#   choose: pick 1 of 3 cards ("pantheon" or a rarity; "Divine" offers 2).   card: "amalgam" adds one random Amalgam.   goto: continue to another stage of the event.
 # Events with "stages" continue there after a "goto"; each stage has its own "text" and "options".
 # An event's "weight" sets how often it's picked (default EVENT_WEIGHT); rare events use less.
 # An event's "act" is the first act it can appear in (default 1).
@@ -685,6 +707,14 @@ const EVENTS := {
 				"fx": {"choose": "Divine"}, "text": "The nameless god accepts. Two gifts shimmer on the altar."},
 			{"label": "Offer gold: pay 60 gold, gain a random Divine card.", "cost": {"gold": 60},
 				"fx": {"card": "Divine"}, "text": "The gold melts into the altar, and a gift rises in its place."},
+			LEAVE]},
+	"shrine_of_the_amalgam": {"name": "Shrine of the Amalgam", "weight": 3,
+		"text": "Three unfinished beasts lie on the altar. The shrine wakes one of them, and no two visitors receive the same gifts.",
+		"options": [
+			{"label": "Offer your vitality: lose 10 max Core HP and wake an Amalgam.", "cost": {"max_hp": 10},
+				"fx": {"card": "amalgam"}, "text": "The altar takes its price. The beast opens its eyes."},
+			{"label": "Offer gold: pay 80 gold and wake an Amalgam.", "cost": {"gold": 80},
+				"fx": {"card": "amalgam"}, "text": "The gold sinks into the stone. The beast stirs."},
 			LEAVE]},
 
 	# Act 2 only ("act": 2).
