@@ -2196,12 +2196,8 @@ func _start_of_round(u) -> void:
 		return
 	if u.side == PLAYER and u.row == BACK:
 		var front = unit_at(PLAYER, FRONT, u.lane)
-		if front != null:
-			if u.id == "athena":
-				front.shield += 3
-				_log("Athena shields %s (+3)." % front.display_name())
-			elif u.id == "priest_of_ra":
-				_heal(front, 2, "Priest of Ra")
+		if front != null and u.id == "priest_of_ra":
+			_heal(front, 2, "Priest of Ra")
 	var rally: int = u.def.get("rally", 0)
 	for card in u.armaments:
 		rally += int(Data.CARDS[card["id"]]["arm"].get("rally", 0))
@@ -2239,6 +2235,13 @@ func _start_of_round(u) -> void:
 		if count > 0:
 			u.shield += count
 			_log("Myrmidon gains Shield %d." % count)
+	if u.id == "athena" and u.row == FRONT:
+		var covered := 0
+		for n in _row_neighbors(u):
+			n.shield += 2
+			covered += 1
+		if covered > 0:
+			_log("Athena shields the allies beside her (Shield 2).")
 	if u.id == "zeus":
 		var hit: Array = []
 		for lane in LANES:

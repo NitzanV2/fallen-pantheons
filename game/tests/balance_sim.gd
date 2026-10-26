@@ -684,7 +684,7 @@ func _best_slot(c, id: String) -> Array:
 	var def: Dictionary = Data.CARDS[id]
 	var kws: Array = def.get("keywords", [])
 	var ranged: bool = "ranged" in kws
-	var support: bool = id in ["athena", "priest_of_ra"] or "reinforce" in kws
+	var support: bool = id == "priest_of_ra" or "reinforce" in kws
 	var best: Array = []
 	var best_score := 0.0
 	for row in 2:
@@ -717,6 +717,10 @@ func _best_slot(c, id: String) -> Array:
 					score += 4.0
 				elif row == BACK and flanker and id != "skoll_and_hati" and ally_front != null and c.is_wolf(ally_front):
 					score = 18.0 + (4.0 if enemy_here else 0.0)
+			if id == "athena" and row == FRONT:
+				for l in [lane - 1, lane + 1]:
+					if l >= 0 and l < 4 and c.unit_at(P, FRONT, l) != null:
+						score += 3.0
 			if id == "benben_stone":
 				score = 0.0
 				if row == FRONT:

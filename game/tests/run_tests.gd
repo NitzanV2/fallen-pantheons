@@ -69,6 +69,7 @@ func _initialize() -> void:
 	test_economy()
 	test_fusion_cards()
 	test_amalgam_shrine()
+	test_athena()
 	print("")
 	print("%d checks, %d failures" % [checks, failures])
 	quit(1 if failures > 0 else 0)
@@ -1692,6 +1693,25 @@ func test_amalgam_shrine() -> void:
 	check(seen.size() > 1, "amalgam: different visits roll different beasts")
 
 
+func test_athena() -> void:
+	var c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var left = c.debug_place("ark_sentinel", P, 0, F)
+	var athena = c.debug_place("athena", P, 1, F)
+	var right = c.debug_place("ark_sentinel", P, 2, F)
+	var behind = c.debug_place("ark_sentinel", P, 1, B)
+	c.end_plan()
+	check(left.shield == 2 and right.shield == 2, "athena: the allies beside her gain Shield 2")
+	check(athena.shield == 0 and behind.shield == 0, "athena: she and the ally behind her gain nothing")
+	c = fresh()
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	var front = c.debug_place("ark_sentinel", P, 1, F)
+	var side = c.debug_place("ark_sentinel", P, 0, B)
+	c.debug_place("athena", P, 1, B)
+	c.end_plan()
+	check(front.shield == 0 and side.shield == 0, "athena: the back row grants no shield")
+
+
 func test_terrain_cards() -> void:
 	var c = fresh()
 	c.debug_place("hollowed_bulwark", E, 3, B)
@@ -2828,6 +2848,9 @@ func test_economy() -> void:
 	run._generate_shop()
 	run.state = "shop"
 	check(run.card_price("augury") == 25 and run.relic_price("golden_fleece") == 100, "economy: Act 1 keeps the base rarity prices")
+	for id in ["shield_raid", "olympian_ichor", "sphinx", "eye_of_ra", "broodwarden"]:
+		check(run.card_price(id) == 25, "economy: %s is priced as a Common" % Data.CARDS[id]["name"])
+	check(run.card_price("harpe") == 40, "economy: Harpe stays an Uncommon")
 	check(run.remove_price() == 50 and run.buy_remove(0) == "" and run.remove_price() == 75, "economy: removal costs 25 more each time")
 	check(run.heal_price() == 40 and run.buy_heal() == "" and run.core_hp == 30 and run.heal_price() == 60, "economy: healing costs 20 more each time")
 	check(run.can_buy_remove() and run.can_buy_heal(), "economy: both services stay available")
