@@ -19,6 +19,8 @@ const ROW_SCALE := [0.74, 0.82, 0.93, 1.0]
 const CENTER_X := 625.0
 const DIVIDER_Y := 343.0
 const TOKEN_SIZE := Vector2(210, 230)
+## Only the lower part of a token receives clicks/hovers so tall sprites don't cover the row above.
+const TOKEN_HIT_FRAC := 0.4
 const SLAB := 9.0
 const GOLD := Color(0.95, 0.78, 0.35)
 const TARGET := Color(1.0, 0.85, 0.25)
@@ -105,13 +107,19 @@ func _token_anchor(side: int, row: int, lane: int, width: int) -> Vector2:
 	return Vector2((first[3].x + last[2].x) / 2.0, ROW_Y[i][1] - 7.0 * ROW_SCALE[i])
 
 
+## Clickable / hoverable region for a token: its feet, not the full tall sprite.
+func _token_hit_rect(t: Control) -> Rect2:
+	var h: float = max(24.0, t.size.y * TOKEN_HIT_FRAC)
+	return Rect2(t.position.x, t.position.y + t.size.y - h, t.size.x, h)
+
+
 ## Hit-test a board point. Pass `tiles_only` to override `prefer_tiles` (e.g. false to grab a token for drag-start).
 func slot_at(pos: Vector2, tiles_only: Variant = null) -> Variant:
 	var only_tiles: bool = prefer_tiles if tiles_only == null else bool(tiles_only)
 	if not only_tiles:
 		for k in range(tokens.size() - 1, -1, -1):
 			var t: Control = tokens[k]
-			if Rect2(t.position, t.size).has_point(pos):
+			if _token_hit_rect(t).has_point(pos):
 				return t.get_meta("slot")
 	for i in range(ROWS.size() - 1, -1, -1):
 		for lane in LANES:
@@ -124,7 +132,8 @@ func slot_at(pos: Vector2, tiles_only: Variant = null) -> Variant:
 func slot_rect(slot: Array) -> Rect2:
 	for t in tokens:
 		if t.get_meta("slot") == slot:
-			return t.get_global_rect()
+			var local := _token_hit_rect(t)
+			return Rect2(global_position + local.position, local.size)
 	var quad := tile_quad(slot[0], slot[1], slot[2], 0)
 	var rect := Rect2(quad[0], Vector2.ZERO)
 	for p in quad:

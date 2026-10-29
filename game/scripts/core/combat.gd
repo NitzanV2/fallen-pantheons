@@ -2012,6 +2012,9 @@ func can_recall(u) -> bool:
 func move_block(u) -> String:
 	if is_fresh(u) and u.effect_used:
 		return "Its effect has already triggered"
+	# Reinforce (e.g. after Tyr's Oath) can attack during planning; that locks them in place.
+	if phase == "plan" and u.attacked_round == round_num:
+		return "Already attacked this round"
 	if is_fresh(u):
 		return ""
 	if _entered_this_plan(u):

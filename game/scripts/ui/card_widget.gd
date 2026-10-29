@@ -43,7 +43,7 @@ const KEYWORD_INFO := {
 	"cleave": ["Cleave", "Also hits the units in the lanes on both sides of the target, in the same row."],
 	"pierce": ["Pierce", "Damage beyond what kills the target carries to the unit behind it."],
 	"revive": ["Revive", "Once per fight: when it dies, it returns in the same slot with 1 HP."],
-	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot and attacks, if it has not already attacked this round."],
+	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot and attacks, if it has not already attacked this round. Attacking during planning locks it in place."],
 	"immovable": ["Immovable", "Can't be pushed or swapped and takes no collision damage."],
 	"airborne": ["Airborne", "Melee attacks can't target it."],
 	"pack": ["Pack", "Wolf. Gains +1 ATK for each of your other Wolves (max +4)."],

@@ -321,6 +321,17 @@ func test_valkyrie_reinforce() -> void:
 	c._deal_damage(c.unit_at(P, F, 0), 99, "effect")
 	check(valk.row == F and valk.atk == 3 and foe.hp == 5, "reinforce: no second attack if it already attacked")
 
+	# Tyr's Oath can trigger Reinforce during planning; the swing is intended, then they lock.
+	c = _with_power(fresh(), "tyrs_oath")
+	foe = c.debug_place("hollowed_zealot", E, 0, F)
+	c.debug_place("ark_sentinel", P, 0, F)
+	valk = c.debug_place("valkyrie", P, 0, B)
+	c.debug_place("hollowed_bulwark", E, 3, B)
+	check(c.use_power([[P, F, 0]]) == "", "reinforce+tyr: oath used")
+	check(valk.row == F and valk.attacked_round == c.round_num and foe.hp < 5, "reinforce+tyr: steps forward and attacks in planning")
+	check(not c.can_move(valk), "reinforce+tyr: locked after the planning attack")
+	check(c.move_unit(0, F, 1, F) != "" and valk.lane == 0, "reinforce+tyr: can't spend a move after attacking")
+
 	c = fresh()
 	var front_foe = c.debug_place("hollowed_bulwark", E, 0, F)
 	var back_foe = c.debug_place("hollowed_bulwark", E, 0, B)

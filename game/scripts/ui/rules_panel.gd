@@ -221,7 +221,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["pierce", "Pierce", "Damage beyond what kills a front unit carries to the unit behind it. It never reaches the Core."],
 		["rally", "Rally X", "Start of round: row neighbours of its own faction gain +X ATK for the rest of the fight. Stacks every round."],
 		["support", "Support", "Start of round: helps the ally directly in front of it (same lane). Works from the back row."],
-		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot and attacks, if it has not already attacked this round."],
+		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot and attacks, if it has not already attacked this round. If that happens during planning (Tyr's Oath), it is locked in place for the rest of planning."],
 		["on_death", "On-Death", "Triggers when the unit dies (and also when it Revives)."],
 		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP. Ankh of Eternity gives this to every ally, and the Core takes 2 each time one Revives. Book of the Dead instead returns the last ally that died for good, at full HP, keeping ATK and HP it had gained (not Armaments)."],
 		["growth", "Growth", "End of round: gains the listed stats."],

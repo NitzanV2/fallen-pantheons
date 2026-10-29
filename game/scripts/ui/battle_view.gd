@@ -511,7 +511,8 @@ func _render(snap: Dictionary) -> void:
 				var t: String = combat.terrain_at(side, row, lane)
 				if t != "":
 					terrain[BoardView.key(side, row, lane)] = t
-	board.prefer_tiles = sel_move != null
+	## Prefer empty tiles over tall overlapping sprites when deploying / summoning / returning.
+	board.prefer_tiles = sel_move != null or _targets_are_empty_slots()
 	board.render(snap, terrain, _current_targets(), _selected_slots())
 	_render_status(snap)
 	_render_hand(snap)
@@ -804,6 +805,17 @@ func _render_hand(snap: Dictionary) -> void:
 			tag.tooltip_text = CardWidget.wrap_text("Claim Soul: when you end planning, Hades claims this card for the rest of the fight. Play it first to keep it.")
 			CardWidget.place(button, tag, 0, -22, -1, 0)
 		hand_box.add_child(button)
+
+
+## True when every legal target is an empty board slot (deploy / summon / Osiris return).
+func _targets_are_empty_slots() -> bool:
+	var targets: Array = _current_targets()
+	if targets.is_empty() or last_snap.is_empty():
+		return false
+	for slot in targets:
+		if last_snap["grid"][slot[0]][slot[1]][slot[2]] != null:
+			return false
+	return true
 
 
 func _current_targets() -> Array:
