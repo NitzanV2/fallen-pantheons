@@ -9,6 +9,7 @@ const RunSave = preload("res://scripts/core/run_save.gd")
 const BattleView = preload("res://scripts/ui/battle_view.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const MapCanvas = preload("res://scripts/ui/map_canvas.gd")
+const Music = preload("res://scripts/ui/music.gd")
 
 const MAP_SIZE := Vector2(1200, 96 * Run.FLOORS)
 const NODE_SIZES := {"fight": 66.0, "elite": 76.0, "boss": 150.0, "shop": 66.0, "shrine": 66.0, "rest": 66.0}
@@ -162,7 +163,20 @@ func _build() -> void:
 		RunSave.clear()
 		exit_requested.emit())
 	add_child(abandon_confirm)
-	_button("Back to sandbox" if sandbox_mode else "Abandon run", _confirm_abandon, sidebar)
+	var exit_row := HBoxContainer.new()
+	exit_row.add_theme_constant_override("separation", 8)
+	sidebar.add_child(exit_row)
+	if not sandbox_mode:
+		var save_btn := _button("Save and exit", _save_and_exit, exit_row)
+		save_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		save_btn.tooltip_text = "Save this run and return to the main menu. Continue Run resumes it."
+	var abandon_btn := _button("Back to sandbox" if sandbox_mode else "Abandon run", _confirm_abandon, exit_row)
+	abandon_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+
+func _save_and_exit() -> void:
+	_persist()
+	exit_requested.emit()
 
 
 func _confirm_abandon() -> void:
@@ -391,6 +405,8 @@ func _show() -> void:
 		exit_requested.emit()
 		return
 	_persist()
+	if run.state != "combat":
+		Music.play_act_theme(run.act)
 	for child in content.get_children():
 		child.queue_free()
 	_update_sidebar()
@@ -739,12 +755,14 @@ func _start_combat() -> void:
 	battle_view.map_requested.connect(_open_info.bind("map"))
 	battle_view.deck_requested.connect(_open_info.bind("deck"))
 	battle_view.abandon_requested.connect(_confirm_abandon)
+	battle_view.save_exit_requested.connect(_save_and_exit)
 	var title := "%s - Floor %d" % [run.battle_def()["name"], run.floor_number()]
 	var bonus: Dictionary = run.enemy_bonus()
 	if bonus["count"] > 0:
 		title += "  (%s Empowered +%d ATK / +%d HP, +%d rounds)" % [
 			"one enemy" if bonus["count"] == 1 else "%d enemies" % bonus["count"], bonus["atk"], bonus["hp"], bonus["rounds"]]
-	battle_view.start_run_fight(c, title)
+	var music_kind := "boss" if run.battle_pool == "boss" else ("elite" if run.battle_pool == "elite" else "battle")
+	battle_view.start_run_fight(c, title, music_kind)
 
 
 func _on_combat_finished(c) -> void:

@@ -6,6 +6,7 @@ signal finished
 signal map_requested
 signal deck_requested
 signal abandon_requested
+signal save_exit_requested
 
 const Combat = preload("res://scripts/core/combat.gd")
 const Data = preload("res://scripts/core/data.gd")
@@ -55,6 +56,7 @@ var skip_button: Button
 var menu_button: Button
 var run_info_row: HBoxContainer
 var abandon_button: Button
+var save_exit_button: Button
 var result_panel: PanelContainer
 var result_label: Label
 var single_buttons: HBoxContainer
@@ -84,25 +86,47 @@ func start(battle: Dictionary, deck: Variant, relics: Array, seed_value: int) ->
 
 
 ## Runs a fight that belongs to a run. Emits `finished` when the player continues.
-func start_run_fight(run_combat, title: String) -> void:
+## `music_kind` is "battle", "elite", or "boss" (from the run's battle_pool).
+func start_run_fight(run_combat, title: String, music_kind := "battle") -> void:
 	run_mode = true
-	params = {"battle": run_combat.battle, "relics": run_combat.relics}
+	params = {"battle": run_combat.battle, "relics": run_combat.relics, "music_kind": music_kind}
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build()
 	menu_button.visible = false
 	run_info_row.visible = true
 	abandon_button.visible = true
+	save_exit_button.visible = true
 	combat = run_combat
 	_begin("[b]%s[/b]" % title)
 	_play_music()
 
 
 func _play_music() -> void:
-	Music.play("boss" if params["battle"].get("boss", false) else "battle")
+	var battle: Dictionary = params["battle"]
+	var act: int = int(battle.get("act", 1))
+	Music.play_combat(act, _music_kind())
+
+
+func _music_kind() -> String:
+	var kind: String = str(params.get("music_kind", ""))
+	if kind in ["battle", "elite", "boss"]:
+		return kind
+	var battle: Dictionary = params["battle"]
+	if battle.get("boss", false):
+		return "boss"
+	var pool: String = str(Data.BATTLE_POOLS.get(str(battle.get("id", "")), ""))
+	if pool == "elite" or pool.ends_with("_elite"):
+		return "elite"
+	if pool == "boss" or pool.ends_with("_boss"):
+		return "boss"
+	return "battle"
 
 
 func _exit_tree() -> void:
-	Music.play("theme")
+	if run_mode:
+		Music.play_act_theme(int(params["battle"].get("act", 1)))
+	else:
+		Music.play("theme")
 	var preview = get_tree().get_first_node_in_group("card_preview")
 	if preview != null:
 		preview.hide_card(board)
@@ -322,8 +346,15 @@ func _build_sidebar() -> void:
 	log_label.add_theme_font_size_override("bold_font_size", 12)
 	log_label.add_theme_color_override("default_color", Color(0.82, 0.82, 0.88))
 	log_panel.add_child(log_label)
-	abandon_button = _button("Abandon run", func(): abandon_requested.emit(), box)
-	abandon_button.visible = false
+	var run_exit_row := HBoxContainer.new()
+	run_exit_row.add_theme_constant_override("separation", 8)
+	box.add_child(run_exit_row)
+	save_exit_button = _button("Save and exit", func(): save_exit_requested.emit(), run_exit_row)
+	save_exit_button.tooltip_text = "Save this run and return to the main menu. The battle restarts from the beginning when you continue."
+	abandon_button = _button("Abandon run", func(): abandon_requested.emit(), run_exit_row)
+	for b in [save_exit_button, abandon_button]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.visible = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -480,6 +511,7 @@ func _render(snap: Dictionary) -> void:
 				var t: String = combat.terrain_at(side, row, lane)
 				if t != "":
 					terrain[BoardView.key(side, row, lane)] = t
+	board.prefer_tiles = sel_move != null
 	board.render(snap, terrain, _current_targets(), _selected_slots())
 	_render_status(snap)
 	_render_hand(snap)
@@ -567,7 +599,7 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 		if u.get("move_block", "") != "":
 			out.append(["", "Can't move", u["move_block"], Color(0.7, 0.7, 0.8)])
 		if u.get("fresh", false):
-			out.append(["", "Not locked in", "Deployed this round: move it freely, without using a move, until you end planning. Drag it onto another unlocked unit to swap, or back to your hand to refund its Faith. An armed unit can't return to hand.", Color(0.6, 0.85, 1.0)])
+			out.append(["push_right", "Free move", "Deployed this round — cyan FREE tag. Reposition as often as you like without spending Moves left, until you end planning. Drag onto another unlocked unit to swap, or back to hand to refund Faith. An armed unit can't return to hand.", Color(0.55, 0.85, 1.0)])
 	var terrain: String = combat.terrain_at(side, row, lane)
 	if terrain != "":
 		out.append(["", Data.TERRAIN[terrain]["name"], Data.TERRAIN[terrain]["text"], TERRAIN_COLORS[terrain]])
@@ -737,9 +769,19 @@ func _render_status(snap: Dictionary) -> void:
 	void_row.visible = tide > 0
 	void_label.text = "The Core takes %d at the end of each round" % tide
 	void_row.tooltip_text = CardWidget.wrap_text("Void Tide: while the boss lives, your Core takes %d damage at the end of every round. Win quickly!" % tide)
-	info_label.text = "[color=#a8a8b8]Deck[/color] %d   [color=#a8a8b8]Discard[/color] %d   [color=#a8a8b8]Moves left[/color] %d%s" % [
+	var fresh_note := ""
+	if combat.phase == "plan":
+		for row in snap["grid"][P]:
+			for u in row:
+				if u != null and u.get("fresh", false):
+					fresh_note = "\n[color=#8cd9ff]Cyan FREE units: reposition without spending a move[/color]"
+					break
+			if fresh_note != "":
+				break
+	info_label.text = "[color=#a8a8b8]Deck[/color] %d   [color=#a8a8b8]Discard[/color] %d   [color=#a8a8b8]Moves left[/color] %d%s%s" % [
 		snap["deck"], snap["discard"], snap["moves_left"],
 		"\n[color=#80ff90]Next spell is free (Hermes)[/color]" if snap["free_spell"] else "",
+		fresh_note,
 	]
 	_update_relic_icons()
 
@@ -822,7 +864,8 @@ func _hand_drag(_pos: Vector2, i: int) -> Variant:
 func _board_drag(pos: Vector2) -> Variant:
 	if animating or combat.phase != "plan" or sel_move == null:
 		return null
-	var slot = board.slot_at(pos)
+	## Allow grabbing the token body even while move-targeting prefers tiles.
+	var slot = board.slot_at(pos, false)
 	if slot == null or slot[0] != P or slot[1] != sel_move[0] or slot[2] != sel_move[1]:
 		return null
 	var u = last_snap["grid"][P][slot[1]][slot[2]]
@@ -962,12 +1005,12 @@ func _on_slot_pressed(side: int, row: int, lane: int) -> void:
 		else:
 			sel_move = [row, lane]
 			if combat.can_reposition(u):
-				var extra := " Drag it onto another unit you deployed this round to swap, or back to your hand to refund its Faith."
+				var extra := " Drag onto another unlocked deploy this round to swap, or back to hand to refund Faith."
 				if not u.armaments.is_empty():
-					extra = " Drag it onto another unit you deployed this round to swap. It is armed, so it can't return to your hand."
-				_set_hint("Move %s: drag or click an empty tile.%s" % [u.display_name(), extra])
+					extra = " Drag onto another unlocked deploy this round to swap. Armed — can't return to hand."
+				_set_hint("Free move %s (won't spend Moves left): drag or click an empty cyan tile.%s" % [u.display_name(), extra])
 			else:
-				_set_hint("Move %s: drag or click it to an empty tile on your side." % u.display_name())
+				_set_hint("Move %s: drag or click it to an empty tile on your side (uses 1 move)." % u.display_name())
 		_refresh()
 		return
 	if u == null:

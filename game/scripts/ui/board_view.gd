@@ -18,12 +18,14 @@ const ROW_Y := [[118.0, 218.0], [222.0, 330.0], [356.0, 472.0], [476.0, 600.0]]
 const ROW_SCALE := [0.74, 0.82, 0.93, 1.0]
 const CENTER_X := 625.0
 const DIVIDER_Y := 343.0
-const TOKEN_SIZE := Vector2(152, 148)
+const TOKEN_SIZE := Vector2(210, 230)
 const SLAB := 9.0
 const GOLD := Color(0.95, 0.78, 0.35)
 const TARGET := Color(1.0, 0.85, 0.25)
 const SELECTED := Color(0.35, 1.0, 0.5)
 const ACTOR_GLOW := Color(1.0, 0.85, 0.35)
+## Fresh hand-deploys: free reposition this plan (matches battle_view hover tip).
+const FRESH := Color(0.55, 0.85, 1.0)
 
 var snap: Dictionary = {}
 var terrain := {}
@@ -35,6 +37,8 @@ var last_hp := {}
 var pulse := 0.0
 var textures := {}
 var labels: Control
+## When true, hit-test tiles only (ignore tall sprites overlapping neighboring slots). Used while choosing a move destination.
+var prefer_tiles := false
 
 
 func _ready() -> void:
@@ -50,7 +54,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if not targets.is_empty():
+	if not targets.is_empty() or _any_fresh():
 		pulse += delta
 		queue_redraw()
 
@@ -101,11 +105,14 @@ func _token_anchor(side: int, row: int, lane: int, width: int) -> Vector2:
 	return Vector2((first[3].x + last[2].x) / 2.0, ROW_Y[i][1] - 7.0 * ROW_SCALE[i])
 
 
-func slot_at(pos: Vector2) -> Variant:
-	for k in range(tokens.size() - 1, -1, -1):
-		var t: Control = tokens[k]
-		if Rect2(t.position, t.size).has_point(pos):
-			return t.get_meta("slot")
+## Hit-test a board point. Pass `tiles_only` to override `prefer_tiles` (e.g. false to grab a token for drag-start).
+func slot_at(pos: Vector2, tiles_only: Variant = null) -> Variant:
+	var only_tiles: bool = prefer_tiles if tiles_only == null else bool(tiles_only)
+	if not only_tiles:
+		for k in range(tokens.size() - 1, -1, -1):
+			var t: Control = tokens[k]
+			if Rect2(t.position, t.size).has_point(pos):
+				return t.get_meta("slot")
 	for i in range(ROWS.size() - 1, -1, -1):
 		for lane in LANES:
 			if Geometry2D.is_point_in_polygon(pos, tile_quad(ROWS[i][0], ROWS[i][1], lane, 0)):
@@ -213,12 +220,20 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 	var closed := quad.duplicate()
 	closed.append(quad[0])
 	draw_polyline(closed, Color(0, 0, 0, 0.55), 1.5, true)
+	var unit = _unit_at(side, row, lane)
+	var fresh_here: bool = unit != null and unit.get("fresh", false)
+	var free_move: bool = _selected_is_fresh()
+	if fresh_here and not _has(targets, slot) and not _has(selected, slot):
+		draw_colored_polygon(quad, Color(FRESH, 0.10 + 0.06 * sin(pulse * 4.0)))
+		draw_polyline(closed, Color(FRESH, 0.55 + 0.25 * sin(pulse * 4.0)), 2.0, true)
 	if _has(targets, slot):
-		draw_colored_polygon(quad, Color(TARGET, 0.12 + 0.08 * sin(pulse * 5.0)))
-		draw_polyline(closed, TARGET, 3.0, true)
+		var mark: Color = FRESH if free_move else TARGET
+		draw_colored_polygon(quad, Color(mark, 0.12 + 0.08 * sin(pulse * 5.0)))
+		draw_polyline(closed, mark, 3.0, true)
 	if _has(selected, slot):
-		draw_colored_polygon(quad, Color(SELECTED, 0.16))
-		draw_polyline(closed, SELECTED, 3.0, true)
+		var sel: Color = FRESH if fresh_here or free_move else SELECTED
+		draw_colored_polygon(quad, Color(sel, 0.16))
+		draw_polyline(closed, sel, 3.0, true)
 	elif hover == slot:
 		draw_colored_polygon(quad, Color(1, 1, 1, 0.08))
 		draw_polyline(closed, Color(1, 1, 1, 0.55), 2.0, true)
@@ -330,6 +345,30 @@ static func _has(list: Array, slot: Array) -> bool:
 	return false
 
 
+func _unit_at(side: int, row: int, lane: int):
+	if snap.is_empty():
+		return null
+	return snap["grid"][side][row][lane]
+
+
+func _any_fresh() -> bool:
+	if snap.is_empty():
+		return false
+	for row in snap["grid"][P]:
+		for u in row:
+			if u != null and u.get("fresh", false):
+				return true
+	return false
+
+
+func _selected_is_fresh() -> bool:
+	if selected.is_empty():
+		return false
+	var s: Array = selected[0]
+	var u = _unit_at(s[0], s[1], s[2])
+	return u != null and u.get("fresh", false)
+
+
 # ---------------------------------------------------------------- tokens
 
 func _rebuild_tokens() -> void:
@@ -365,6 +404,7 @@ func _rebuild_tokens() -> void:
 
 func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> Control:
 	var enemy: bool = u["side"] == E
+	var fresh: bool = u.get("fresh", false)
 	var size := Vector2(width, TOKEN_SIZE.y * sc)
 	var root := Control.new()
 	root.size = size
@@ -381,28 +421,58 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 		var def: Dictionary = Data.CARDS[u["id"]]
 		metal = CardWidget.RARITY_STYLES.get(def["rarity"], CardWidget.RARITY_STYLES["Starter"])["metal"]
 		tint = CardWidget.FACTION_COLORS[def["faction"]]
-
-	var frame := Panel.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.06, 0.06, 0.09)
-	sb.border_color = SELECTED if is_selected else metal
-	sb.set_border_width_all(max(2, int(round(3 * sc))))
-	sb.set_corner_radius_all(int(8 * sc))
-	sb.shadow_color = Color(SELECTED, 0.6) if is_selected else Color(0, 0, 0, 0.5)
-	sb.shadow_size = int((10 if is_selected else 4) * sc)
-	frame.add_theme_stylebox_override("panel", sb)
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	CardWidget.place(root, frame, 0, 0, -0.001, -0.001)
+	var accent: Color = FRESH if fresh else (SELECTED if is_selected else metal)
+	var highlight: bool = is_selected or fresh
 
 	var bar_h: float = 26 * sc
+	var icon_band: float = 28 * sc
 	var art_bottom: float = size.y - bar_h - 4 * sc
-	var art := CardWidget.art("enemies" if enemy else "cards", u["id"], u["name"], tint, int(24 * sc))
+	var flying: bool = u.get("airborne", false)
+	var sprite := CardWidget.board_sprite(u["id"], false, flying)
+	var framed := sprite == null
+	if framed:
+		var frame := Panel.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.06, 0.06, 0.09)
+		sb.border_color = accent if highlight else metal
+		sb.set_border_width_all(max(2, int(round(3 * sc))))
+		sb.set_corner_radius_all(int(8 * sc))
+		sb.shadow_color = Color(accent, 0.6) if highlight else Color(0, 0, 0, 0.5)
+		sb.shadow_size = int((10 if highlight else 4) * sc)
+		frame.add_theme_stylebox_override("panel", sb)
+		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		CardWidget.place(root, frame, 0, 0, -0.001, -0.001)
+	elif highlight:
+		var glow := Panel.new()
+		var gsb := StyleBoxFlat.new()
+		gsb.bg_color = Color(0, 0, 0, 0)
+		gsb.border_color = accent
+		gsb.set_border_width_all(max(2, int(round(3 * sc))))
+		gsb.set_corner_radius_all(int(10 * sc))
+		gsb.shadow_color = Color(accent, 0.55)
+		gsb.shadow_size = int(12 * sc)
+		glow.add_theme_stylebox_override("panel", gsb)
+		glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		CardWidget.place(root, glow, -6 * sc, -6 * sc, 6 * sc, 6 * sc)
+
+	var art: Control = sprite if sprite != null else CardWidget.art("enemies" if enemy else "cards", u["id"], u["name"], tint, int(24 * sc))
 	if u.get("swine", false):
 		art.modulate = Color(1.0, 0.6, 0.78)
-	CardWidget.place(root, art, 4 * sc, 4 * sc, -4 * sc, art_bottom)
+	## Sprite host runs to the HP bar; bottom fade bleeds over keyword icons.
+	var icon_top: float = art_bottom - icon_band
+	var art_top: float = -12.0 * sc if sprite != null else 4.0 * sc
+	var art_pad: float = 0.0 if sprite != null else 4.0 * sc
+	CardWidget.place(root, art, art_pad, art_top, -art_pad if art_pad > 0 else -0.001, art_bottom)
+	if sprite != null and sprite.has_meta("board_tex"):
+		var board_tex: TextureRect = sprite.get_meta("board_tex")
+		root.set_meta("sprite_art", board_tex)
+		root.set_meta("sprite_idle", board_tex.texture)
+		root.set_meta("sprite_attack", CardWidget.board_sprite_texture(u["id"], true, flying))
+		root.set_meta("unit_id", u["id"])
 
 	if enemy and u.get("intent", "") != "":
-		root.add_child(_intent_ribbon(u, sc, Rect2(4 * sc, art_bottom - 20 * sc, size.x - 8 * sc, 20 * sc)))
+		var intent_y: float = icon_top - 22 * sc if sprite != null else art_bottom - 20 * sc
+		root.add_child(_intent_ribbon(u, sc, Rect2(4 * sc, intent_y, size.x - 8 * sc, 20 * sc)))
 
 	var ratio: float = clamp(float(u["hp"]) / max(1, u["max_hp"]), 0.0, 1.0)
 	var hp_back := ColorRect.new()
@@ -429,28 +499,48 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 
 	if u["shield"] > 0:
 		var badge := CardWidget.icon("shield", 30 * sc)
-		badge.position = Vector2(-9, -9) * sc
+		## Overlaps the upper-left of the sprite instead of floating above the token.
+		badge.position = Vector2(-4, 36) * sc
 		badge.size = Vector2(30, 30) * sc
 		root.add_child(badge)
 		var num := CardWidget.number_label(str(u["shield"]), 11 * sc, Color.WHITE)
 		num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		CardWidget.place(badge, num, 0, 1 * sc, -0.001, -0.001)
 
-	var status := VBoxContainer.new()
-	status.add_theme_constant_override("separation", int(2 * sc))
-	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if fresh:
+		root.add_child(_fresh_badge(sc, size.x))
+
+	var icons := HBoxContainer.new()
+	icons.add_theme_constant_override("separation", int(3 * sc))
+	icons.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var source: Dictionary = Data.ENEMIES[u["id"]] if enemy else Data.CARDS[u["id"]]
+	var kws: Array = source.get("keywords", [])
+	for kw in kws:
+		if CardWidget.KEYWORD_INFO.has(kw):
+			icons.add_child(CardWidget.icon(kw, 22 * sc))
 	for pair in [["judgement", u.get("judged", false)], ["vengeance", u.get("hunted", false)], ["ferry", u.get("ferried", false)], ["revive", u["revive"]], ["poison", u.get("poisoned", false)], ["veil", u.get("veil", false)],
-			["spellward", u.get("spellward", false)], ["helm", u.get("helm", false)], ["frenzy", u["empowered"]]]:
-		if pair[1]:
-			status.add_child(CardWidget.icon(pair[0], 20 * sc))
+			["spellward", u.get("spellward", false)], ["helm", u.get("helm", false)], ["airborne", u.get("airborne", false)], ["frenzy", u["empowered"]]]:
+		if pair[1] and not kws.has(pair[0]):
+			icons.add_child(CardWidget.icon(pair[0], 22 * sc))
 	if u.get("burn", 0) > 0:
-		status.add_child(_chip("burn", u["burn"], sc, Color(1.0, 0.75, 0.35)))
+		icons.add_child(_chip("burn", u["burn"], sc, Color(1.0, 0.75, 0.35)))
 	for i in u.get("armaments", []).size():
-		status.add_child(CardWidget.icon("armament", 20 * sc))
-	for child in status.get_children():
-		child.size_flags_horizontal = Control.SIZE_SHRINK_END
-	status.position = Vector2(size.x - 5 * sc - status.get_combined_minimum_size().x, 5 * sc)
-	root.add_child(status)
+		icons.add_child(CardWidget.icon("armament", 22 * sc))
+	if sprite != null:
+		icons.alignment = BoxContainer.ALIGNMENT_CENTER
+		CardWidget.place(root, icons, 4 * sc, icon_top, -4 * sc, art_bottom)
+	else:
+		var status := VBoxContainer.new()
+		status.add_theme_constant_override("separation", int(2 * sc))
+		status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		while icons.get_child_count() > 0:
+			var child: Control = icons.get_child(0)
+			icons.remove_child(child)
+			child.size_flags_horizontal = Control.SIZE_SHRINK_END
+			status.add_child(child)
+		status.position = Vector2(size.x - 5 * sc - status.get_combined_minimum_size().x, 5 * sc)
+		root.add_child(status)
+		icons.queue_free()
 	return root
 
 
@@ -461,6 +551,35 @@ func _chip(icon_id: String, value: int, sc: float, color: Color) -> HBoxContaine
 	chip.add_child(CardWidget.icon(icon_id, 20 * sc))
 	chip.add_child(CardWidget.number_label(str(value), 12 * sc, color))
 	return chip
+
+
+## Corner tag: free reposition this plan (does not spend Moves left).
+func _fresh_badge(sc: float, token_w: float) -> Control:
+	var badge := Panel.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.18, 0.28, 0.92)
+	sb.border_color = FRESH
+	sb.set_border_width_all(max(1, int(round(2 * sc))))
+	sb.set_corner_radius_all(int(6 * sc))
+	sb.shadow_color = Color(FRESH, 0.45)
+	sb.shadow_size = int(6 * sc)
+	badge.add_theme_stylebox_override("panel", sb)
+	var bw: float = 58 * sc
+	var bh: float = 22 * sc
+	badge.size = Vector2(bw, bh)
+	badge.position = Vector2(token_w - bw - 2 * sc, 8 * sc)
+	var arrow := CardWidget.icon("push_right", 14 * sc)
+	arrow.modulate = FRESH
+	arrow.position = Vector2(3 * sc, 4 * sc)
+	arrow.size = Vector2(14, 14) * sc
+	badge.add_child(arrow)
+	var label := CardWidget.number_label("FREE", 9 * sc, FRESH)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.position = Vector2(18 * sc, 1 * sc)
+	label.size = Vector2(bw - 20 * sc, bh - 2 * sc)
+	badge.add_child(label)
+	return badge
 
 
 ## Attacks show the damage; special moves show their name, e.g. "CHARGE 3".
@@ -595,21 +714,38 @@ func _actor_glow(token: Control, order: int, fresh: bool) -> void:
 		badge.create_tween().tween_property(badge, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+func _set_attack_pose(token: Control, attacking: bool) -> void:
+	if not token.has_meta("sprite_art"):
+		return
+	var art: TextureRect = token.get_meta("sprite_art")
+	var idle: Texture2D = token.get_meta("sprite_idle")
+	var strike: Texture2D = token.get_meta("sprite_attack")
+	if attacking and strike != null:
+		art.texture = strike
+	elif idle != null:
+		art.texture = idle
+	CardWidget.board_sprite_relayout(art)
+
+
 func _lunge(token: Control, to: Vector2) -> void:
 	var start := token.position
 	var dir := (to - (start + token.size / 2)).normalized()
+	_set_attack_pose(token, true)
 	var tween := token.create_tween()
 	tween.tween_property(token, "position", start + dir * 36, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(token, "position", start, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_callback(_set_attack_pose.bind(token, false))
 
 
 ## Fires a glowing bolt at `to`; returns how long it takes to arrive.
 func _shoot(token: Control, to: Vector2, enemy: bool) -> float:
 	var from := token.position + token.size / 2
 	var start := token.position
+	_set_attack_pose(token, true)
 	var recoil := token.create_tween()
 	recoil.tween_property(token, "position", start - (to - from).normalized() * 10, 0.08)
 	recoil.tween_property(token, "position", start, 0.15)
+	recoil.tween_callback(_set_attack_pose.bind(token, false))
 	var color := Color(1.0, 0.45, 0.4) if enemy else Color(1.0, 0.9, 0.55)
 	var bolt := Panel.new()
 	bolt.mouse_filter = Control.MOUSE_FILTER_IGNORE

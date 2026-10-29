@@ -95,6 +95,81 @@ const ART_FOCUS := {"void_herald": 0.34, "hel": 0.28, "apep": 0.3}
 const ENEMY_COLORS := {"enemy": Color(0.55, 0.25, 0.6), "elite": Color(0.8, 0.3, 0.35), "boss": Color(0.9, 0.2, 0.2)}
 
 
+## How much of the fitted sprite height to push past the token floor.
+## Board PNGs keep a tall bottom alpha fade; without this bleed the figure floats above the HP bar.
+const BOARD_SPRITE_FLOOR_BLEED := 0.26
+## Landscape board art (multi-tile bosses) width-fits the token; square art keeps min-aspect fit.
+const BOARD_SPRITE_WIDE_ASPECT := 1.4
+
+## Board sprite file stem: amalgam_* variants share `amalgam.png`.
+static func board_sprite_stem(id: String) -> String:
+	if id.begins_with("amalgam_"):
+		return "amalgam"
+	return id
+
+
+## Path for a board sprite. Prefer `{id}_airborne[.png|_attack.png]` when `airborne` and that file exists.
+static func board_sprite_path(id: String, attack := false, airborne := false) -> String:
+	var stem := board_sprite_stem(id)
+	var suffix := "_attack" if attack else ""
+	if airborne:
+		var air := "res://art/sprites/%s_airborne%s.png" % [stem, suffix]
+		if ResourceLoader.exists(air):
+			return air
+	return "res://art/sprites/%s%s.png" % [stem, suffix]
+
+
+## Frameless board sprite when `res://art/sprites/{id}.png` exists. Null otherwise.
+## Pass `attack` true for the strike pose used during the lunge / shot (`{id}_attack.png`).
+## Pass `airborne` true to use `{id}_airborne` art when present (Erinyes flying Fury).
+## Returns a host Control; the TextureRect is in meta `board_tex` (aspect-fit, floor-pinned).
+static func board_sprite(id: String, attack := false, airborne := false) -> Control:
+	var path := board_sprite_path(id, attack, airborne)
+	if not ResourceLoader.exists(path):
+		return null
+	var host := Control.new()
+	host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.clip_contents = false
+	var tex := TextureRect.new()
+	tex.texture = load(path)
+	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tex.stretch_mode = TextureRect.STRETCH_SCALE
+	tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(tex)
+	host.set_meta("board_tex", tex)
+	var layout := func():
+		if host.size.x <= 0.0 or host.size.y <= 0.0 or tex.texture == null:
+			return
+		var full: Vector2 = tex.texture.get_size()
+		if full.x <= 0.0 or full.y <= 0.0:
+			return
+		## Wide multi-tile art spans the token width; height may overflow upward.
+		var s: float = host.size.x / full.x if full.x / full.y >= BOARD_SPRITE_WIDE_ASPECT \
+				else minf(host.size.x / full.x, host.size.y / full.y)
+		var w: float = full.x * s
+		var h: float = full.y * s
+		tex.size = Vector2(w, h)
+		## Pin the opaque figure to the floor by letting the bottom fade overhang icons / HP.
+		tex.position = Vector2((host.size.x - w) * 0.5, host.size.y - h + h * BOARD_SPRITE_FLOOR_BLEED)
+	host.set_meta("board_layout", layout)
+	host.resized.connect(layout)
+	host.item_rect_changed.connect(layout)
+	return host
+
+
+## Re-run bottom-align after swapping idle/attack textures on a board sprite host or its TextureRect.
+static func board_sprite_relayout(art: Control) -> void:
+	var host: Control = art.get_parent() if art is TextureRect else art
+	if host != null and host.has_meta("board_layout"):
+		(host.get_meta("board_layout") as Callable).call()
+
+
+static func board_sprite_texture(id: String, attack := false, airborne := false) -> Texture2D:
+	var path := board_sprite_path(id, attack, airborne)
+	return load(path) as Texture2D if ResourceLoader.exists(path) else null
+
+
 ## Art for a card, enemy, relic, or patron (`kind` is the folder under res://art).
 ## Draws a tinted placeholder with the name's initials until the image file exists.
 static func art(kind: String, id: String, display_name: String, tint: Color, font_size := 28) -> Control:

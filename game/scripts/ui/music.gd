@@ -1,12 +1,19 @@
 extends Node
 ## Background music: one looping track at a time, crossfading when it changes.
-## Call `Music.play("theme" / "battle" / "boss")` from anywhere; the player node creates itself.
-## The loops are synthesized by tools/compose_music.py.
+## Call `Music.play("theme")` for the menu, `play_act_theme(act)` on the run map,
+## and `play_combat(act, kind)` in fights (`battle` / `elite` / `boss`).
+## Loops are synthesized by tools/compose_music.py.
 
 const TRACKS := {
 	"theme": "res://music/theme.ogg",
-	"battle": "res://music/battle.ogg",
-	"boss": "res://music/boss.ogg",
+	"act1_theme": "res://music/act1_theme.ogg",
+	"act1_battle": "res://music/act1_battle.ogg",
+	"act1_elite": "res://music/act1_elite.ogg",
+	"act1_boss": "res://music/act1_boss.ogg",
+	"act2_theme": "res://music/act2_theme.ogg",
+	"act2_battle": "res://music/act2_battle.ogg",
+	"act2_elite": "res://music/act2_elite.ogg",
+	"act2_boss": "res://music/act2_boss.ogg",
 }
 const VOLUME_DB := -8.0
 const SILENT_DB := -40.0
@@ -25,6 +32,18 @@ static func play(track: String) -> void:
 	var music := _instance()
 	if music != null:
 		music._switch(track)
+
+
+## Map / shop / rest / shrine music for a 1-based act index.
+static func play_act_theme(act: int) -> void:
+	play("act%d_theme" % clampi(act, 1, 2))
+
+
+## Combat music. `kind` is "battle", "elite", or "boss".
+static func play_combat(act: int, kind: String) -> void:
+	if kind not in ["battle", "elite", "boss"]:
+		kind = "battle"
+	play("act%d_%s" % [clampi(act, 1, 2), kind])
 
 
 ## Mutes all game audio (the Master bus), remembered between sessions.

@@ -1,8 +1,14 @@
-"""Synthesizes the game's three music loops into game/music/*.ogg.
+"""Synthesizes the game's looping music into game/music/*.ogg.
 
-  theme.ogg   general screens (menu, map, events): slow D minor harp, pads, bell and choir.
-  battle.ogg  regular fights: driving string ostinato, taiko, brass melody.
-  boss.ogg    boss fights: faster, Phrygian (Eb over D), pounding drums, brass and choir chant.
+  theme.ogg       title / patron select (shared).
+  act1_theme.ogg  Act 1 map / shop / rest / shrine (Dying Stars — void D minor).
+  act1_battle.ogg Act 1 normal fights.
+  act1_elite.ogg  Act 1 elite fights (hotter than battle, below boss).
+  act1_boss.ogg   Act 1 boss fights.
+  act2_theme.ogg  Act 2 map screens (Drowned Underworld — watery Em/Am).
+  act2_battle.ogg Act 2 normal fights.
+  act2_elite.ogg  Act 2 elite fights.
+  act2_boss.ogg   Act 2 boss fights.
 
 Each loop is rendered three times back to back and the middle pass is kept, so reverb and
 release tails (and slightly early notes of the next pass) are already present at its edges.
@@ -173,6 +179,18 @@ def hat():
     return highpass(rng.standard_normal(len(t)), 7000) * np.exp(-t * 60)
 
 
+def _hats(song, t0, beat, steps, gain=0.1, pan=0.3):
+    """`steps` is 16 gains (0 = rest) for 16th-note hats across a bar."""
+    for s, g in enumerate(steps):
+        if g:
+            song.add("drums", hat(), t0 + s * beat / 4, g * gain, pan)
+
+
+def _fill_taiko(song, t0, beat, start=8, gain0=0.28, step=0.05):
+    for s in range(start, 16):
+        song.add("drums", taiko(False), t0 + s * beat / 4, gain0 + step * (s - start))
+
+
 # ------------------------------------------------------------------ mixing
 
 class Song:
@@ -258,11 +276,34 @@ def theme(song: Song, off: float) -> None:
         tones = [r + 12, r + 19, r + 24, r + 24 + third, r + 31, r + 36]
         for j, p in enumerate([0, 1, 2, 3, 4, 3, 2, 1]):
             song.add("harp", harp(hz(tones[p]), beat / 2), t0 + j * beat / 2, 1.0 if j else 1.3, -0.4 + 0.15 * p)
-        if i % 2 == 0:
-            song.add("drums", frame_drum(), t0, 0.6)
-        if i >= 8:
-            song.add("drums", taiko(True), t0, 1.0)
-            song.add("drums", taiko(False), t0 + 2.5 * beat, 0.4)
+        # Drums breathe across the 16 bars: hush → pulse → swell → thin out
+        phrase = i // 4
+        if phrase == 0:
+            if i % 2 == 0:
+                song.add("drums", frame_drum(), t0, 0.45)
+        elif phrase == 1:
+            song.add("drums", frame_drum(), t0, 0.55)
+            if i % 2:
+                song.add("drums", taiko(False), t0 + 2 * beat, 0.3)
+            _hats(song, t0, beat, [0.5, 0, 0, 0, 0.3, 0, 0, 0, 0.4, 0, 0, 0, 0.25, 0, 0, 0], 0.08)
+        elif phrase == 2:
+            song.add("drums", taiko(True), t0, 0.9)
+            song.add("drums", frame_drum(), t0 + 2 * beat, 0.5)
+            if i % 2 == 0:
+                song.add("drums", taiko(False), t0 + 2.5 * beat, 0.35)
+            _hats(song, t0, beat, [0.6, 0, 0.3, 0, 0.45, 0, 0.25, 0, 0.55, 0, 0.3, 0, 0.4, 0, 0.2, 0], 0.09)
+            if i % 4 == 3:
+                _fill_taiko(song, t0, beat, 10, 0.22, 0.04)
+        else:
+            song.add("drums", taiko(True), t0, 0.7)
+            if i == 14:
+                song.add("drums", snare(), t0 + 2 * beat, 0.35)
+                song.add("drums", snare(), t0 + 3 * beat, 0.4)
+            elif i == 15:
+                song.add("drums", frame_drum(), t0 + beat, 0.4)
+                song.add("drums", taiko(False), t0 + 3 * beat, 0.35)
+            else:
+                song.add("drums", taiko(False), t0 + 3 * beat, 0.3)
     song.line("melody", bell, "A4:2 F4:1 E4:1 D4:3 F4:1 C5:2 A4:2 G4:4 A4:1 D5:2 C5:1 Bb4:2 A4:1 G4:1 G4:2 Bb4:1 A4:1 A4:4",
               off, beat, pan=0.15)
     phrase2 = "F5:2 D5:2 C5:2 A4:1 C5:1 D5:2 Bb4:2 A4:4 F4:1 G4:1 A4:1 Bb4:1 C5:2 G4:2 A4:2 C#5:2 R:4"
@@ -279,7 +320,25 @@ def ostinato(song, r, third, t0, beat, steps, gain=1.0, low=False):
             song.add("ostinato", strings(hz(m - 12), beat / 4 * 0.9), t0 + s * beat / 4, 0.6 * gain * accent)
 
 
-def battle(song: Song, off: float) -> None:
+def act1_theme(song: Song, off: float) -> None:
+    """Dying Stars map: theme drums plus sparse mid-bar answers that shift by phrase."""
+    theme(song, off)
+    beat = 60 / 72
+    bar = 4 * beat
+    for i in range(16):
+        t0 = off + i * bar
+        phrase = i // 4
+        if phrase == 0 and i % 4 == 2:
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.28)
+        elif phrase == 1 and i % 2 == 0:
+            song.add("drums", taiko(False), t0 + 1.5 * beat, 0.32)
+        elif phrase == 2:
+            song.add("drums", snare(), t0 + 2.5 * beat, 0.28)
+        elif phrase == 3 and i % 2:
+            song.add("drums", frame_drum(), t0 + beat, 0.35)
+
+
+def act1_battle(song: Song, off: float) -> None:
     beat = 60 / 126
     bar = 4 * beat
     cycle = ["Dm", "Dm", "Bb", "C", "Dm", "Dm", "Gm", "A"]
@@ -293,16 +352,29 @@ def battle(song: Song, off: float) -> None:
         ostinato(song, r, third, t0, beat, steps)
         for e in (0, 3, 6):
             song.add("bass", bass(hz(r - 12), beat * 0.7), t0 + e * beat / 2)
+        # Three 8-bar drum arcs: lean → backbeat → drive
+        arc = i // 8
         song.add("drums", taiko(True), t0, 1.0)
-        song.add("drums", taiko(True), t0 + 1.5 * beat, 0.8)
-        song.add("drums", taiko(False), t0 + 3 * beat, 0.7)
-        for e in (1, 3):
-            song.add("drums", snare(), t0 + e * beat, 0.55)
-        for s in range(16):
-            song.add("drums", hat(), t0 + s * beat / 4, 0.12 if s % 2 else 0.06, 0.3)
-        if i % 8 == 7:
-            for s in range(8, 16):
-                song.add("drums", taiko(False), t0 + s * beat / 4, 0.3 + 0.06 * (s - 8))
+        if arc == 0:
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.55)
+            song.add("drums", snare(), t0 + 2 * beat, 0.4)
+            _hats(song, t0, beat, [0.7, 0, 0.35, 0, 0.5, 0, 0.3, 0, 0.65, 0, 0.35, 0, 0.45, 0, 0.25, 0], 0.11)
+        elif arc == 1:
+            song.add("drums", taiko(True), t0 + 1.5 * beat, 0.75)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.65)
+            song.add("drums", snare(), t0 + beat, 0.5)
+            song.add("drums", snare(), t0 + 3 * beat, 0.55)
+            _hats(song, t0, beat, [0.8, 0.3, 0.45, 0.25, 0.7, 0.3, 0.4, 0.2, 0.75, 0.3, 0.45, 0.25, 0.65, 0.35, 0.4, 0.3], 0.12)
+        else:
+            song.add("drums", taiko(True), t0 + 1.5 * beat, 0.85)
+            song.add("drums", taiko(False), t0 + 2.5 * beat, 0.55)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.7)
+            song.add("drums", snare(), t0 + beat, 0.55)
+            song.add("drums", snare(), t0 + 2 * beat, 0.35)
+            song.add("drums", snare(), t0 + 3 * beat, 0.6)
+            _hats(song, t0, beat, [0.9, 0.4, 0.55, 0.35, 0.8, 0.4, 0.5, 0.3, 0.85, 0.45, 0.55, 0.35, 0.75, 0.5, 0.6, 0.4], 0.13)
+        if i % 4 == 3:
+            _fill_taiko(song, t0, beat, 8 if arc else 10, 0.28, 0.05)
         if i >= 16:
             for m in [r + 12, r + 19, r + 24 + third]:
                 song.add("choir", choir(hz(m), bar), t0, 0.35)
@@ -313,7 +385,57 @@ def battle(song: Song, off: float) -> None:
     song.line("melody", brass, final, off + 16 * bar, beat, 0.6, 0.0, -12)
 
 
-def boss(song: Song, off: float) -> None:
+def act1_elite(song: Song, off: float) -> None:
+    """Hotter than battle: faster pulse, denser ostinato, more snare — still below boss."""
+    beat = 60 / 136
+    bar = 4 * beat
+    cycle = ["Dm", "Eb", "Dm", "C", "Dm", "Bb", "Gm", "A"]
+    prog = cycle + cycle + ["Bb", "C", "Dm", "Eb", "Bb", "C", "A", "A"]
+    steps = [0, 12, 0, 7, 0, 12, 0, "t", 0, 12, 0, 7, 1, 12, 0, 7]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        for j, m in enumerate([r, r + 7, r + 12, r + 12 + third]):
+            song.add("pad", pad(hz(m), bar), t0, 1.0, -0.3 + 0.2 * j)
+        ostinato(song, r, third, t0, beat, steps, gain=1.15, low=True)
+        for e in range(8):
+            song.add("bass", bass(hz(r - 12), beat * 0.45), t0 + e * beat / 2, 1.1 if e % 2 == 0 else 0.75)
+        arc = i // 8
+        song.add("drums", taiko(True), t0, 1.05)
+        if arc == 0:
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.7)
+            song.add("drums", snare(), t0 + 2 * beat, 0.45)
+            song.add("drums", snare(), t0 + 3 * beat, 0.4)
+            _hats(song, t0, beat, [0.7, 0, 0.4, 0, 0.55, 0, 0.35, 0, 0.7, 0, 0.4, 0, 0.5, 0, 0.3, 0], 0.12)
+        elif arc == 1:
+            song.add("drums", taiko(True), t0 + beat, 0.7)
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.85)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.65)
+            for e in (1, 2, 3):
+                song.add("drums", snare(), t0 + e * beat, 0.48 + 0.06 * e)
+            _hats(song, t0, beat, [0.85, 0.35, 0.5, 0.3, 0.75, 0.35, 0.45, 0.25, 0.8, 0.4, 0.5, 0.3, 0.7, 0.45, 0.55, 0.35], 0.13)
+        else:
+            song.add("drums", taiko(True), t0 + beat, 0.8)
+            song.add("drums", taiko(False), t0 + 1.5 * beat, 0.5)
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.9)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.75)
+            song.add("drums", snare(), t0 + 0.5 * beat, 0.35)
+            for e in (1, 2, 3):
+                song.add("drums", snare(), t0 + e * beat, 0.52 + 0.07 * e)
+            _hats(song, t0, beat, [1, 0.45, 0.6, 0.4, 0.9, 0.45, 0.55, 0.35, 0.95, 0.5, 0.6, 0.4, 0.85, 0.55, 0.7, 0.45], 0.14)
+        if i % 4 == 3:
+            _fill_taiko(song, t0, beat, 8, 0.26 + 0.02 * arc, 0.05)
+        if i >= 8:
+            for m in [r + 12, r + 19]:
+                song.add("choir", choir(hz(m), bar), t0, 0.3)
+    song.line("melody", brass, "D4:1 F4:0.5 A4:0.5 Bb4:1 A4:1 G4:1 Eb4:1 D4:2 F4:1 A4:1 D5:1 C5:1 Bb4:1 A4:1 "
+              "G4:1.5 F4:0.5 Eb4:1 D4:1 A3:2 D4:1.5 F4:0.5 G4:1 Bb4:1 A4:2 C#5:2", off + 8 * bar, beat)
+    sting = "D5:2 F5:2 Eb5:2 C5:2 D5:4 A4:2 Bb4:2 A4:4"
+    song.line("choir", choir, sting, off + 16 * bar, beat, 0.9, 0.0, -12)
+    song.line("melody", brass, sting, off + 16 * bar, beat, 0.65)
+
+
+def act1_boss(song: Song, off: float) -> None:
     beat = 60 / 144
     bar = 4 * beat
     a = ["Dm", "Dm", "Eb", "Eb", "Dm", "Dm", "C", "A"]
@@ -328,18 +450,33 @@ def boss(song: Song, off: float) -> None:
         ostinato(song, r, third, t0, beat, steps, low=True)
         for e in range(8):
             song.add("bass", bass(hz(r - 12), beat * 0.4), t0 + e * beat / 2, 1.2 if e % 2 == 0 else 0.8)
-        for q in range(4):
-            song.add("drums", taiko(True), t0 + q * beat, 1.0 if q == 0 else 0.75)
-        if section >= 2:
+        # Section 0: martial pulses; 1: snare march; 2: double-time chaos; 3: return thinner
+        song.add("drums", taiko(True), t0, 1.05)
+        if section == 0:
+            song.add("drums", taiko(True), t0 + 2 * beat, 0.7)
+            song.add("drums", snare(), t0 + 2 * beat, 0.45)
+            _hats(song, t0, beat, [0.6, 0, 0.3, 0, 0.45, 0, 0.25, 0, 0.55, 0, 0.3, 0, 0.4, 0, 0.2, 0], 0.1)
+        elif section == 1:
+            for q in (1, 2, 3):
+                song.add("drums", taiko(True), t0 + q * beat, 0.7 if q != 2 else 0.85)
+            song.add("drums", snare(), t0 + beat, 0.55)
+            song.add("drums", snare(), t0 + 3 * beat, 0.6)
+            _hats(song, t0, beat, [0.8, 0.3, 0.45, 0.25, 0.7, 0.3, 0.4, 0.2, 0.75, 0.35, 0.45, 0.25, 0.65, 0.4, 0.5, 0.3], 0.12)
+        elif section == 2:
             for q in range(4):
+                song.add("drums", taiko(True), t0 + q * beat, 1.0 if q == 0 else 0.75)
                 song.add("drums", taiko(False), t0 + (q + 0.5) * beat, 0.45)
-        for e in (1, 3):
-            song.add("drums", snare(), t0 + e * beat, 0.6)
-        for s in range(16):
-            song.add("drums", hat(), t0 + s * beat / 4, 0.12 if s % 2 else 0.07, 0.3)
+            for e in (1, 2, 3):
+                song.add("drums", snare(), t0 + e * beat, 0.55 + 0.05 * e)
+            _hats(song, t0, beat, [1, 0.5, 0.65, 0.4, 0.9, 0.5, 0.6, 0.35, 0.95, 0.55, 0.65, 0.4, 0.85, 0.6, 0.75, 0.5], 0.14)
+        else:
+            song.add("drums", taiko(True), t0 + 2 * beat, 0.8)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.55)
+            song.add("drums", snare(), t0 + 2 * beat, 0.5)
+            song.add("drums", snare(), t0 + 3.5 * beat, 0.4)
+            _hats(song, t0, beat, [0.7, 0, 0.4, 0, 0.55, 0.25, 0.35, 0, 0.65, 0, 0.4, 0.2, 0.5, 0.3, 0.35, 0], 0.11)
         if i % 4 == 3:
-            for s in range(8, 16):
-                song.add("drums", taiko(False), t0 + s * beat / 4, 0.35 + 0.07 * (s - 8))
+            _fill_taiko(song, t0, beat, 8 if section >= 1 else 10, 0.3 + 0.03 * min(section, 2), 0.06)
         if section >= 1:
             for m in [r - 12, r - 5, r]:
                 song.add("brass", brass(hz(m), beat * 1.2), t0, 1.0)
@@ -359,10 +496,247 @@ def boss(song: Song, off: float) -> None:
     song.line("choir", choir, melody, off + 24 * bar, beat, 0.6)
 
 
+def act2_theme(song: Song, off: float) -> None:
+    """Drowned Underworld map: Phrygian ferry chant — not Act 1's D-minor bell lament."""
+    beat = 60 / 64
+    bar = 4 * beat
+    prog = ["Em", "F", "Em", "B", "Am", "F", "Am", "B", "C", "G", "Am", "B", "Em", "F", "B", "B"]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        for j, m in enumerate([r - 5, r, r + 7, r + 12]):
+            song.add("pad", pad(hz(m), bar * 1.1), t0, 0.9, -0.4 + 0.25 * j)
+        song.add("bass", bass(hz(r - 12), bar * 0.85), t0, 0.85)
+        # Single drip every other beat, not Act 1's arpeggio cascade
+        song.add("harp", harp(hz(r + 19), beat * 0.8), t0 + beat, 0.7, 0.4)
+        song.add("harp", harp(hz(r + 12), beat * 0.8), t0 + 3 * beat, 0.55, -0.4)
+        # Ferry oars that thicken across phrases, then thin for the turnaround
+        phrase = i // 4
+        if phrase == 0:
+            if i % 2 == 0:
+                song.add("drums", frame_drum(), t0, 0.4)
+        elif phrase == 1:
+            song.add("drums", frame_drum(), t0, 0.5)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.28)
+            if i % 2:
+                song.add("drums", frame_drum(), t0 + 2 * beat, 0.3)
+        elif phrase == 2:
+            song.add("drums", taiko(True), t0, 0.55)
+            song.add("drums", frame_drum(), t0 + 2 * beat, 0.45)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.35)
+            _hats(song, t0, beat, [0.4, 0, 0, 0, 0.25, 0, 0, 0, 0.35, 0, 0, 0, 0.2, 0, 0, 0], 0.07)
+            if i % 4 == 3:
+                song.add("drums", snare(), t0 + 2.5 * beat, 0.3)
+                song.add("drums", snare(), t0 + 3.5 * beat, 0.35)
+        else:
+            song.add("drums", frame_drum(), t0, 0.45)
+            if i == 14:
+                song.add("drums", taiko(False), t0 + beat, 0.3)
+                song.add("drums", frame_drum(), t0 + 2.5 * beat, 0.35)
+            elif i == 15:
+                song.add("drums", taiko(False), t0 + 2 * beat, 0.25)
+                song.add("drums", frame_drum(), t0 + 3 * beat, 0.4)
+    # Oscillating drone motif + deep choir response (vs Act 1 rising/falling A-F-E-D)
+    song.line("melody", bell, "B3:3 C4:1 B3:2 A3:2 G3:4 R:2 B3:2 "
+              "C4:2 E4:2 B3:4 F4:3 E4:1 B3:4", off, beat, pan=-0.1)
+    song.line("choir", choir, "E3:4 F3:4 E3:4 B2:4 E3:2 G3:2 F3:4 B2:4", off, beat, 0.7, 0.0, 0)
+    phrase2 = "B4:4 A4:2 G4:2 F4:4 E4:4 R:2 C5:1 B4:1 A4:2 G4:2 F#4:4 E4:4"
+    song.line("choir", choir, phrase2, off + 8 * bar, beat, 0.85, 0.0, -12)
+    song.line("melody", bell, "E4:2 R:2 B3:4 R:2 F4:2 E4:6", off + 8 * bar, beat, 0.5, 0.2)
+
+
+def act2_battle(song: Song, off: float) -> None:
+    """Ferry-crossing fight: descending Styx motif, not a transpose of Act 1's rising brass call."""
+    beat = 60 / 112
+    bar = 4 * beat
+    cycle = ["Em", "C", "Am", "B", "Em", "G", "Am", "B"]
+    prog = cycle + cycle + ["Am", "C", "Em", "B", "Am", "G", "Em", "B"]
+    # Rolling triplet-feel figure, distinct from Act 1's gallop
+    steps = [0, 7, 12, 7, 0, 7, 12, "t", 12, 7, 0, 7, 12, 7, 0, 7]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        for j, m in enumerate([r, r + 7, r + 12, r + 12 + third]):
+            song.add("pad", pad(hz(m), bar), t0, 1.0, -0.3 + 0.2 * j)
+        ostinato(song, r, third, t0, beat, steps, gain=0.9)
+        for e in (0, 3, 5):
+            song.add("bass", bass(hz(r - 12), beat * 0.8), t0 + e * beat / 2, 0.9)
+        arc = i // 8
+        song.add("drums", frame_drum(), t0, 0.7)
+        if arc == 0:
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.55)
+            song.add("drums", snare(), t0 + 2.5 * beat, 0.3)
+            _hats(song, t0, beat, [0.55, 0, 0, 0.3, 0, 0, 0.4, 0, 0.5, 0, 0, 0.25, 0, 0, 0.35, 0], 0.09)
+        elif arc == 1:
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.7)
+            song.add("drums", taiko(True), t0 + 3.5 * beat, 0.5)
+            song.add("drums", snare(), t0 + 2.5 * beat, 0.4)
+            song.add("drums", snare(), t0 + beat, 0.3)
+            _hats(song, t0, beat, [0.65, 0, 0.3, 0.35, 0.45, 0, 0.5, 0.25, 0.6, 0, 0.3, 0.35, 0.4, 0, 0.45, 0.2], 0.1)
+        else:
+            song.add("drums", taiko(False), t0 + beat, 0.45)
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.75)
+            song.add("drums", taiko(True), t0 + 3 * beat, 0.55)
+            song.add("drums", taiko(True), t0 + 3.5 * beat, 0.6)
+            song.add("drums", snare(), t0 + 1.5 * beat, 0.35)
+            song.add("drums", snare(), t0 + 2.5 * beat, 0.45)
+            _hats(song, t0, beat, [0.75, 0.25, 0.4, 0.35, 0.55, 0.3, 0.6, 0.3, 0.7, 0.25, 0.4, 0.4, 0.5, 0.3, 0.55, 0.35], 0.11)
+        if i % 4 == 3:
+            _fill_taiko(song, t0, beat, 10, 0.22, 0.04)
+            song.add("drums", frame_drum(), t0 + 3.5 * beat, 0.4)
+        if i % 4 == 0:
+            song.add("harp", harp(hz(r + 24), beat * 2), t0 + beat, 0.55, 0.35)
+        if i >= 16:
+            for m in [r + 7, r + 12, r + 19]:
+                song.add("choir", choir(hz(m), bar), t0, 0.28)
+    # Long falling phrases + held ferry bells — opposite contour to Act 1
+    song.line("melody", brass, "B4:3 A4:1 G4:2 E4:2 D4:1 E4:1 G4:2 B3:4 "
+              "C5:2 B4:1 A4:1 G4:3 E4:1 A4:2 G4:1 F#4:1 E4:4", off + 8 * bar, beat)
+    song.line("melody", bell, "E5:2 R:1 B4:1 A4:4 R:2 G4:2 E4:4", off + 8 * bar, beat, 0.55, -0.2)
+    final = "B4:3 G4:1 E4:4 A4:2 C5:2 B4:8 G4:2 E4:2 B3:4 E4:4"
+    song.line("choir", choir, final, off + 16 * bar, beat, 1.0, 0.0, -12)
+    song.line("melody", brass, final, off + 16 * bar, beat, 0.5)
+    song.line("melody", bell, "E5:4 B4:4 A4:4 E4:4", off + 16 * bar, beat, 0.4, 0.15)
+
+
+def act2_elite(song: Song, off: float) -> None:
+    """Toll / hunt pulse: jagged leaps and short cells, not Act 1 elite's rising run."""
+    beat = 60 / 124
+    bar = 4 * beat
+    cycle = ["Em", "F", "Em", "B", "Am", "C", "Am", "B"]
+    prog = cycle + cycle + ["C", "B", "Em", "F", "Am", "B", "Em", "B"]
+    steps = [0, 0, 12, 7, 0, 12, 7, 12, 0, 1, 12, 7, 0, 12, "t", 0]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        for j, m in enumerate([r, r + 7, r + 12, r + 12 + third]):
+            song.add("pad", pad(hz(m), bar), t0, 1.0, -0.3 + 0.2 * j)
+        ostinato(song, r, third, t0, beat, steps, gain=1.1, low=True)
+        for e in range(8):
+            song.add("bass", bass(hz(r - 12), beat * 0.4), t0 + e * beat / 2, 1.05 if e % 2 == 0 else 0.7)
+        arc = i // 8
+        song.add("drums", taiko(True), t0, 1.0)
+        if arc == 0:
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.7)
+            song.add("drums", frame_drum(), t0 + 3 * beat, 0.5)
+            song.add("drums", snare(), t0 + 2 * beat, 0.4)
+            _hats(song, t0, beat, [0.7, 0, 0.35, 0, 0.5, 0, 0.3, 0, 0.65, 0, 0.35, 0, 0.45, 0, 0.25, 0], 0.11)
+        elif arc == 1:
+            song.add("drums", taiko(False), t0 + beat, 0.7)
+            song.add("drums", taiko(True), t0 + 2 * beat, 0.85)
+            song.add("drums", frame_drum(), t0 + 3 * beat, 0.6)
+            for e in (1, 2, 3):
+                song.add("drums", snare(), t0 + e * beat, 0.45)
+            _hats(song, t0, beat, [0.8, 0.35, 0.5, 0.3, 0.7, 0.35, 0.45, 0.25, 0.75, 0.4, 0.5, 0.3, 0.65, 0.4, 0.55, 0.35], 0.12)
+        else:
+            song.add("drums", taiko(False), t0 + 0.5 * beat, 0.45)
+            song.add("drums", taiko(False), t0 + beat, 0.8)
+            song.add("drums", taiko(True), t0 + 2 * beat, 0.9)
+            song.add("drums", frame_drum(), t0 + 2.5 * beat, 0.5)
+            song.add("drums", frame_drum(), t0 + 3 * beat, 0.65)
+            song.add("drums", snare(), t0 + beat, 0.5)
+            song.add("drums", snare(), t0 + 2 * beat, 0.4)
+            song.add("drums", snare(), t0 + 3 * beat, 0.55)
+            _hats(song, t0, beat, [0.95, 0.45, 0.6, 0.4, 0.85, 0.45, 0.55, 0.35, 0.9, 0.5, 0.6, 0.4, 0.8, 0.55, 0.7, 0.45], 0.13)
+        if i % 4 == 3:
+            _fill_taiko(song, t0, beat, 8, 0.24 + 0.02 * arc, 0.05)
+        if i >= 8:
+            for m in [r + 12, r + 19]:
+                song.add("choir", choir(hz(m), bar), t0, 0.28)
+    song.line("melody", brass, "E4:0.5 B4:0.5 E5:1 R:0.5 B4:0.5 G4:1 E4:2 "
+              "F4:0.5 C5:0.5 F5:1 R:0.5 C5:0.5 A4:1 F4:2 "
+              "E4:1 G4:1 B4:2 A4:1 F#4:1 E4:2 B3:1 D4:1 E4:4", off + 8 * bar, beat)
+    sting = "B4:1 E5:1 R:1 G5:1 E5:2 B4:2 A4:1 C5:1 B4:4 E4:4"
+    song.line("choir", choir, sting, off + 16 * bar, beat, 0.9, 0.0, -12)
+    song.line("melody", brass, sting, off + 16 * bar, beat, 0.6)
+
+
+def act2_boss(song: Song, off: float) -> None:
+    """River-king processional: Phrygian pedals + falling fifths — not Act 1 boss transposed."""
+    beat = 60 / 132
+    bar = 4 * beat
+    # Pedal-heavy underworld cycle (not Act 1's Dm/Eb block form)
+    a = ["Em", "B", "Em", "F", "Am", "B", "C", "B"]
+    prog = a + a + ["F", "Am", "Em", "B", "C", "F", "Am", "B"] + a
+    # Sparse toll ostinato vs Act 1's galloping 12ths
+    steps = [0, "t", 0, 12, 0, 7, 0, "t", 12, 0, 7, 0, 12, "t", 0, 7]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        section = i // 8
+        for j, m in enumerate([r - 5, r, r + 7, r + 12 + third]):
+            song.add("pad", pad(hz(m), bar), t0, 1.0, -0.35 + 0.22 * j)
+        ostinato(song, r, third, t0, beat, steps, low=True, gain=0.95)
+        # Half-note ferry oars, not Act 1's 8th-note pump
+        for e in (0, 2, 4, 6):
+            song.add("bass", bass(hz(r - 12), beat * 0.85), t0 + e * beat / 2, 1.1 if e % 4 == 0 else 0.8)
+        song.add("drums", taiko(True), t0, 1.05)
+        if section == 0:
+            song.add("drums", frame_drum(), t0 + 2 * beat, 0.6)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.45)
+            _hats(song, t0, beat, [0.5, 0, 0, 0, 0.3, 0, 0, 0, 0.45, 0, 0, 0.25, 0, 0, 0.35, 0], 0.09)
+        elif section == 1:
+            song.add("drums", frame_drum(), t0 + 2 * beat, 0.75)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.65)
+            song.add("drums", snare(), t0 + 1.5 * beat, 0.45)
+            song.add("drums", snare(), t0 + 3.5 * beat, 0.4)
+            _hats(song, t0, beat, [0.65, 0, 0.3, 0, 0.45, 0.25, 0.3, 0, 0.55, 0, 0.3, 0.3, 0.4, 0, 0.45, 0.25], 0.1)
+        elif section == 2:
+            song.add("drums", taiko(True), t0 + beat, 0.55)
+            song.add("drums", frame_drum(), t0 + 2 * beat, 0.8)
+            song.add("drums", taiko(False), t0 + 2.5 * beat, 0.45)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.7)
+            song.add("drums", snare(), t0 + 1.5 * beat, 0.5)
+            song.add("drums", snare(), t0 + 3 * beat, 0.4)
+            song.add("drums", snare(), t0 + 3.5 * beat, 0.5)
+            _hats(song, t0, beat, [0.8, 0.3, 0.45, 0.3, 0.6, 0.35, 0.5, 0.3, 0.7, 0.3, 0.45, 0.4, 0.55, 0.35, 0.6, 0.4], 0.12)
+        else:
+            song.add("drums", frame_drum(), t0 + 2 * beat, 0.65)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.5)
+            song.add("drums", snare(), t0 + 3.5 * beat, 0.4)
+            _hats(song, t0, beat, [0.55, 0, 0.25, 0, 0.4, 0, 0.25, 0, 0.5, 0, 0.3, 0.2, 0.35, 0, 0.4, 0], 0.09)
+        if i % 4 == 3:
+            for s in range(10, 16):
+                song.add("drums", frame_drum(), t0 + s * beat / 4, 0.2 + 0.04 * (s - 10))
+            if section >= 1:
+                _fill_taiko(song, t0, beat, 12, 0.25, 0.05)
+        if section >= 1:
+            # Held low brass pedals (processional), not Act 1's punched hits
+            for m in [r - 12, r - 5]:
+                song.add("brass", brass(hz(m), beat * 2.2), t0, 0.85)
+            song.add("brass", brass(hz(r), beat * 0.5), t0 + 3 * beat, 0.55)
+        if section == 0 and i % 2 == 0:
+            song.add("melody", bell(hz(midi("B3")), bar * 0.9), t0, 0.4)
+            song.add("harp", harp(hz(r + 19), beat * 1.5), t0 + 2 * beat, 0.45, 0.3)
+        if section == 2:
+            for m in [r + 7, r + 12, r + 19]:
+                song.add("choir", choir(hz(m), bar), t0, 0.3)
+    # Slow falling fifths + toll leaps — opposite of Act 1's double-tongued rise (8 bars)
+    melody = ("B3:2 E4:2 G4:2 E4:2 B3:2 C4:2 F4:2 A4:2 G4:2 F4:2 "
+              "E4:2 B4:2 A4:2 E4:2 B3:2 E4:2")
+    song.line("melody", brass, melody, off + 8 * bar, beat)
+    song.line("melody", bell, "E5:2 R:2 B4:4 R:2 A4:2 E4:4", off + 8 * bar, beat, 0.4, -0.25)
+    chant = "E4:4 B3:4 C4:4 G3:4 B3:2 E4:2 F4:4 B3:4"
+    song.line("choir", choir, chant, off + 16 * bar, beat, 1.0, 0.0, 0)
+    song.line("melody", brass, chant, off + 16 * bar, beat, 0.6, 0.0, 12)
+    song.line("melody", brass, melody, off + 24 * bar, beat)
+    song.line("choir", choir, melody, off + 24 * bar, beat, 0.5)
+    song.line("melody", bell, "B4:4 E5:4 A4:4 E4:4", off + 24 * bar, beat, 0.35, 0.2)
+
+
+THEME_LEVELS = {"pad": -7, "bass": -12, "harp": -6, "drums": -10, "melody": -5, "choir": -7}
+BATTLE_LEVELS = {"pad": -10, "ostinato": -5, "bass": -8, "drums": -3, "melody": -4, "choir": -8, "harp": -9}
+ELITE_LEVELS = {"pad": -10, "ostinato": -4, "bass": -7, "drums": -2, "melody": -3, "choir": -7}
+BOSS_LEVELS = {"pad": -10, "ostinato": -5, "bass": -7, "drums": -2, "brass": -7, "melody": -3, "choir": -6, "harp": -9}
+
+
 if __name__ == "__main__":
-    render("theme", 16 * 4 * 60 / 72, theme,
-           {"pad": -7, "bass": -12, "harp": -6, "drums": -10, "melody": -5, "choir": -7})
-    render("battle", 24 * 4 * 60 / 126, battle,
-           {"pad": -10, "ostinato": -5, "bass": -8, "drums": -3, "melody": -4, "choir": -8})
-    render("boss", 32 * 4 * 60 / 144, boss,
-           {"pad": -10, "ostinato": -5, "bass": -7, "drums": -2, "brass": -7, "melody": -3, "choir": -6})
+    render("theme", 16 * 4 * 60 / 72, theme, THEME_LEVELS)
+    render("act1_theme", 16 * 4 * 60 / 72, act1_theme, THEME_LEVELS)
+    render("act1_battle", 24 * 4 * 60 / 126, act1_battle, BATTLE_LEVELS)
+    render("act1_elite", 24 * 4 * 60 / 136, act1_elite, ELITE_LEVELS)
+    render("act1_boss", 32 * 4 * 60 / 144, act1_boss, BOSS_LEVELS)
+    render("act2_theme", 16 * 4 * 60 / 64, act2_theme, THEME_LEVELS)
+    render("act2_battle", 24 * 4 * 60 / 112, act2_battle, BATTLE_LEVELS)
+    render("act2_elite", 24 * 4 * 60 / 124, act2_elite, ELITE_LEVELS)
+    render("act2_boss", 32 * 4 * 60 / 132, act2_boss, BOSS_LEVELS)

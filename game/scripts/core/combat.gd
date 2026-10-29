@@ -772,6 +772,7 @@ func _unit_snapshot(u) -> Dictionary:
 		"ferried": u.side == PLAYER and ferry_target() == u,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
 		"helm": helm_active(u),
+		"airborne": u.has_kw("airborne"),
 		"spellward": u.side == ENEMY and is_spellwarded(u),
 		"armaments": u.armaments.map(func(card): return card["id"]),
 	}
@@ -946,7 +947,25 @@ func _draw(n: int) -> void:
 			_log("Drowned: your units in lane %d get -1 ATK this round." % (lane + 1))
 
 
+## Erinyes: exactly one living Fury is Airborne each round (lane order, rotating).
+func _rotate_fury_airborne() -> void:
+	var furies: Array = []
+	for e in units(ENEMY):
+		if e.id != "erinyes_fury":
+			continue
+		e.bonus_kw = e.bonus_kw.filter(func(kw): return kw != "airborne")
+		furies.append(e)
+	if furies.is_empty():
+		return
+	furies.sort_custom(func(a, b): return a.lane < b.lane)
+	var pick: int = (round_num - 1) % furies.size()
+	if pick < 0:
+		pick = 0
+	furies[pick].bonus_kw.append("airborne")
+
+
 func _declare_intents() -> void:
+	_rotate_fury_airborne()
 	intents.clear()
 	petrified_lane = -1
 	sandstorm_row = -1

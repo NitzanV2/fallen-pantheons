@@ -15,6 +15,8 @@ const GUARANTEED := {
 	"elite": [[4, 5, 6, 7], [9, 10, 11, 12]],
 	"rest": [[6, 7, 8, 9]],
 }
+# No start-to-boss path may exceed these counts (inclusive of the pre-boss rest).
+const PATH_CAPS := {"elite": 4, "rest": 3, "shop": 3}
 # A shop never connects to another shop, nor a rest to another rest, so a path can't visit two of the same in a row.
 const SERVICES := ["shop", "rest"]
 const MAX_HP: int = Data.BALANCE["core_hp"]
@@ -233,6 +235,7 @@ func _generate_map() -> void:
 	for type in GUARANTEED:
 		for range_floors in GUARANTEED[type]:
 			_ensure_type(type, range_floors, range_floors[range_floors.size() / 2])
+	_cap_path_types()
 
 
 func _roll_type(f: int) -> String:
@@ -325,6 +328,50 @@ func _ensure_type(type: String, in_floors: Array, fallback_floor: int) -> void:
 					_replace_service(n)
 				nodes[chosen]["type"] = type
 				return
+
+
+## Demote excess elites / rests / shops so every start-to-boss path respects PATH_CAPS.
+func _cap_path_types() -> void:
+	for _i in 200:
+		var fix: int = _path_cap_fix()
+		if fix < 0:
+			return
+		nodes[fix]["type"] = "fight"
+
+
+## Node to demote on a path that exceeds a PATH_CAPS limit, or -1 if all paths are within caps.
+func _path_cap_fix() -> int:
+	for start in floors[0]:
+		var hit: int = _dfs_path_cap_fix(start, [], {})
+		if hit >= 0:
+			return hit
+	return -1
+
+
+func _dfs_path_cap_fix(id: int, path: Array, counts: Dictionary) -> int:
+	var type: String = nodes[id]["type"]
+	var next_counts: Dictionary = counts.duplicate()
+	if PATH_CAPS.has(type):
+		next_counts[type] = int(next_counts.get(type, 0)) + 1
+	var next_path: Array = path + [id]
+	if nodes[id]["edges"].is_empty():
+		for capped in PATH_CAPS:
+			if int(next_counts.get(capped, 0)) <= PATH_CAPS[capped]:
+				continue
+			for i in range(next_path.size() - 1, -1, -1):
+				var nid: int = next_path[i]
+				if nodes[nid]["type"] == capped and _removable(nid):
+					return nid
+			for i in range(next_path.size() - 1, -1, -1):
+				var nid: int = next_path[i]
+				if nodes[nid]["type"] == capped and nodes[nid]["floor"] != FLOORS - 2:
+					return nid
+		return -1
+	for e in nodes[id]["edges"]:
+		var hit: int = _dfs_path_cap_fix(e, next_path, next_counts)
+		if hit >= 0:
+			return hit
+	return -1
 
 
 func _nearest(i: int, n_from: int, n_to: int) -> int:

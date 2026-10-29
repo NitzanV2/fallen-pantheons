@@ -1428,6 +1428,31 @@ func test_act2_elites() -> void:
 	c._declare_intents()
 	check(c.vengeance_uid == -1, "erinyes: only last round's damage counts")
 
+	# Erinyes: only one Fury is Airborne each round; they rotate by lane.
+	c = fresh()
+	var f0 = c.debug_place("erinyes_fury", E, 0, F)
+	var f2 = c.debug_place("erinyes_fury", E, 2, F)
+	var f3 = c.debug_place("erinyes_fury", E, 3, F)
+	c.round_num = 1
+	c._declare_intents()
+	check(f0.has_kw("airborne") and not f2.has_kw("airborne") and not f3.has_kw("airborne"), "erinyes: round 1 leftmost Fury is Airborne")
+	check(c._unit_snapshot(f0)["airborne"] and not c._unit_snapshot(f2)["airborne"], "erinyes: airborne shown only on the flying Fury")
+	var melee = c.debug_place("ark_sentinel", P, 2, F)
+	check(c._can_target(melee, f2) and not c._can_target(melee, f0), "erinyes: melee hits grounded, not airborne")
+	c.round_num = 2
+	c._declare_intents()
+	check(not f0.has_kw("airborne") and f2.has_kw("airborne") and not f3.has_kw("airborne"), "erinyes: round 2 next lane is Airborne")
+	c._deal_damage(f2, f2.hp, "effect")
+	check(not f2.alive, "erinyes: airborne Fury can die")
+	c.round_num = 3
+	c._declare_intents()
+	var flying := 0
+	for f in [f0, f3]:
+		if f.alive and f.has_kw("airborne"):
+			flying += 1
+	## Survivors lanes 0 then 3; round 3 → index (3-1)%2 = 0 → lane 0.
+	check(flying == 1 and f0.has_kw("airborne") and not f3.has_kw("airborne"), "erinyes: after a death, exactly one survivor is Airborne")
+
 	# Keeper: seals a lane until it takes 6 damage this round; Guardians return two rounds later.
 	c = fresh()
 	var keeper = c.debug_place("keeper_of_the_gate", E, 1, B)
@@ -2373,6 +2398,26 @@ func test_maps() -> void:
 			if f == Run.FLOORS - 2:
 				check(node["type"] == "rest", "%s: pre-boss floor is rest" % tag)
 			check(not (node["type"] == "elite" and f < Run.EARLY_FLOORS), "%s: elite too early" % tag)
+		_check_map_path_caps(run, tag)
+
+
+func _check_map_path_caps(run, tag: String) -> void:
+	for start in run.floors[0]:
+		_dfs_check_path_caps(run, start, {}, tag)
+
+
+func _dfs_check_path_caps(run, id: int, counts: Dictionary, tag: String) -> void:
+	var type: String = run.nodes[id]["type"]
+	var next: Dictionary = counts.duplicate()
+	if Run.PATH_CAPS.has(type):
+		next[type] = int(next.get(type, 0)) + 1
+	if run.nodes[id]["edges"].is_empty():
+		for capped in Run.PATH_CAPS:
+			check(int(next.get(capped, 0)) <= Run.PATH_CAPS[capped],
+					"%s: path has %d %ss (max %d)" % [tag, int(next.get(capped, 0)), capped, Run.PATH_CAPS[capped]])
+		return
+	for e in run.nodes[id]["edges"]:
+		_dfs_check_path_caps(run, e, next, tag)
 
 
 func test_reward_rule() -> void:
