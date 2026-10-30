@@ -79,6 +79,13 @@ var devotion := 0
 var foreign := 0
 ## The first floor on which the god power is charged again.
 var power_ready_floor := 0
+## Deck / devotion / power nodes / reward as they were before the last card pick.
+## While on the map after a reward, Save and exit writes this instead so a misclick can be undone.
+## Cleared when the next map node is entered.
+var reward_checkpoint := {}
+## Boss fights cleared this run, and how many of those took no direct Core damage.
+var bosses_beaten := 0
+var bosses_untouched := 0
 
 
 ## `p_power` defaults to the patron's first god power.
@@ -424,6 +431,7 @@ func available_nodes() -> Array:
 func enter_node(id: int) -> String:
 	if not available_nodes().has(id):
 		return "That node is not reachable."
+	reward_checkpoint = {}
 	current = id
 	path.append(id)
 	var type: String = nodes[id]["type"]
@@ -517,6 +525,9 @@ func finish_combat(c) -> void:
 		return
 	if type == "boss":
 		fights_won += 1
+		bosses_beaten += 1
+		if c.core_direct_damage == 0:
+			bosses_untouched += 1
 		if is_final_act():
 			state = "victory"
 			return
@@ -557,6 +568,13 @@ func finish_combat(c) -> void:
 func finish_reward(card_index: int) -> void:
 	if state != "reward":
 		return
+	reward_checkpoint = {
+		"deck": deck.duplicate(),
+		"devotion": devotion,
+		"foreign": foreign,
+		"power_nodes": power_nodes.duplicate(),
+		"reward": reward.duplicate(true),
+	}
 	if card_index >= 0 and card_index < reward["cards"].size():
 		add_card(reward["cards"][card_index])
 	state = "map"
@@ -722,7 +740,14 @@ func buy_heal() -> String:
 # ---------------------------------------------------------------- shrine
 
 ## Events already met this run are skipped until every event has been seen.
-## Rare events have a lower "weight".
+## Rare events have a lower "weight" (boosted by Omens Tablet).
+func _event_weight(id: String) -> int:
+	var w: int = Data.EVENTS[id].get("weight", Data.EVENT_WEIGHT)
+	if has_relic("omens_tablet") and w < Data.EVENT_WEIGHT:
+		w *= Data.RARE_EVENT_WEIGHT_MULT
+	return w
+
+
 func _pick_event() -> void:
 	var open: Array = Data.EVENTS.keys().filter(func(id): return Data.EVENTS[id].get("act", 1) <= act)
 	var ids: Array = open.filter(func(id): return not seen_events.has(id))
@@ -730,11 +755,11 @@ func _pick_event() -> void:
 		ids = open
 	var total := 0
 	for ev_id in ids:
-		total += Data.EVENTS[ev_id].get("weight", Data.EVENT_WEIGHT)
+		total += _event_weight(ev_id)
 	var roll := event_rng.randi_range(1, total)
 	var id: String = ids[-1]
 	for ev_id in ids:
-		roll -= Data.EVENTS[ev_id].get("weight", Data.EVENT_WEIGHT)
+		roll -= _event_weight(ev_id)
 		if roll <= 0:
 			id = ev_id
 			break
@@ -902,7 +927,7 @@ func _apply_fx(fx: Dictionary) -> Array:
 	return notes
 
 
-## One Amalgam. Each of the twenty keyword trios is equally likely.
+## One Amalgam. Each of the twenty Chimera + keyword-trio variants is equally likely.
 func _roll_amalgam() -> String:
 	var pool: Array = []
 	for id in Data.CARDS:
@@ -971,6 +996,30 @@ func rest_remove(deck_index: int) -> String:
 	return ""
 
 
+# ---------------------------------------------------------------- badges
+
+## Badges this finished run earns. Only meaningful once `state` is victory.
+func earned_badges() -> Array:
+	if state != "victory":
+		return []
+	var out: Array = []
+	if bosses_untouched > 0:
+		out.append("untouched_boss")
+	if bosses_beaten >= Data.ACTS.size() and bosses_untouched >= bosses_beaten:
+		out.append("untouched_all")
+	if gold >= 100:
+		out.append("gold_100")
+	if gold >= 150:
+		out.append("gold_150")
+	if gold >= 200:
+		out.append("gold_200")
+	if core_hp >= max_hp and max_hp > 0:
+		out.append("full_core")
+	if relics.size() >= 5:
+		out.append("relic_hoard")
+	return out
+
+
 # ---------------------------------------------------------------- save
 
 const SAVE_VERSION := 1
@@ -979,14 +1028,29 @@ const SAVE_STATES := ["map", "combat", "reward", "shop", "shrine", "rest", "act_
 
 ## Everything needed to resume between nodes. A fight itself is not stored:
 ## continuing during a battle starts that battle again.
+## On the map right after a card reward, the save rewinds to that reward so a
+## misclicked pick can be redone via Save and exit / Continue Run.
 func to_save() -> Dictionary:
+	var save_state := state
+	var save_deck: Array = deck.duplicate()
+	var save_devotion := devotion
+	var save_foreign := foreign
+	var save_power_nodes: Array = power_nodes.duplicate()
+	var save_reward: Dictionary = reward.duplicate(true)
+	if state == "map" and not reward_checkpoint.is_empty():
+		save_state = "reward"
+		save_deck = reward_checkpoint["deck"].duplicate()
+		save_devotion = reward_checkpoint["devotion"]
+		save_foreign = reward_checkpoint["foreign"]
+		save_power_nodes = reward_checkpoint["power_nodes"].duplicate()
+		save_reward = reward_checkpoint["reward"].duplicate(true)
 	return {
 		"version": SAVE_VERSION,
 		"seed_value": seed_value,
 		"patron": patron,
 		"power": power,
-		"power_nodes": power_nodes.duplicate(),
-		"deck": deck.duplicate(),
+		"power_nodes": save_power_nodes,
+		"deck": save_deck,
 		"relics": relics.duplicate(),
 		"core_hp": core_hp,
 		"max_hp": max_hp,
@@ -997,11 +1061,11 @@ func to_save() -> Dictionary:
 		"floors": floors.duplicate(true),
 		"current": current,
 		"path": path.duplicate(),
-		"state": state,
+		"state": save_state,
 		"battle_id": battle_id,
 		"last_battle_id": last_battle_id,
 		"battle_pool": battle_pool,
-		"reward": reward.duplicate(true),
+		"reward": save_reward,
 		"shop": shop.duplicate(true),
 		"shrine": shrine.duplicate(true),
 		"seen_events": seen_events.duplicate(),
@@ -1011,9 +1075,11 @@ func to_save() -> Dictionary:
 		"boss_ids": boss_ids.duplicate(),
 		"bonus_upgrades": bonus_upgrades,
 		"act_summary": act_summary.duplicate(true),
-		"devotion": devotion,
-		"foreign": foreign,
+		"devotion": save_devotion,
+		"foreign": save_foreign,
 		"power_ready_floor": power_ready_floor,
+		"bosses_beaten": bosses_beaten,
+		"bosses_untouched": bosses_untouched,
 		"map_rng": map_rng.state,
 		"reward_rng": reward_rng.state,
 		"shop_rng": shop_rng.state,
@@ -1107,6 +1173,8 @@ func apply_save(data: Dictionary) -> bool:
 	devotion = int(data.get("devotion", 0))
 	foreign = int(data.get("foreign", 0))
 	power_ready_floor = int(data.get("power_ready_floor", 0))
+	bosses_beaten = int(data.get("bosses_beaten", 0))
+	bosses_untouched = int(data.get("bosses_untouched", 0))
 	map_rng.state = data["map_rng"]
 	reward_rng.state = data["reward_rng"]
 	shop_rng.state = data["shop_rng"]

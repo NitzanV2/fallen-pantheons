@@ -10,6 +10,7 @@ const CardPreview = preload("res://scripts/ui/card_preview.gd")
 const RulesPanel = preload("res://scripts/ui/rules_panel.gd")
 const Music = preload("res://scripts/ui/music.gd")
 const RunSave = preload("res://scripts/core/run_save.gd")
+const Achievements = preload("res://scripts/core/achievements.gd")
 
 const PATRON_TILE := Vector2(332, 544)
 const PATRON_ART_BOTTOM := 322
@@ -186,6 +187,7 @@ func _build_menu() -> void:
 	column.add_child(continue_row)
 	column.add_child(_codex_row("opt_card", "New Run", "Choose a patron", _show_patrons, true))
 	column.add_child(_codex_row("rulebook", "Rulebook", "How battles work", _toggle_rules, false))
+	column.add_child(_codex_row("opt_relic", "Badges", "Exceptional run awards", _open_achievements, false))
 	var close_gap := Control.new()
 	close_gap.custom_minimum_size = Vector2(0, 18)
 	close_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -683,6 +685,54 @@ func _toggle_rules() -> void:
 		help_panel.visible = not help_panel.visible
 	if help_panel.visible:
 		move_child(help_panel, get_child_count() - 1)
+
+
+func _open_achievements() -> void:
+	if run_view != null or battle_view != null:
+		return
+	_close_card_list()
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.035, 0.03, 0.06, 0.97)
+	sb.set_content_margin_all(36)
+	panel.add_theme_stylebox_override("panel", sb)
+	add_child(panel)
+	card_list = panel
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	panel.add_child(box)
+	box.add_child(CardWidget._label("Badges", 36, GOLD, true))
+	box.add_child(CardWidget._label("Earned on exceptional finished runs. Unlock once; they stay in this list.", 16, MUTED, false))
+	var have: Array = Achievements.unlocked()
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 10)
+	scroll.add_child(list)
+	for id in Data.ACHIEVEMENTS:
+		var def: Dictionary = Data.ACHIEVEMENTS[id]
+		var unlocked: bool = id in have
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		var icon := CardWidget.icon(def["icon"], 32)
+		icon.modulate = Color.WHITE if unlocked else Color(1, 1, 1, 0.28)
+		row.add_child(icon)
+		var col := VBoxContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var title_color: Color = CREAM if unlocked else Color(0.45, 0.44, 0.5)
+		var detail_color: Color = MUTED if unlocked else Color(0.35, 0.34, 0.4)
+		col.add_child(CardWidget._label(def["name"] if unlocked else "???", 20, title_color, false))
+		col.add_child(CardWidget._label(def["text"] if unlocked else "Keep running.", 14, detail_color, false))
+		row.add_child(col)
+		list.add_child(row)
+	var close := Button.new()
+	close.text = "Close"
+	close.custom_minimum_size = Vector2(160, 44)
+	CardWidget.style_button(close, true, 16)
+	close.pressed.connect(_close_card_list)
+	box.add_child(close)
 
 
 func _unhandled_input(event: InputEvent) -> void:

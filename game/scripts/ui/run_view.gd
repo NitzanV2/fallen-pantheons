@@ -6,6 +6,7 @@ signal exit_requested
 const Data = preload("res://scripts/core/data.gd")
 const Run = preload("res://scripts/core/run.gd")
 const RunSave = preload("res://scripts/core/run_save.gd")
+const Achievements = preload("res://scripts/core/achievements.gd")
 const BattleView = preload("res://scripts/ui/battle_view.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 const MapCanvas = preload("res://scripts/ui/map_canvas.gd")
@@ -169,7 +170,7 @@ func _build() -> void:
 	if not sandbox_mode:
 		var save_btn := _button("Save and exit", _save_and_exit, exit_row)
 		save_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		save_btn.tooltip_text = "Save this run and return to the main menu. Continue Run resumes it."
+		save_btn.tooltip_text = "Save this run and return to the main menu. Continue Run resumes it. If you just left a card reward, Continue returns you there so you can pick again."
 	var abandon_btn := _button("Back to sandbox" if sandbox_mode else "Abandon run", _confirm_abandon, exit_row)
 	abandon_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
@@ -982,7 +983,17 @@ func _show_end() -> void:
 		box.add_child(scene)
 	box.add_child(_rich("Reached: [b]Act %d, floor %d[/b] / %d\nFights won: [b]%d[/b]\nCore HP: [b]%d[/b]\nGold: [b]%d[/b]\nDeck: [b]%d[/b] cards\nRelics: [b]%d[/b]" % [
 		run.act, run.floor_number(), Run.FLOORS, run.fights_won, max(run.core_hp, 0), run.gold, run.deck.size(), run.relics.size()]))
+	if won:
+		var badges: Array = run.earned_badges()
+		var fresh: Array = Achievements.unlock(badges)
+		if not badges.is_empty():
+			box.add_child(_heading("Badges earned", 18))
+			for id in badges:
+				var def: Dictionary = Data.ACHIEVEMENTS[id]
+				var note := "  (new)" if id in fresh else ""
+				box.add_child(_icon_line(def["icon"], "%s — %s%s" % [def["name"], def["text"], note], GOLD))
 	_option("View final deck.", "opt_card", func(): _open_deck("Final deck"), box)
+	_option("View relics (%d)." % run.relics.size(), "opt_relic", func(): _open_relics("Final relics"), box)
 	var menu := _button("Back to menu", func(): exit_requested.emit(), box)
 	CardWidget.style_button(menu, true, 18)
 	menu.custom_minimum_size = Vector2(0, 48)
@@ -1279,6 +1290,24 @@ func _open_deck(title: String, on_pick := Callable(), on_cancel := Callable()) -
 		_close_overlay()
 		if on_cancel.is_valid():
 			on_cancel.call(), box)
+
+
+func _open_relics(title: String) -> void:
+	var box := _new_overlay(title)
+	if run.relics.is_empty():
+		box.add_child(_text("No relics this run.", Color(0.7, 0.68, 0.76)))
+	else:
+		var scroll := ScrollContainer.new()
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		box.add_child(scroll)
+		var grid := GridContainer.new()
+		grid.columns = 3
+		grid.add_theme_constant_override("h_separation", 12)
+		grid.add_theme_constant_override("v_separation", 12)
+		scroll.add_child(grid)
+		for id in run.relics:
+			grid.add_child(CardWidget.relic_button(id))
+	_button("Close", _close_overlay, box)
 
 
 func _close_overlay() -> void:

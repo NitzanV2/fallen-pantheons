@@ -647,15 +647,14 @@ static func short_intent(text: String, type: String) -> String:
 
 # ---------------------------------------------------------------- turn animation
 
-## Animates one resolve event: the acting unit glows with its place in the turn order
-## (popping in when its turn starts), melee attacks lunge, ranged attacks fire a bolt.
+## Animates one resolve event: turn-order badge (no gold frame), melee lunges, ranged bolts.
 func play_event(ev: Dictionary, order: int, fresh: bool) -> void:
 	var token := _token_for(ev.get("actor"))
 	if token == null:
 		return
 	move_child(token, get_child_count() - 1)
 	move_child(labels, get_child_count() - 1)
-	_actor_glow(token, order, fresh)
+	_actor_badge(token, order, fresh)
 	var enemy: bool = ev["actor"][0] == E
 	if ev.has("target"):
 		var target := _token_for(ev["target"])
@@ -682,20 +681,7 @@ func _token_for(slot) -> Control:
 	return null
 
 
-func _actor_glow(token: Control, order: int, fresh: bool) -> void:
-	var glow := Panel.new()
-	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.draw_center = false
-	sb.border_color = ACTOR_GLOW
-	sb.set_border_width_all(3)
-	sb.set_corner_radius_all(8)
-	sb.shadow_color = Color(ACTOR_GLOW, 0.65)
-	sb.shadow_size = 16
-	glow.add_theme_stylebox_override("panel", sb)
-	glow.size = token.size
-	token.add_child(glow)
-
+func _actor_badge(token: Control, order: int, fresh: bool) -> void:
 	var badge := Panel.new()
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bs := StyleBoxFlat.new()
@@ -717,8 +703,6 @@ func _actor_glow(token: Control, order: int, fresh: bool) -> void:
 	if fresh:
 		token.scale = Vector2(1.12, 1.12)
 		token.create_tween().tween_property(token, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		glow.modulate.a = 0.0
-		glow.create_tween().tween_property(glow, "modulate:a", 1.0, 0.15)
 		badge.scale = Vector2(0.3, 0.3)
 		badge.create_tween().tween_property(badge, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 

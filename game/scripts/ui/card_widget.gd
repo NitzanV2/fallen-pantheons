@@ -43,10 +43,11 @@ const KEYWORD_INFO := {
 	"cleave": ["Cleave", "Also hits the units in the lanes on both sides of the target, in the same row."],
 	"pierce": ["Pierce", "Damage beyond what kills the target carries to the unit behind it."],
 	"revive": ["Revive", "Once per fight: when it dies, it returns in the same slot with 1 HP."],
-	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot and attacks, if it has not already attacked this round. Attacking during planning locks it in place."],
+	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot and attacks (if it has not already attacked this round). That swing does not spend its normal attack. Reinforcing or attacking during planning locks it in place."],
 	"immovable": ["Immovable", "Can't be pushed or swapped and takes no collision damage."],
 	"airborne": ["Airborne", "Melee attacks can't target it."],
 	"pack": ["Pack", "Wolf. Gains +1 ATK for each of your other Wolves (max +4)."],
+	"chimera": ["Chimera", "Counts as every token type (Wolf, Scarab, and any later ones)."],
 	"armament": ["Armament", "Play it on one of your units: it stays attached for the fight. A unit holds one (a new one replaces the old). When the unit dies, the Armament shuffles into your draw pile."],
 	"flank": ["Flank", "In the back row, attacks right after the Wolf in front of it, hitting the same target."],
 	"veil": ["Veil", "Ignores the first damage it takes each round."],
@@ -642,7 +643,7 @@ static func def_icons(def: Dictionary, card_id: String) -> Array:
 		var rest := text
 		for kw in def.get("keywords", []):
 			rest = rest.replacen(KEYWORD_INFO[kw][0] + ".", "")
-		rest = rest.replace("Wolf.", "").replace("Summoned token.", "")
+		rest = rest.replace("Wolf.", "").replace("Scarab.", "").replace("Summoned token.", "")
 		if rest.strip_edges() != "":
 			out.append("ability")
 	return out

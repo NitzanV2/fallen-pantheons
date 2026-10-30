@@ -828,7 +828,7 @@ func _current_targets() -> Array:
 			return []
 		var targets: Array = combat.valid_targets(sel_hand)
 		if pair_first != null:
-			return targets.filter(func(t): return t[1] == pair_first[1] and t != pair_first)
+			return targets.filter(func(t): return t != pair_first)
 		return targets
 	if sel_move != null:
 		var mover = combat.unit_at(P, sel_move[0], sel_move[1])
@@ -1058,7 +1058,7 @@ func _target_with_card(slot: Array) -> void:
 		"enemy_pair":
 			if pair_first == null:
 				pair_first = slot
-				_set_hint("Choose the second enemy in the same row.")
+				_set_hint("Choose the second enemy to swap.")
 				_refresh()
 			else:
 				_apply(combat.play_spell(sel_hand, [pair_first, slot]))

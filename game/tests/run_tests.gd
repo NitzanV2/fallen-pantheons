@@ -6,6 +6,7 @@ const Combat = preload("res://scripts/core/combat.gd")
 const Data = preload("res://scripts/core/data.gd")
 const Run = preload("res://scripts/core/run.gd")
 const RunSave = preload("res://scripts/core/run_save.gd")
+const Achievements = preload("res://scripts/core/achievements.gd")
 const CardWidget = preload("res://scripts/ui/card_widget.gd")
 
 const P := 0
@@ -70,6 +71,7 @@ func _initialize() -> void:
 	test_fusion_cards()
 	test_amalgam_shrine()
 	test_athena()
+	test_achievements()
 	print("")
 	print("%d checks, %d failures" % [checks, failures])
 	quit(1 if failures > 0 else 0)
@@ -86,6 +88,20 @@ func fresh(core := 50, boss := false, relics: Array = []):
 	var c = Combat.new()
 	c.setup({"core": core, "enemies": [], "terrain": [], "boss": boss}, [], relics, 1)
 	return c
+
+
+## Count rare shrine picks over `trials` independent rolls (seen_events cleared each time).
+func _rare_event_hits(seed_value: int, trials: int, relics: Array) -> int:
+	var run = Run.new()
+	run.setup(seed_value, "myrmidon")
+	run.relics = relics.duplicate()
+	var hits := 0
+	for n in trials:
+		run.seen_events.clear()
+		run._pick_event()
+		if Data.EVENTS[run.shrine["event"]].get("weight", Data.EVENT_WEIGHT) < Data.EVENT_WEIGHT:
+			hits += 1
+	return hits
 
 
 func test_lane_attack() -> void:
@@ -302,34 +318,40 @@ func test_valkyrie_reinforce() -> void:
 	check(hunter.row == F and hunter.lane == 2, "reinforce: Ulfr Hunter steps forward")
 	check(hunter.atk == 2 and hunter.shield == 4, "reinforce: Gjallarhorn shields Ulfr Hunter, no ATK gain")
 
-	# The step is the attack, so a unit whose turn already passed still swings, and only once.
+	# The reinforce swing is bonus: they can still attack again in resolve.
 	c = fresh()
+	c.phase = "resolve"
 	var foe = c.debug_place("hollowed_zealot", E, 0, F)
 	c.debug_place("ark_sentinel", P, 0, F)
 	valk = c.debug_place("valkyrie", P, 0, B)
 	c._deal_damage(c.unit_at(P, F, 0), 99, "effect")
 	check(valk.row == F and foe.hp == 2, "reinforce: the step attacks for the fallen ally's ATK")
+	check(valk.attacked_round == 0 and valk.reinforced_round == c.round_num, "reinforce: resolve swing does not spend the normal attack")
 	var hp_after: int = foe.hp
 	c._act(valk)
-	check(foe.hp == hp_after, "reinforce: that attack counts for the round")
+	check(foe.hp < hp_after and valk.attacked_round == c.round_num, "reinforce: they still attack during the attacking phase")
 
 	c = fresh()
+	c.phase = "resolve"
 	foe = c.debug_place("hollowed_zealot", E, 0, F)
 	c.debug_place("ark_sentinel", P, 0, F)
 	valk = c.debug_place("valkyrie", P, 0, B)
 	valk.attacked_round = c.round_num
 	c._deal_damage(c.unit_at(P, F, 0), 99, "effect")
-	check(valk.row == F and valk.atk == 3 and foe.hp == 5, "reinforce: no second attack if it already attacked")
+	check(valk.row == F and valk.atk == 3 and foe.hp == 5, "reinforce: no reinforce swing if it already attacked")
 
-	# Tyr's Oath can trigger Reinforce during planning; the swing is intended, then they lock.
+	# Tyr's Oath can trigger Reinforce during planning; the swing locks free move / FREE icon.
 	c = _with_power(fresh(), "tyrs_oath")
 	foe = c.debug_place("hollowed_zealot", E, 0, F)
 	c.debug_place("ark_sentinel", P, 0, F)
 	valk = c.debug_place("valkyrie", P, 0, B)
+	valk.from_hand = true
+	valk.deployed_round = c.round_num
 	c.debug_place("hollowed_bulwark", E, 3, B)
+	check(c.can_reposition(valk), "reinforce+tyr: FREE before the oath")
 	check(c.use_power([[P, F, 0]]) == "", "reinforce+tyr: oath used")
 	check(valk.row == F and valk.attacked_round == c.round_num and foe.hp < 5, "reinforce+tyr: steps forward and attacks in planning")
-	check(not c.can_move(valk), "reinforce+tyr: locked after the planning attack")
+	check(not c.can_reposition(valk) and not c.can_move(valk), "reinforce+tyr: FREE gone and locked after the planning attack")
 	check(c.move_unit(0, F, 1, F) != "" and valk.lane == 0, "reinforce+tyr: can't spend a move after attacking")
 
 	c = fresh()
@@ -820,6 +842,13 @@ func test_spells() -> void:
 	var d = c.unit_at(E, F, 3)
 	check(c.play_spell(0, [[E, F, 1], [E, F, 3]]) == "", "transposition: legal")
 	check(b.lane == 3 and d.lane == 1, "transposition: units swapped")
+	c = fresh()
+	var front = c.debug_place("void_spawn", E, 0, F)
+	var back = c.debug_place("hollowed_zealot", E, 2, B)
+	c.hand = [c._new_card("transposition")]
+	c.faith = 1
+	check(c.play_spell(0, [[E, F, 0], [E, B, 2]]) == "", "transposition: cross-row is legal")
+	check(front.row == B and front.lane == 2 and back.row == F and back.lane == 0, "transposition: swaps front and back")
 
 	var h = fresh(30, true)
 	var herald = h.debug_place("void_herald", E, 1, F)
@@ -1254,6 +1283,22 @@ func test_act2_enemies() -> void:
 		if e.id == "shade":
 			arrived = e
 	check(arrived != null and arrived.lane == 2 and arrived.row == F, "waves: an occupied slot sends it to the nearest empty one")
+	# Full front row: a ferry spill waits in the back, then advances when a front slot frees.
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [
+		["void_spawn", 0, 0], ["void_spawn", 1, 0], ["void_spawn", 2, 0], ["void_spawn", 3, 0],
+	], "terrain": [], "waves": [[2, "shade", 0, 0]], "max_rounds": 4}, [], [], 1)
+	c.end_plan()
+	var waiter = null
+	for e in c.units(E):
+		if e.id == "shade":
+			waiter = e
+	check(waiter != null and waiter.row == B, "waves: a full front puts the ferry arrival in the back")
+	check(c.intents.get(waiter.uid, {}).get("type", "") == "wait", "waves: a back-row melee arrival Waits")
+	c._deal_damage(c.unit_at(E, F, 1), 99, "effect")
+	c.end_plan()
+	check(waiter.alive and waiter.row == F and waiter.lane == 1, "waves: a Waiting enemy advances into a freed front slot")
+	check(c.intents.get(waiter.uid, {}).get("type", "") == "attack", "waves: after advancing it intends to attack")
 
 	# Every Act 2 battle is valid and pooled.
 	for b in Data.BATTLES:
@@ -1702,10 +1747,11 @@ func test_amalgam_shrine() -> void:
 	var seen_kw := {}
 	for id in ids:
 		var words: Array = Data.CARDS[id]["keywords"]
-		check(words.size() == 3, "amalgam: %s has three keywords" % id)
+		check(words.size() == 4 and words[0] == "chimera", "amalgam: %s has Chimera plus three rolled keywords" % id)
 		for word in words:
 			seen_kw[word] = true
-	check(seen_kw.size() == 6, "amalgam: the pool is Frenzy, Revive, Cleave, Taunt, Ranged and Pierce")
+	seen_kw.erase("chimera")
+	check(seen_kw.size() == 6, "amalgam: the roll pool is Frenzy, Revive, Cleave, Taunt, Ranged and Pierce")
 	var run = Run.new()
 	run.setup(3, "myrmidon")
 	for id in ids:
@@ -1727,6 +1773,66 @@ func test_amalgam_shrine() -> void:
 		other.choose_option(0)
 		seen[other.deck[other.deck.size() - 1]] = true
 	check(seen.size() > 1, "amalgam: different visits roll different beasts")
+	var c = fresh()
+	var beast = c.debug_place("amalgam_cleave_frenzy_pierce", P, 1, F)
+	check(c.is_wolf(beast) and c.is_scarab(beast), "chimera: an Amalgam counts as Wolf and Scarab")
+	c.debug_place("wolf", P, 0, F)
+	var pack_wolf = c.debug_place("ulfr_hunter", P, 2, F)
+	check(c.effective_atk(pack_wolf) == Data.CARDS["ulfr_hunter"]["atk"] + 2, "chimera: Pack counts the Amalgam as a Wolf")
+	c.debug_place("khepri", P, 3, B)
+	check(c.effective_atk(beast) == Data.CARDS["amalgam_cleave_frenzy_pierce"]["atk"] + 1, "chimera: Khepri buffs the Amalgam as a Scarab")
+	c.core_hp = 30
+	c._deal_damage(beast, 99, "effect")
+	check(c.core_hp == 31, "chimera: Khepri heals when the Amalgam dies")
+
+
+func test_achievements() -> void:
+	check(Data.ACHIEVEMENTS.has("untouched_boss") and Data.ACHIEVEMENTS.has("gold_200"), "badges: achievement defs exist")
+	var c = fresh(40)
+	c._damage_core(5, "Void Charger", true)
+	c._damage_core(3, "The Void Tide", false)
+	check(c.core_damage_taken == 8 and c.core_direct_damage == 5, "badges: combat splits direct Core damage")
+	var run = Run.new()
+	run.setup(7, "myrmidon", "zeus_lightning_bolt")
+	run.state = "victory"
+	run.gold = 160
+	run.core_hp = run.max_hp
+	run.bosses_beaten = Data.ACTS.size()
+	run.bosses_untouched = Data.ACTS.size()
+	run.relics = ["pilgrims_pouch", "healing_ampoule", "obol", "wardens_plate", "eye_of_horus"]
+	var badges: Array = run.earned_badges()
+	for id in ["untouched_boss", "untouched_all", "gold_100", "gold_150", "full_core", "relic_hoard"]:
+		check(id in badges, "badges: victory earns %s" % id)
+	check(not ("gold_200" in badges), "badges: 160 gold does not earn Dragon's Hoard")
+	run.gold = 50
+	run.bosses_untouched = 0
+	run.relics = []
+	run.core_hp = run.max_hp - 1
+	check(run.earned_badges().is_empty(), "badges: a plain victory earns none")
+	var saved_path := Achievements.path
+	Achievements.path = "user://achievements_test.save"
+	Achievements.clear()
+	check(Achievements.unlock(["gold_100", "gold_100"]) == ["gold_100"], "badges: unlock records a badge once")
+	check(Achievements.is_unlocked("gold_100") and Achievements.unlock(["gold_100"]).is_empty(), "badges: a second unlock is a no-op")
+	Achievements.clear()
+	Achievements.path = saved_path
+	run = Run.new()
+	run.setup(8, "shieldmaiden", "tyrs_oath")
+	run.enter_node(run.available_nodes()[0])
+	run.nodes[run.current]["type"] = "boss"
+	c = run.make_combat()
+	c.result = "win"
+	run.finish_combat(c)
+	check(run.bosses_beaten == 1 and run.bosses_untouched == 1, "badges: a clean boss clear is counted")
+	run = Run.new()
+	run.setup(10, "mummy_guardian", "osiris_return")
+	run.enter_node(run.available_nodes()[0])
+	run.nodes[run.current]["type"] = "boss"
+	var boss_fight = run.make_combat()
+	boss_fight._damage_core(4, "Boss", true)
+	boss_fight.result = "win"
+	run.finish_combat(boss_fight)
+	check(run.bosses_beaten == 1 and run.bosses_untouched == 0, "badges: direct Core damage denies Untouched")
 
 
 func test_athena() -> void:
@@ -2537,6 +2643,15 @@ func test_event_data() -> void:
 	run.start_event("lethes_spring")
 	var notes: Array = run._apply_fx({"lose_relic": true})
 	check(run.relics.size() == 1 and notes.size() == 1, "events: lose_relic removes one relic")
+	# Omens Tablet triples rare-event weights (weight < EVENT_WEIGHT).
+	check(Data.RELICS.has("omens_tablet") and Data.RELICS["omens_tablet"].get("pool", true), "events: Omens Tablet is in the relic pool")
+	check(ResourceLoader.exists("res://art/relics/omens_tablet.png"), "events: Omens Tablet has art")
+	var rare_ids: Array = Data.EVENTS.keys().filter(func(id): return Data.EVENTS[id].get("weight", Data.EVENT_WEIGHT) < Data.EVENT_WEIGHT)
+	check(rare_ids.size() >= 2, "events: at least two rare-weight events exist")
+	var trials := 400
+	var without := _rare_event_hits(42, trials, [])
+	var with_tablet := _rare_event_hits(42, trials, ["omens_tablet"])
+	check(with_tablet >= without * 2, "events: Omens Tablet at least doubles rare picks (%d vs %d / %d)" % [with_tablet, without, trials])
 	for ev_id in Data.EVENTS:
 		var ev: Dictionary = Data.EVENTS[ev_id]
 		if ev_id != "pantheon_shrine":
@@ -2823,6 +2938,25 @@ func test_continue_run() -> void:
 	check(loaded.state == "combat" and loaded.battle_id == run.battle_id and loaded.current == run.current, "continue: a fight saves its battle")
 	check(RunSave.describe(loaded).ends_with("battle restarts"), "continue: a saved fight says the battle restarts")
 	check(_board_sig(run.make_combat()) == _board_sig(loaded.make_combat()), "continue: the battle is rebuilt the same way")
+	var c = run.make_combat()
+	c.result = "win"
+	c.round_num = c.max_rounds
+	run.finish_combat(c)
+	check(run.state == "reward" and run.reward["cards"].size() == 3, "continue: a win opens a card reward")
+	var pre_deck: Array = run.deck.duplicate()
+	var pre_devotion: int = run.devotion
+	var picked: String = run.reward["cards"][0]
+	run.finish_reward(0)
+	check(run.state == "map" and run.deck.has(picked) and not run.reward_checkpoint.is_empty(), "continue: picking a card reaches the map with a reward checkpoint")
+	RunSave.write(run)
+	loaded = RunSave.read()
+	check(loaded.state == "reward" and loaded.deck == pre_deck and loaded.devotion == pre_devotion, "continue: saving from the map after a reward rewinds to that reward")
+	check(loaded.reward["cards"] == run.reward_checkpoint["reward"]["cards"], "continue: the rewound reward keeps the same card choices")
+	check(run.enter_node(run.available_nodes()[0]) == "", "continue: entering a node after a reward commits the pick")
+	check(run.reward_checkpoint.is_empty() and run.deck.has(picked), "continue: the checkpoint clears once a node is entered")
+	RunSave.write(run)
+	loaded = RunSave.read()
+	check(loaded.state == run.state and loaded.deck.has(picked), "continue: after entering a node the picked card stays saved")
 	var shop_run = Run.new()
 	shop_run.setup(9, "shieldmaiden", "tyrs_oath")
 	shop_run.gold = 200

@@ -29,6 +29,8 @@ var deployed_round := 0
 var from_hand := false
 ## Its own effect has already triggered, so a unit deployed this planning phase can no longer be moved or returned.
 var effect_used := false
+## Round it Reinforced into the front. Clears free reposition during planning.
+var reinforced_round := 0
 var veil_round := 0
 var attacked_round := 0
 var poisoned := false
@@ -58,7 +60,7 @@ func copy():
 	var u = get_script().new()
 	for prop in ["uid", "id", "def", "side", "lane", "row", "atk", "max_hp", "hp", "spd", "threat",
 			"shield", "alive", "revive_used", "is_token", "wide", "width", "empowered", "card", "temp_atk", "moved_round", "deployed_round",
-			"veil_round", "poisoned", "attacked_round", "from_hand", "effect_used", "burn"]:
+			"veil_round", "poisoned", "attacked_round", "from_hand", "effect_used", "reinforced_round", "burn"]:
 		u.set(prop, get(prop))
 	u.bonus_kw = bonus_kw.duplicate()
 	u.armaments = armaments.duplicate(true)

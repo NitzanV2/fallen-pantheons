@@ -9,7 +9,7 @@ extends RefCounted
 #   ally_slot       - a slot on your grid in the card's "row" with no terrain (units there are fine)
 #   enemy           - any enemy unit
 #   enemy_front     - an enemy front-row unit (plus a push direction)
-#   enemy_pair      - two enemy units in the same row
+#   enemy_pair      - two movable enemy units (any rows)
 #   empty_ally_slot - an empty slot on your grid
 
 const CARDS := {
@@ -18,7 +18,7 @@ const CARDS := {
 	"echo_archer": {"name": "Echo Archer", "faction": "neutral", "rarity": "Starter", "type": "unit", "cost": 1, "atk": 2, "hp": 2, "spd": 3, "keywords": ["ranged"], "text": "Ranged."},
 	"rebuke": {"name": "Rebuke", "faction": "neutral", "rarity": "Starter", "type": "spell", "cost": 1, "target": "enemy_front", "text": "Push an enemy front unit one lane. If it hits a unit or the edge, both take 3. Immovable units are immune."},
 	"warding": {"name": "Warding", "faction": "neutral", "rarity": "Starter", "type": "spell", "cost": 1, "target": "ally", "text": "Give an ally Shield 4."},
-	"transposition": {"name": "Transposition", "faction": "neutral", "rarity": "Uncommon", "type": "spell", "cost": 0, "target": "enemy_pair", "exhaust": true, "text": "Swap two enemy units in the same row (not Immovable). Their locked intents move with them. Exhaust."},
+	"transposition": {"name": "Transposition", "faction": "neutral", "rarity": "Uncommon", "type": "spell", "cost": 0, "target": "enemy_pair", "exhaust": true, "text": "Swap two enemy units (not Immovable), including across rows. Their locked intents move with them. Exhaust."},
 	"faith_surge": {"name": "Faith Surge", "faction": "neutral", "rarity": "Uncommon", "type": "spell", "cost": 0, "target": "none", "exhaust": true, "text": "Gain 2 Faith. Exhaust."},
 	"channel_ley_line": {"name": "Channel Ley Line", "faction": "neutral", "rarity": "Uncommon", "type": "spell", "cost": 2, "target": "ally_slot", "terrain": "ley_line", "row": 0, "exhaust": true, "text": "Turn one of your front slots without terrain into a Ley Line for this fight (+2 ATK there). Exhaust."},
 	"raise_ruins": {"name": "Raise Ruins", "faction": "neutral", "rarity": "Common", "type": "spell", "cost": 1, "target": "ally_slot", "terrain": "ruins", "row": 1, "exhaust": true, "text": "Turn one of your back slots without terrain into Ruins for this fight (Ranged attacks can't target it). Exhaust."},
@@ -55,7 +55,7 @@ const CARDS := {
 	"death_rite": {"name": "Death Rite", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "ally", "text": "Destroy an ally. Draw 1. If that ally's card has an On-Death effect, draw 1 more."},
 	"shield_raid": {"name": "Shieldthane", "faction": "norse", "rarity": "Common", "type": "unit", "cost": 2, "atk": 2, "hp": 4, "spd": 4, "keywords": [], "text": "Whenever you move it, it gains Shield 2."},
 	"hunting_cry": {"name": "Hunting Cry", "faction": "norse", "rarity": "Uncommon", "type": "spell", "cost": 1, "target": "none", "text": "Your Wolves have Flank and +1 ATK this round."},
-	"reckless_charge": {"name": "Doomrunner", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 4, "keywords": [], "text": "Whenever you move it, it takes 1 damage. On-Death: deal its ATK to every enemy in its lane."},
+	"reckless_charge": {"name": "Doomrunner", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 2, "keywords": [], "text": "Whenever you move it, it takes 1 damage. On-Death: deal its ATK to every enemy in its lane."},
 	"carrion_wolf": {"name": "Carrion Wolf", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 3, "hp": 4, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. On-Death: your other Wolves gain +1 ATK."},
 	"packrunner": {"name": "Packrunner", "faction": "norse", "rarity": "Rare", "type": "unit", "cost": 2, "atk": 3, "hp": 4, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "text": "Wolf. Pack. The first time you move it behind a Wolf, it gains Flank for the fight."},
 
@@ -120,30 +120,30 @@ const CARDS := {
 	"solar_scarab": {"name": "Solar Scarab", "faction": "egypt", "rarity": "Rare", "type": "unit", "cost": 2, "atk": 2, "hp": 3, "spd": 3, "keywords": [], "text": "On-Death: Summon a Scarab. While you have a Sunlit slot, your Scarabs' attacks apply Burn 1."},
 
 	# Tokens
-	"scarab": {"name": "Scarab", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 1, "spd": 4, "keywords": [], "token": true, "text": "Summoned token."},
+	"scarab": {"name": "Scarab", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 1, "spd": 4, "keywords": [], "tribe": "scarab", "token": true, "text": "Scarab. Summoned token."},
 	"wolf": {"name": "Wolf", "faction": "token", "rarity": "Token", "type": "unit", "cost": 0, "atk": 1, "hp": 2, "spd": 4, "keywords": ["pack"], "tribe": "wolf", "token": true, "text": "Wolf. Pack. Summoned token."},
 
-	# Amalgams - shrine only. Same body, every trio of the keyword pool. Never drafted or sold.
-	"amalgam_cleave_frenzy_pierce": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "frenzy", "pierce"], "amalgam": true, "text": "Cleave. Frenzy. Pierce."},
-	"amalgam_cleave_frenzy_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "frenzy", "ranged"], "amalgam": true, "text": "Cleave. Frenzy. Ranged."},
-	"amalgam_cleave_frenzy_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "frenzy", "revive"], "amalgam": true, "text": "Cleave. Frenzy. Revive."},
-	"amalgam_cleave_frenzy_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "frenzy", "taunt"], "amalgam": true, "text": "Cleave. Frenzy. Taunt."},
-	"amalgam_cleave_pierce_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "pierce", "ranged"], "amalgam": true, "text": "Cleave. Pierce. Ranged."},
-	"amalgam_cleave_pierce_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "pierce", "revive"], "amalgam": true, "text": "Cleave. Pierce. Revive."},
-	"amalgam_cleave_pierce_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "pierce", "taunt"], "amalgam": true, "text": "Cleave. Pierce. Taunt."},
-	"amalgam_cleave_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "ranged", "revive"], "amalgam": true, "text": "Cleave. Ranged. Revive."},
-	"amalgam_cleave_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "ranged", "taunt"], "amalgam": true, "text": "Cleave. Ranged. Taunt."},
-	"amalgam_cleave_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["cleave", "revive", "taunt"], "amalgam": true, "text": "Cleave. Revive. Taunt."},
-	"amalgam_frenzy_pierce_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "pierce", "ranged"], "amalgam": true, "text": "Frenzy. Pierce. Ranged."},
-	"amalgam_frenzy_pierce_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "pierce", "revive"], "amalgam": true, "text": "Frenzy. Pierce. Revive."},
-	"amalgam_frenzy_pierce_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "pierce", "taunt"], "amalgam": true, "text": "Frenzy. Pierce. Taunt."},
-	"amalgam_frenzy_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "ranged", "revive"], "amalgam": true, "text": "Frenzy. Ranged. Revive."},
-	"amalgam_frenzy_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "ranged", "taunt"], "amalgam": true, "text": "Frenzy. Ranged. Taunt."},
-	"amalgam_frenzy_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["frenzy", "revive", "taunt"], "amalgam": true, "text": "Frenzy. Revive. Taunt."},
-	"amalgam_pierce_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["pierce", "ranged", "revive"], "amalgam": true, "text": "Pierce. Ranged. Revive."},
-	"amalgam_pierce_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["pierce", "ranged", "taunt"], "amalgam": true, "text": "Pierce. Ranged. Taunt."},
-	"amalgam_pierce_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["pierce", "revive", "taunt"], "amalgam": true, "text": "Pierce. Revive. Taunt."},
-	"amalgam_ranged_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["ranged", "revive", "taunt"], "amalgam": true, "text": "Ranged. Revive. Taunt."},
+	# Amalgams - shrine only. Chimera plus every trio of the keyword pool. Never drafted or sold.
+	"amalgam_cleave_frenzy_pierce": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "frenzy", "pierce"], "amalgam": true, "text": "Chimera. Cleave. Frenzy. Pierce."},
+	"amalgam_cleave_frenzy_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "frenzy", "ranged"], "amalgam": true, "text": "Chimera. Cleave. Frenzy. Ranged."},
+	"amalgam_cleave_frenzy_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "frenzy", "revive"], "amalgam": true, "text": "Chimera. Cleave. Frenzy. Revive."},
+	"amalgam_cleave_frenzy_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "frenzy", "taunt"], "amalgam": true, "text": "Chimera. Cleave. Frenzy. Taunt."},
+	"amalgam_cleave_pierce_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "pierce", "ranged"], "amalgam": true, "text": "Chimera. Cleave. Pierce. Ranged."},
+	"amalgam_cleave_pierce_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "pierce", "revive"], "amalgam": true, "text": "Chimera. Cleave. Pierce. Revive."},
+	"amalgam_cleave_pierce_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "pierce", "taunt"], "amalgam": true, "text": "Chimera. Cleave. Pierce. Taunt."},
+	"amalgam_cleave_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "ranged", "revive"], "amalgam": true, "text": "Chimera. Cleave. Ranged. Revive."},
+	"amalgam_cleave_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "ranged", "taunt"], "amalgam": true, "text": "Chimera. Cleave. Ranged. Taunt."},
+	"amalgam_cleave_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "cleave", "revive", "taunt"], "amalgam": true, "text": "Chimera. Cleave. Revive. Taunt."},
+	"amalgam_frenzy_pierce_ranged": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "frenzy", "pierce", "ranged"], "amalgam": true, "text": "Chimera. Frenzy. Pierce. Ranged."},
+	"amalgam_frenzy_pierce_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "frenzy", "pierce", "revive"], "amalgam": true, "text": "Chimera. Frenzy. Pierce. Revive."},
+	"amalgam_frenzy_pierce_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "frenzy", "pierce", "taunt"], "amalgam": true, "text": "Chimera. Frenzy. Pierce. Taunt."},
+	"amalgam_frenzy_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "frenzy", "ranged", "revive"], "amalgam": true, "text": "Chimera. Frenzy. Ranged. Revive."},
+	"amalgam_frenzy_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "frenzy", "ranged", "taunt"], "amalgam": true, "text": "Chimera. Frenzy. Ranged. Taunt."},
+	"amalgam_frenzy_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "frenzy", "revive", "taunt"], "amalgam": true, "text": "Chimera. Frenzy. Revive. Taunt."},
+	"amalgam_pierce_ranged_revive": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "pierce", "ranged", "revive"], "amalgam": true, "text": "Chimera. Pierce. Ranged. Revive."},
+	"amalgam_pierce_ranged_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "pierce", "ranged", "taunt"], "amalgam": true, "text": "Chimera. Pierce. Ranged. Taunt."},
+	"amalgam_pierce_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "pierce", "revive", "taunt"], "amalgam": true, "text": "Chimera. Pierce. Revive. Taunt."},
+	"amalgam_ranged_revive_taunt": {"name": "Amalgam", "faction": "neutral", "rarity": "Rare", "type": "unit", "cost": 3, "atk": 2, "hp": 5, "spd": 3, "keywords": ["chimera", "ranged", "revive", "taunt"], "amalgam": true, "text": "Chimera. Ranged. Revive. Taunt."},
 
 	# Curses - only added by shrines. They can't be played and leave the hand at the start of the next round.
 	"void_taint": {"name": "Void Taint", "faction": "curse", "rarity": "Curse", "type": "curse", "cost": 0, "token": true, "text": "Unplayable. Discarded at the start of the next round."},
@@ -159,7 +159,7 @@ const CARDS := {
 
 ## One-line effect shown on compact non-unit cards; the full text appears on hover.
 const CARD_SHORT := {
-	"rebuke": "Push 1 lane, 3 on impact", "warding": "Shield 4", "transposition": "Swap two enemies", "augury": "Draw 2",
+	"rebuke": "Push 1 lane, 3 on impact", "warding": "Shield 4", "transposition": "Swap any two enemies", "augury": "Draw 2",
 	"faith_surge": "+2 Faith", "channel_ley_line": "Create a Ley Line", "raise_ruins": "Create Ruins",
 	"divine_insight": "Draw 2", "ambrosia": "+2 Faith", "aegis_of_olympus": "All allies Shield 3",
 	"thread_of_fate": "Return a unit to hand", "ragnarok": "Sacrifice: blast its lane", "longship": "+2 moves, Shield 2",
@@ -253,6 +253,25 @@ const RELICS := {
 	"seers_lens": {"name": "Seer's Lens", "rarity": "Common", "combat": false, "pool": false, "text": "At the start of each fight, see enemy intents for rounds 1 and 2."},
 	"pilgrims_pouch": {"name": "Pilgrim's Pouch", "rarity": "Common", "combat": false, "text": "+8 gold after each won fight."},
 	"healing_ampoule": {"name": "Healing Ampoule", "rarity": "Common", "combat": false, "text": "After each won fight, heal the Core by 3."},
+	"omens_tablet": {"name": "Omens Tablet", "rarity": "Uncommon", "combat": false, "text": "Rare shrine events are three times as likely."},
+}
+
+## Badges earned on exceptional finished runs. "icon" is an art/icons stem.
+## Checked in order on victory; gold tiers stack (a 200-gold run earns all three).
+const ACHIEVEMENTS := {
+	"untouched_boss": {
+		"name": "Untouched", "icon": "shield",
+		"text": "Defeat a boss without taking direct Core damage (enemy hits and Threat).",
+	},
+	"untouched_all": {
+		"name": "Untouchable", "icon": "helm",
+		"text": "Defeat every act boss without taking direct Core damage.",
+	},
+	"gold_100": {"name": "Full Purse", "icon": "opt_gold", "text": "Finish a run with at least 100 gold."},
+	"gold_150": {"name": "Heavy Purse", "icon": "opt_gold", "text": "Finish a run with at least 150 gold."},
+	"gold_200": {"name": "Dragon's Hoard", "icon": "opt_gold", "text": "Finish a run with at least 200 gold."},
+	"full_core": {"name": "Unbroken", "icon": "hp", "text": "Win a run with your Core at full HP."},
+	"relic_hoard": {"name": "Reliquary", "icon": "opt_relic", "text": "Win a run holding 5 or more relics."},
 }
 
 const TERRAIN := {
@@ -578,7 +597,9 @@ const ACT_HEAL := 0.75
 # Events with "stages" continue there after a "goto"; each stage has its own "text" and "options".
 # An event's "weight" sets how often it's picked (default EVENT_WEIGHT); rare events use less.
 # An event's "act" is the first act it can appear in (default 1).
+# Omens Tablet multiplies weights below EVENT_WEIGHT by RARE_EVENT_WEIGHT_MULT.
 const EVENT_WEIGHT := 10
+const RARE_EVENT_WEIGHT_MULT := 3
 const LEAVE := {"label": "Leave.", "text": "You move on."}
 const CANOPIC_JAR := [
 	{"weight": 22, "text": "The jar holds a sacred relic, perfectly preserved.", "fx": {"relic": true}},

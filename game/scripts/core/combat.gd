@@ -39,6 +39,9 @@ var is_boss := false
 var phase := "plan"
 var result := ""
 var core_max := 0
+## Core HP lost this fight. "Direct" is enemy hits / Threat (enemy_hit=true); the rest is tides, tolls, relics, etc.
+var core_damage_taken := 0
+var core_direct_damage := 0
 var moves_left := 0
 var longship_active := false
 var spells_this_round := 0
@@ -266,7 +269,7 @@ func _row_neighbors(u) -> Array:
 
 func effective_atk(u) -> int:
 	var a: int = u.atk + u.temp_atk
-	if u.id == "scarab" and _has_living(u.side, "khepri"):
+	if is_scarab(u) and _has_living(u.side, "khepri"):
 		a += 1
 	if u.has_kw("pack"):
 		var others := _wolf_count(u.side) - (1 if is_wolf(u) and u.alive else 0)
@@ -633,6 +636,37 @@ func _wave_slot(lane: int, row: int) -> Array:
 	return []
 
 
+## Melee enemies that spilled into the back (intent: Wait) step into empty front slots
+## when space opens — checked at the start of each round after ferry arrivals.
+func _advance_waiting_enemies() -> void:
+	var waiting: Array = []
+	for e in units(ENEMY):
+		if e.row != BACK or e.has_kw("ranged") or e.has_kw("immovable") or e.wide:
+			continue
+		waiting.append(e)
+	waiting.sort_custom(func(a, b): return a.lane < b.lane)
+	for e in waiting:
+		if not e.alive or e.row != BACK:
+			continue
+		var lane := _waiting_front_lane(e)
+		if lane < 0:
+			continue
+		_remove(e)
+		_place(e, FRONT, lane)
+		_log("%s advances to the front (%s)." % [e.display_name(), _unit_label(e)])
+
+
+## Prefer the unit's own lane, then the nearest empty front slot.
+func _waiting_front_lane(e) -> int:
+	if slot_open(ENEMY, FRONT, e.lane):
+		return e.lane
+	for d in range(1, LANES):
+		for l in [e.lane - d, e.lane + d]:
+			if l >= 0 and l < LANES and slot_open(ENEMY, FRONT, l):
+				return l
+	return -1
+
+
 func _sunlit_slots() -> Array:
 	var out: Array = []
 	for row in 2:
@@ -650,7 +684,12 @@ func _add_burn(t, amount: int) -> void:
 
 
 func is_wolf(u) -> bool:
-	return u.def.get("tribe", "") == "wolf"
+	return u.def.get("tribe", "") == "wolf" or u.has_kw("chimera")
+
+
+## Scarab tokens, and units with Chimera (counts as every token type).
+func is_scarab(u) -> bool:
+	return u.def.get("tribe", "") == "scarab" or u.has_kw("chimera")
 
 
 func _wolf_count(side: int) -> int:
@@ -791,6 +830,7 @@ func _start_round() -> void:
 	for u in units(PLAYER) + units(ENEMY):
 		u.temp_atk = 0
 	_arrive_waves()
+	_advance_waiting_enemies()
 	faith = 3
 	if round_num == 1 and has_relic("ember_of_faith"):
 		faith += 1
@@ -1414,8 +1454,8 @@ func _check_targets(def: Dictionary, targets: Array, direction: int) -> String:
 				return "Choose two enemy units."
 			var a = _at(targets[0])
 			var b = _at(targets[1])
-			if a == null or b == null or a == b or a.row != b.row:
-				return "Choose two different enemy units in the same row."
+			if a == null or b == null or a == b:
+				return "Choose two different enemy units."
 			if a.has_kw("immovable") or b.has_kw("immovable"):
 				return "Immovable units cannot be swapped."
 			if is_spellwarded(a) or is_spellwarded(b):
@@ -1668,12 +1708,14 @@ func _resolve_spell(card: Dictionary, targets: Array, direction: int) -> void:
 		"transposition":
 			var a = _at(targets[0])
 			var b = _at(targets[1])
+			var a_row: int = a.row
 			var a_lane: int = a.lane
+			var b_row: int = b.row
 			var b_lane: int = b.lane
 			_remove(a)
 			_remove(b)
-			_place(a, a.row, b_lane)
-			_place(b, b.row, a_lane)
+			_place(a, b_row, b_lane)
+			_place(b, a_row, a_lane)
 			_log("Swapped %s and %s." % [a.display_name(), b.display_name()])
 		"ragnarok":
 			var u = _at(targets[0])
@@ -1999,9 +2041,9 @@ func is_fresh(u) -> bool:
 	return _entered_this_plan(u) and u.from_hand
 
 
-## A hand-deployed unit whose effect has not fired can still be moved, swapped, or returned.
+## A hand-deployed unit that is still free to reposition (not locked by effect, attack, or Reinforce).
 func can_reposition(u) -> bool:
-	return is_fresh(u) and not u.effect_used
+	return is_fresh(u) and not u.effect_used and u.attacked_round != round_num and u.reinforced_round != round_num
 
 
 func can_recall(u) -> bool:
@@ -2015,6 +2057,8 @@ func move_block(u) -> String:
 	# Reinforce (e.g. after Tyr's Oath) can attack during planning; that locks them in place.
 	if phase == "plan" and u.attacked_round == round_num:
 		return "Already attacked this round"
+	if phase == "plan" and u.reinforced_round == round_num:
+		return "Already reinforced this round"
 	if is_fresh(u):
 		return ""
 	if _entered_this_plan(u):
@@ -2497,7 +2541,7 @@ func _attack(u, target, atk: int) -> void:
 			burn_amt = 2 if is_sunlit(u.side, u.row, u.lane) else 0
 		elif is_sunlit(u.side, u.row, u.lane):
 			burn_amt += 1
-		if u.id == "scarab" and u.side == PLAYER and _any_sunlit():
+		if is_scarab(u) and u.side == PLAYER and _any_sunlit():
 			burn_amt += _count_living(PLAYER, "solar_scarab")
 		_add_burn(target, burn_amt)
 
@@ -2706,6 +2750,10 @@ func _heal(u, amount: int, source: String) -> void:
 func _damage_core(amount: int, source: String, enemy_hit := false, extra := {}) -> void:
 	if enemy_hit and has_relic("wardens_plate"):
 		amount = max(1, amount - 2)
+	if amount > 0:
+		core_damage_taken += amount
+		if enemy_hit:
+			core_direct_damage += amount
 	core_hp -= amount
 	_log("%s deals %d to the Core (%d left)." % [source, amount, max(core_hp, 0)], extra)
 	if core_hp <= 0 and result == "":
@@ -2906,7 +2954,7 @@ func _death_triggers(u) -> void:
 			w.max_hp += 1
 			w.hp += 1
 			_log("Geri howls for the fallen Wolf (+1/+1).")
-		elif w.id == "khepri" and w.side == u.side and u.side == PLAYER and u.id == "scarab":
+		elif w.id == "khepri" and w.side == u.side and u.side == PLAYER and is_scarab(u):
 			_heal_core(1, "Khepri")
 		elif w.id == "odin" and w.side == u.side and u.side == PLAYER:
 			var t = unit_at(ENEMY, FRONT, u.lane)
@@ -2927,6 +2975,7 @@ func _reinforce(u) -> void:
 		b.atk += u.atk
 	if has_relic("gjallarhorn") and b.side == PLAYER:
 		b.shield += 4
+	b.reinforced_round = round_num
 	_log("%s steps forward to reinforce lane %d." % [b.display_name(), u.lane + 1])
 	if b.attacked_round == round_num:
 		return
@@ -2934,6 +2983,10 @@ func _reinforce(u) -> void:
 	actor = b
 	_act(b)
 	actor = prev
+	# The reinforce swing is bonus: they still get their normal attack in resolve.
+	# During planning (Tyr's Oath) the swing locks them in place for the rest of the plan.
+	if phase != "plan":
+		b.attacked_round = 0
 
 
 func _check_enemies_cleared() -> void:
