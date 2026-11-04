@@ -916,22 +916,25 @@ func test_vault_verbs() -> void:
 	c.debug_place("chain_anchor", E, 0, F)
 	c.debug_place("chain_anchor", E, 2, F)
 	var stuck = c.debug_place("raider", P, 1, F)
+	stuck.max_hp = 20
+	stuck.hp = 20
 	stuck.deployed_round = 0
 	stuck.from_hand = false
 	c.end_plan()
 	check(c.phase == "plan", "vault: advanced to next plan after Door Sealmark")
+	check(stuck.alive, "vault: stuck unit survives Door attack for Sealmark check")
 	check(int(c.sealmarks.get(stuck.lane, 0)) > 0, "vault: Sealmark survives into next plan")
 	check(c.move_block(stuck) == "Sealmarked in this lane", "vault: next-plan move blocked by Sealmark")
 	check(c.move_unit(stuck.lane, F, 2, F) != "", "vault: move out of Sealmark rejected")
 	## Enemy Sealmark: Rebuke can't target it, and pushing a neighbor into it only hurts the neighbor.
 	c = fresh(40, true)
 	var guard = c.debug_place("hinge_guard", E, 1, F)
-	var thrall = c.debug_place("chain_thrall", E, 0, F)
+	var pusher = c.debug_place("chain_thrall", E, 0, F)
 	c.hand = [c._new_card("rebuke")]
 	c.faith = 3
 	check(not c.valid_targets(0).has([E, F, 1]), "vault: Sealmarked Hinge Guard is not a Rebuke target")
 	check(c.play_spell(0, [[E, F, 0]], 1) == "", "vault: Rebuke neighbor into Guard")
-	check(thrall.hp == thrall.max_hp - 3, "vault: pusher takes collision into Sealmark")
+	check(pusher.hp == pusher.max_hp - 3, "vault: pusher takes collision into Sealmark")
 	check(guard.hp == guard.max_hp, "vault: Sealmarked Guard takes no collision damage")
 	## Door Guardians: Seal Wardens return once in Warden Eternal phase 2.
 	c = fresh(50, true)
@@ -1322,12 +1325,13 @@ func test_act2_enemies() -> void:
 	var c = fresh()
 	var shade = c.debug_place("shade", E, 0, F)
 	var sentinel = c.debug_place("ark_sentinel", P, 0, F)
+	var shade_hp: int = shade.hp
 	c._attack(sentinel, shade, 3)
-	check(shade.hp == 3, "incorporeal: melee 3 deals 1")
+	check(shade.hp == shade_hp - 1, "incorporeal: melee 3 deals 1")
 	c._attack(sentinel, shade, 1)
-	check(shade.hp == 2, "incorporeal: minimum 1")
+	check(shade.hp == shade_hp - 2, "incorporeal: minimum 1")
 	var archer = c.debug_place("echo_archer", P, 0, B)
-	c._attack(archer, shade, 2)
+	c._attack(archer, shade, shade.hp)
 	check(not shade.alive, "incorporeal: ranged deals full damage")
 
 	# Drown floods your front slot in its lane; Flooded is -1 ATK and blocks Revive.
