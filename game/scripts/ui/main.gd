@@ -50,7 +50,9 @@ const GOLD := Color(0.95, 0.78, 0.35)
 const CREAM := Color(0.94, 0.9, 0.82)
 const MUTED := Color(0.7, 0.68, 0.76)
 const LIST_GROUPS := {"neutral": "Neutral", "norse": "Norse", "greek": "Greek", "egypt": "Egyptian", "divine": "Divine (shrines only)", "other": "Tokens, curses and statuses"}
+const ENEMY_LIST_GROUPS := {"enemy": "Enemies", "elite": "Elites", "boss": "Bosses"}
 const RARITY_ORDER := ["Starter", "Common", "Uncommon", "Rare"]
+const KIND_ORDER := ["enemy", "elite", "boss"]
 const PATRON_SHORT := {"norse": "Norse", "greek": "Greek", "egypt": "Egyptian"}
 
 var menu: Control
@@ -994,7 +996,7 @@ func _start_event_test(event: String, pantheon: String) -> void:
 	run_view.start_test(seed_value, Data.PATRONS[event_patron.selected]["card"], event, pantheon)
 
 
-## Every card in the game, grouped by faction. `filter` is a LIST_GROUPS key or "all".
+## Every card and enemy in the game. `filter` is a LIST_GROUPS / ENEMY_LIST_GROUPS key or "all".
 func _open_card_list(filter := "all") -> void:
 	_close_card_list()
 	card_list = PanelContainer.new()
@@ -1012,13 +1014,13 @@ func _open_card_list(filter := "all") -> void:
 	header.add_theme_constant_override("separation", 8)
 	box.add_child(header)
 	var title := Label.new()
-	title.text = "Card list - %d cards" % Data.CARDS.size()
-	title.add_theme_font_size_override("font_size", 32)
+	title.text = "Card list - %d cards, %d enemies" % [Data.CARDS.size(), Data.ENEMIES.size()]
+	title.add_theme_font_size_override("font_size", 28)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
-	for key in ["all"] + LIST_GROUPS.keys():
+	for key in ["all"] + LIST_GROUPS.keys() + ENEMY_LIST_GROUPS.keys():
 		var b := Button.new()
-		b.text = "All" if key == "all" else LIST_GROUPS[key]
+		b.text = "All" if key == "all" else (LIST_GROUPS[key] if LIST_GROUPS.has(key) else ENEMY_LIST_GROUPS[key])
 		b.custom_minimum_size = Vector2(0, 40)
 		b.disabled = key == filter
 		b.pressed.connect(_open_card_list.bind(key))
@@ -1038,19 +1040,36 @@ func _open_card_list(filter := "all") -> void:
 	var sections := VBoxContainer.new()
 	sections.add_theme_constant_override("separation", 10)
 	scroll.add_child(sections)
-	for group in LIST_GROUPS:
-		if filter != "all" and filter != group:
-			continue
-		var ids: Array = Data.CARDS.keys().filter(func(id): return _list_group(id) == group)
-		ids.sort_custom(_card_before)
-		sections.add_child(_heading("%s - %d" % [LIST_GROUPS[group], ids.size()]))
-		var grid := GridContainer.new()
-		grid.columns = 8
-		grid.add_theme_constant_override("h_separation", 10)
-		grid.add_theme_constant_override("v_separation", 10)
-		for id in ids:
-			grid.add_child(CardWidget.card_button(id))
-		sections.add_child(grid)
+	var show_cards := filter == "all" or LIST_GROUPS.has(filter)
+	var show_enemies := filter == "all" or ENEMY_LIST_GROUPS.has(filter)
+	if show_cards:
+		for group in LIST_GROUPS:
+			if filter != "all" and filter != group:
+				continue
+			var ids: Array = Data.CARDS.keys().filter(func(id): return _list_group(id) == group)
+			ids.sort_custom(_card_before)
+			sections.add_child(_heading("%s - %d" % [LIST_GROUPS[group], ids.size()]))
+			var grid := GridContainer.new()
+			grid.columns = 8
+			grid.add_theme_constant_override("h_separation", 10)
+			grid.add_theme_constant_override("v_separation", 10)
+			for id in ids:
+				grid.add_child(CardWidget.card_button(id))
+			sections.add_child(grid)
+	if show_enemies:
+		for kind in KIND_ORDER:
+			if filter != "all" and filter != kind:
+				continue
+			var eids: Array = Data.ENEMIES.keys().filter(func(id): return Data.ENEMIES[id]["kind"] == kind)
+			eids.sort_custom(_enemy_before)
+			sections.add_child(_heading("%s - %d" % [ENEMY_LIST_GROUPS[kind], eids.size()]))
+			var egrid := GridContainer.new()
+			egrid.columns = 8
+			egrid.add_theme_constant_override("h_separation", 10)
+			egrid.add_theme_constant_override("v_separation", 10)
+			for id in eids:
+				egrid.add_child(CardWidget.enemy_button(id))
+			sections.add_child(egrid)
 
 
 func _close_card_list() -> void:
@@ -1077,6 +1096,18 @@ func _card_before(a: String, b: String) -> bool:
 	if da["cost"] != db["cost"]:
 		return da["cost"] < db["cost"]
 	return da["name"] < db["name"]
+
+
+func _enemy_before(a: String, b: String) -> bool:
+	var da: Dictionary = Data.ENEMIES[a]
+	var db: Dictionary = Data.ENEMIES[b]
+	var aa: int = int(da.get("act", 1))
+	var ab: int = int(db.get("act", 1))
+	if aa != ab:
+		return aa < ab
+	if da["name"] != db["name"]:
+		return da["name"] < db["name"]
+	return a < b
 
 
 func _add_sandbox_link() -> void:

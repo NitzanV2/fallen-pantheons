@@ -28,6 +28,13 @@ func show_card(card_id: String, from: Control, cost := -1) -> void:
 	_show(face, _keyword_entries(CardWidget.glossary_icons(Data.CARDS[card_id], card_id)), from.get_global_rect(), from)
 
 
+func show_enemy(enemy_id: String, from: Control) -> void:
+	var size := BOSS_SIZE if Data.ENEMIES[enemy_id]["kind"] == "boss" else BIG_SIZE
+	var face := CardWidget.enemy_face(enemy_id, size)
+	var entries := _keyword_entries(CardWidget.glossary_icons(CardWidget.enemy_def(enemy_id), enemy_id))
+	_show(face, entries, from.get_global_rect(), from, size)
+
+
 ## A unit on the board (a combat snapshot entry, or {} for an empty slot) plus extra glossary
 ## entries of the form [icon id or "", title, text, title colour].
 func show_unit(u: Dictionary, rect: Rect2, from: Control, extras: Array) -> void:

@@ -14,6 +14,10 @@ const TRACKS := {
 	"act2_battle": "res://music/act2_battle.ogg",
 	"act2_elite": "res://music/act2_elite.ogg",
 	"act2_boss": "res://music/act2_boss.ogg",
+	"act3_theme": "res://music/act3_theme.ogg",
+	"act3_battle": "res://music/act3_battle.ogg",
+	"act3_elite": "res://music/act3_elite.ogg",
+	"act3_boss": "res://music/act3_boss.ogg",
 }
 const VOLUME_DB := -8.0
 const SILENT_DB := -40.0
@@ -36,14 +40,14 @@ static func play(track: String) -> void:
 
 ## Map / shop / rest / shrine music for a 1-based act index.
 static func play_act_theme(act: int) -> void:
-	play("act%d_theme" % clampi(act, 1, 2))
+	play("act%d_theme" % clampi(act, 1, 3))
 
 
 ## Combat music. `kind` is "battle", "elite", or "boss".
 static func play_combat(act: int, kind: String) -> void:
 	if kind not in ["battle", "elite", "boss"]:
 		kind = "battle"
-	play("act%d_%s" % [clampi(act, 1, 2), kind])
+	play("act%d_%s" % [clampi(act, 1, 3), kind])
 
 
 ## Mutes all game audio (the Master bus), remembered between sessions.

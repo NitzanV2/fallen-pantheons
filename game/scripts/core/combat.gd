@@ -75,6 +75,21 @@ var hades_freed := false
 const HADES_FREE := 8
 ## Nidhogg stops gnawing once this many of your slots are Rotted.
 const ROT_MAX := 4
+## Act 3 Binding Vault: open Breaches as "side:lane" -> true. Sealmarks: player lane -> rounds left.
+var breaches := {}
+var sealmarks := {}
+## Broken Manacle: skip the first Bound clamp this fight.
+var manacle_used := false
+## Reliquary Inlay / Key of the Outer Seal: prevent the next Breach open.
+var breach_ward_charges := 0
+## The Unbound phase 2: empty player slots deal 1 to the Core at end of round.
+var vault_bleed := false
+## Uids that already Sundering-split (not a death).
+var sundered := {}
+## Adamant Warden: already spent its once-per-round save this round (by uid).
+var ward_saves := {}
+## Mad Turnkey: a player unit locked out of the fight for one round (card held here, not discarded).
+var vault_cell := {}
 var intents := {}
 var petrified_lane := -1
 var sandstorm_row := -1
@@ -153,6 +168,10 @@ func setup(battle_def: Dictionary, deck_ids: Array, relic_ids: Array, seed_value
 			_log("Sun Disk: your lane %d %s slot is Sunlit." % [slot[1] + 1, "front" if slot[0] == FRONT else "back"])
 	if has_relic("void_touched_heart"):
 		_damage_core(3, "Void-Touched Heart")
+	if has_relic("key_of_the_outer_seal"):
+		breach_ward_charges += 1
+	if has_relic("reliquary_inlay"):
+		breach_ward_charges += 1
 	_start_round()
 
 
@@ -423,6 +442,400 @@ func _living(id: String):
 ## Helm of Darkness: every 3rd round Hades can't be targeted or damaged.
 func helm_active(u) -> bool:
 	return u.id == "hades" and round_num % 3 == 0
+
+
+# ---------------------------------------------------------------- Act 3 Binding Vault
+
+func _breach_key(side: int, lane: int) -> String:
+	return "%d:%d" % [side, lane]
+
+
+func open_breach(side: int, lane: int, reason := "Breach") -> void:
+	lane = clampi(lane, 0, LANES - 1)
+	if breach_ward_charges > 0:
+		breach_ward_charges -= 1
+		_log("A vault ward turns aside the Breach (%s)." % reason)
+		return
+	var key := _breach_key(side, lane)
+	if breaches.get(key, false):
+		return
+	breaches[key] = true
+	_log("%s opens in lane %d." % [reason, lane + 1], {"breach": true, "breach_side": side, "breach_lane": lane})
+
+
+func keybearer_alive() -> bool:
+	return units(ENEMY).any(func(e): return e.has_kw("keybearer"))
+
+
+## End of round: living player units close one Breach in their lane unless a Keybearer lives.
+func _close_breaches_by_presence() -> void:
+	if keybearer_alive():
+		return
+	var occupied := {}
+	for u in units(PLAYER):
+		occupied[u.lane] = true
+	var closed: Array = []
+	for key in breaches.keys():
+		if not breaches[key]:
+			continue
+		var parts: PackedStringArray = String(key).split(":")
+		var lane: int = int(parts[1])
+		if occupied.get(lane, false):
+			closed.append(key)
+	for key in closed:
+		breaches.erase(key)
+		_log("Your presence reseals a Breach in lane %d." % (int(String(key).split(":")[1]) + 1))
+
+
+func _rift_tax() -> void:
+	var n: int = breaches.values().count(true)
+	if n <= 0:
+		return
+	_damage_core(n, "Rift (%d Breach%s)" % [n, "es" if n != 1 else ""])
+
+
+func sealmark_player_lane(lane: int, rounds := 2) -> void:
+	lane = clampi(lane, 0, LANES - 1)
+	if has_relic("cartouche_shard"):
+		rounds = maxi(1, rounds - 1)
+	sealmarks[lane] = maxi(int(sealmarks.get(lane, 0)), rounds)
+	_log("Lane %d is Sealmarked (%d round%s)." % [lane + 1, rounds, "s" if rounds != 1 else ""], {"sealmark_lane": lane})
+
+
+func _tick_sealmarks() -> void:
+	var next := {}
+	for lane in sealmarks.keys():
+		var left: int = int(sealmarks[lane]) - 1
+		if left > 0:
+			next[lane] = left
+	sealmarks = next
+
+
+## Minimum HP Bound protection allows (0 = none). Gold Seam / half-bind floors use max_hp/2.
+func bound_hp_floor(u) -> int:
+	if u == null or not u.alive or u.side != ENEMY:
+		return 0
+	var floor_hp := 0
+	for b in units(ENEMY):
+		if b == u or not b.alive:
+			continue
+		if b.id == "gold_seam" or b.has_kw("bound_half"):
+			if u == _largest_enemy_excluding(b):
+				floor_hp = maxi(floor_hp, maxi(1, u.max_hp / 2))
+		if b.id == "seal_warden" or b.has_kw("bound_floor"):
+			if u == _highest_hp_other_in_row(b):
+				floor_hp = maxi(floor_hp, 1)
+		if b.id == "chain_anchor" and u.id == "door_of_gleipnir":
+			floor_hp = maxi(floor_hp, 1)
+		if b.id == "chain_thrall" and u.id == "hundred_handed":
+			floor_hp = maxi(floor_hp, maxi(1, u.max_hp / 2))
+		if b.id in ["rift_mite", "gold_seam"] and u.id == "cartouche_bound":
+			floor_hp = maxi(floor_hp, 1)
+		if b.id == "gold_seam" and u.id == "the_unbound":
+			floor_hp = maxi(floor_hp, maxi(1, u.max_hp / 2))
+		if b.id == "key_acolyte" and u.id == "mad_turnkey":
+			floor_hp = maxi(floor_hp, 1)
+	return floor_hp
+
+
+func _largest_enemy_excluding(exclude) -> Variant:
+	var best = null
+	for e in units(ENEMY):
+		if e == exclude:
+			continue
+		if best == null or e.max_hp > best.max_hp or (e.max_hp == best.max_hp and e.hp > best.hp):
+			best = e
+	return best
+
+
+func _highest_hp_other_in_row(warden) -> Variant:
+	var best = null
+	for e in units(ENEMY):
+		if e == warden or e.row != warden.row:
+			continue
+		if best == null or e.hp > best.hp or (e.hp == best.hp and e.max_hp > best.max_hp):
+			best = e
+	return best
+
+
+## True while this unit is Bound (protected by a living binder).
+func is_bound(u) -> bool:
+	return bound_hp_floor(u) > 0
+
+
+## Sunder at half HP: leave without death triggers; spawn children from def.sunder_into.
+## Blocked while a half-HP Bound floor is still active (Gold Seam / Chain Thralls).
+func _try_sunder(u, before_hp: int) -> bool:
+	if u == null or not u.alive or sundered.has(u.uid):
+		return false
+	if not u.has_kw("sunder") and u.def.get("sunder_into", []).is_empty():
+		return false
+	if before_hp * 2 <= u.max_hp:
+		return false
+	if u.hp * 2 > u.max_hp:
+		return false
+	var floor_hp: int = bound_hp_floor(u)
+	if floor_hp >= maxi(1, u.max_hp / 2):
+		return false
+	_sunder_unit(u)
+	return true
+
+
+## When a half-binder dies, a unit already at half HP may Sunder immediately.
+func _check_pending_sunders() -> void:
+	for e in units(ENEMY):
+		if e.alive and e.hp * 2 <= e.max_hp:
+			_try_sunder(e, e.max_hp)
+
+
+func _sunder_unit(u) -> void:
+	sundered[u.uid] = true
+	var kids: Array = u.def.get("sunder_into", ["husk", "husk"])
+	var home_lane: int = u.lane
+	var home_row: int = u.row
+	_log("%s Sundering-splits!" % _unit_label(u), {"sunder": true, "pose_slot": [u.side, u.row, u.lane]})
+	if u.id == "the_unbound":
+		vault_bleed = true
+		_log("Broken chains: empty slots now bleed the Core.")
+	u.alive = false
+	_remove(u)
+	# Not a death: skip On-Death / Revive / Hel toll / etc.
+	var offsets: Array = [0, 1, -1, 2, -2]
+	for kid_id in kids:
+		for off in offsets:
+			var lane: int = home_lane + int(off)
+			if lane < 0 or lane >= LANES:
+				continue
+			if unit_at(ENEMY, home_row, lane) != null:
+				continue
+			_spawn(str(kid_id), ENEMY, lane, home_row, null)
+			break
+	_check_enemies_cleared()
+
+
+func _vault_bleed_tax() -> void:
+	if not vault_bleed:
+		return
+	var empty := 0
+	for row in 2:
+		for lane in LANES:
+			if unit_at(PLAYER, row, lane) == null and terrain_at(PLAYER, row, lane) != "rotted":
+				empty += 1
+	if empty > 0:
+		_damage_core(empty, "Broken chains (empty slots)")
+
+
+func _adamant_ward_save(dying) -> bool:
+	if dying.side != ENEMY:
+		return false
+	for w in units(ENEMY):
+		if w.id != "adamant_warden" or not w.alive or w.lane != dying.lane:
+			continue
+		if ward_saves.get(w.uid, false):
+			continue
+		ward_saves[w.uid] = true
+		dying.hp = 1
+		_log("%s's Ward keeps %s at 1 HP." % [_unit_label(w), dying.display_name()])
+		_deal_damage(w, 2, "effect")
+		return true
+	return false
+
+
+func _void_hinge_end(h) -> void:
+	if not h.alive or result != "":
+		return
+	var lane := _lane_with_fewest_player_units()
+	open_breach(PLAYER, lane, "Void Hinge")
+
+
+func _door_of_gleipnir_end(door) -> void:
+	if not door.alive or result != "":
+		return
+	sealmark_player_lane(_lane_with_most_player_units(), 1)
+	var anchors := units(ENEMY).filter(func(e): return e.id == "chain_anchor")
+	if anchors.is_empty():
+		door.atk += 2
+		open_breach(PLAYER, door.lane, "Door of Gleipnir")
+		_log("The Door of Gleipnir Unravels with no Anchors left (+2 ATK).")
+
+
+func _canopic_lock_end(lock) -> void:
+	if not lock.alive or result != "":
+		return
+	sealmark_player_lane(_lane_with_most_player_units(), 1)
+	var empty_lane := _lane_with_fewest_player_units()
+	var count := 0
+	for row in 2:
+		if unit_at(PLAYER, row, empty_lane) != null:
+			count += 1
+	if count == 0:
+		open_breach(PLAYER, empty_lane, "Canopic Lock")
+
+
+## Mad Turnkey: Sealmark, then lock a marked unit into a cell for one round (or open a Breach).
+func _mad_turnkey_end(turnkey) -> void:
+	if not turnkey.alive or result != "":
+		return
+	sealmark_player_lane(_lane_of_strongest_player_unit(), 1)
+	if vault_cell.is_empty():
+		var prey = _vault_cell_prey()
+		if prey != null:
+			_imprison_in_vault_cell(prey, turnkey)
+			return
+	open_breach(PLAYER, _lane_with_fewest_player_units(), "Mad Turnkey")
+
+
+func _vault_cell_prey():
+	var best = null
+	for u in units(PLAYER):
+		if u.has_kw("immovable"):
+			continue
+		if int(sealmarks.get(u.lane, 0)) <= 0:
+			continue
+		if best == null or u.hp < best.hp or (u.hp == best.hp and (u.row > best.row or (u.row == best.row and u.lane < best.lane))):
+			best = u
+	return best
+
+
+func _imprison_in_vault_cell(u, jailer) -> void:
+	if u == null or not u.alive or not vault_cell.is_empty():
+		return
+	var label: String = u.display_name()
+	_return_armaments(u)
+	if u.is_token or u.card == null:
+		u.alive = false
+		_remove(u)
+		_log("%s locks %s in a cell (gone)." % [_unit_label(jailer), label])
+		return
+	vault_cell = {
+		"card": u.card, "id": u.id, "atk": u.atk, "hp": u.hp, "max_hp": u.max_hp,
+		"release_round": round_num + 2,
+	}
+	u.alive = false
+	_remove(u)
+	_log("%s locks %s in a cell for a round." % [_unit_label(jailer), label], {"cell": true})
+
+
+func _try_release_vault_cell(force := false) -> void:
+	if vault_cell.is_empty():
+		return
+	if not force and round_num < int(vault_cell.get("release_round", 0)):
+		return
+	var card: Dictionary = vault_cell["card"]
+	var id: String = vault_cell["id"]
+	var atk: int = int(vault_cell["atk"])
+	var hp: int = int(vault_cell["hp"])
+	var max_hp: int = int(vault_cell["max_hp"])
+	for row in [FRONT, BACK]:
+		for lane in LANES:
+			if unit_at(PLAYER, row, lane) != null or not slot_open(PLAYER, row, lane):
+				continue
+			var u = _spawn(id, PLAYER, lane, row, card)
+			u.atk = atk
+			u.max_hp = max_hp
+			u.hp = mini(hp, max_hp)
+			u.from_hand = false
+			vault_cell = {}
+			_log("%s returns from the cell." % u.display_name(), {"cell_release": true})
+			return
+	if hand.size() < MAX_HAND:
+		hand.append(card)
+		vault_cell = {}
+		_log("%s returns from the cell to your hand." % card_def(card)["name"], {"cell_release": true})
+
+
+func _skeleton_key_end(key) -> void:
+	if not key.alive or result != "":
+		return
+	sealmark_player_lane(_lane_with_most_player_units(), 1)
+	open_breach(PLAYER, _lane_with_fewest_player_units(), "Skeleton Key")
+
+
+func _warden_eternal_end(w) -> void:
+	if not w.alive or result != "":
+		return
+	if w.hp * 2 > w.max_hp:
+		var lane := rng.randi_range(0, LANES - 1)
+		for _i in LANES:
+			if unit_at(ENEMY, FRONT, lane) == null:
+				open_breach(ENEMY, lane, "Warden Eternal")
+				break
+			lane = (lane + 1) % LANES
+
+
+func _the_unbound_end(u) -> void:
+	if not u.alive:
+		# Phase 2 husks may still be up; bleed while any chain_broke lives or vault_bleed set.
+		return
+	if u.hp * 2 <= u.max_hp and not vault_bleed:
+		vault_bleed = true
+		_log("The binding fails: empty slots bleed the Core.")
+
+
+func _seal_of_names_end(_s) -> void:
+	pass
+
+
+func _act3_phase_summons() -> void:
+	for boss in units(ENEMY):
+		if boss.id == "warden_eternal" and boss.hp * 2 <= boss.max_hp:
+			if not _has_living(ENEMY, "key_acolyte"):
+				for lane in LANES:
+					if unit_at(ENEMY, FRONT, lane) == null:
+						_spawn("key_acolyte", ENEMY, lane, FRONT, null)
+						_log("The Warden summons a Key Acolyte.")
+						break
+		if boss.id == "seal_of_names" and boss.hp * 2 <= boss.max_hp:
+			if not _has_living(ENEMY, "key_acolyte"):
+				for lane in LANES:
+					if unit_at(ENEMY, FRONT, lane) == null:
+						_spawn("key_acolyte", ENEMY, lane, FRONT, null)
+						break
+			var scribes := units(ENEMY).filter(func(e): return e.id == "vault_scribe").size()
+			while scribes < 2:
+				var placed := false
+				for lane in LANES:
+					if unit_at(ENEMY, BACK, lane) == null:
+						_spawn("vault_scribe", ENEMY, lane, BACK, null)
+						scribes += 1
+						placed = true
+						break
+				if not placed:
+					break
+
+
+func _seal_of_names_litany() -> void:
+	var seals := units(ENEMY).filter(func(e): return e.id == "seal_of_names")
+	if seals.is_empty():
+		return
+	var s = seals[0]
+	var lanes: Array = [_lane_with_fewest_player_units()]
+	if s.hp * 2 <= s.max_hp:
+		var second := _lane_with_fewest_player_units(lanes[0])
+		if second != lanes[0]:
+			lanes.append(second)
+	var dmg := 3 if units(ENEMY).any(func(e): return e.id == "key_acolyte") else 2
+	for lane in lanes:
+		var hit := false
+		for row in 2:
+			var t = unit_at(PLAYER, row, lane)
+			if t != null:
+				_deal_damage(t, dmg, "effect")
+				hit = true
+		if not hit:
+			open_breach(PLAYER, lane, "Litany")
+			_damage_core(dmg, "Seal of Names (empty lane)")
+
+
+func _seal_of_names_false_name() -> void:
+	if not _has_living(ENEMY, "seal_of_names"):
+		return
+	if faith >= 1:
+		faith -= 1
+		deck.insert(rng.randi_range(0, maxi(0, deck.size())), _new_card("void_web"))
+		_log("False Name: the Seal spends 1 Faith and writes a Void Web into your draw pile.")
+	else:
+		open_breach(PLAYER, _lane_with_fewest_player_units(), "False Name")
 
 
 func _hades_phase_two(h) -> bool:
@@ -772,6 +1185,10 @@ func snapshot() -> Dictionary:
 		"weighing": weighing(),
 		"rot_targets": _rot_targets(),
 		"void_tide": _void_tide(),
+		"breaches": breaches.keys().filter(func(k): return breaches[k]),
+		"sealmarks": sealmarks.duplicate(),
+		"vault_cell": card_def(vault_cell["card"])["name"] if not vault_cell.is_empty() else "",
+		"vault_bleed": vault_bleed,
 		"power_uses": power_uses,
 		"power_ready": power.get("ready", true),
 		"power_ready_floor": power.get("ready_floor", 0),
@@ -796,8 +1213,31 @@ func _quicksand_targets() -> Array:
 	return out
 
 
+## Bosses whose attacks / intents change at half HP (phase 2). Not Hel or Nidhogg.
+const ENRAGE_BOSSES := ["void_herald", "apep", "hades", "ammit", "warden_eternal", "the_unbound", "seal_of_names"]
+
+
+## True when this boss is in its HP-based phase 2.
+func boss_enraged(u) -> bool:
+	return u != null and u.alive and u.id in ENRAGE_BOSSES and u.hp * 2 <= u.max_hp
+
+
+## Board art pose: helm (Hades untargetable) > breath (Nidhogg even rounds) > enraged (phase 2).
+func boss_sprite_pose(u) -> String:
+	if u == null or not u.alive:
+		return ""
+	if helm_active(u):
+		return "helm"
+	if u.id == "nidhogg" and intents.get(u.uid, {}).get("type", "") == "breath":
+		return "breath"
+	if boss_enraged(u):
+		return "enraged"
+	return ""
+
+
 func _unit_snapshot(u) -> Dictionary:
 	var intent: Dictionary = intents.get(u.uid, {})
+	var pose := boss_sprite_pose(u)
 	return {
 		"uid": u.uid, "id": u.id, "name": u.display_name(), "side": u.side,
 		"atk": effective_atk(u), "hp": u.hp, "max_hp": u.max_hp, "spd": effective_spd(u),
@@ -809,10 +1249,14 @@ func _unit_snapshot(u) -> Dictionary:
 		"poisoned": u.poisoned, "burn": u.burn, "judged": u.side == PLAYER and u.uid == judged_uid, "swine": u.uid == transformed_uid,
 		"hunted": u.side == PLAYER and u.uid == vengeance_uid and units(ENEMY).any(func(e): return e.has_kw("vengeance")),
 		"ferried": u.side == PLAYER and ferry_target() == u,
+		"celled": u.side == PLAYER and _has_living(ENEMY, "mad_turnkey") and _vault_cell_prey() == u,
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
 		"helm": helm_active(u),
 		"airborne": u.has_kw("airborne"),
 		"spellward": u.side == ENEMY and is_spellwarded(u),
+		"enraged": boss_enraged(u),
+		"bound": is_bound(u),
+		"sprite_pose": pose,
 		"armaments": u.armaments.map(func(card): return card["id"]),
 	}
 
@@ -829,6 +1273,7 @@ func _start_round() -> void:
 	drowned_lanes = []
 	for u in units(PLAYER) + units(ENEMY):
 		u.temp_atk = 0
+	_try_release_vault_cell(not _has_living(ENEMY, "mad_turnkey"))
 	_arrive_waves()
 	_advance_waiting_enemies()
 	faith = 3
@@ -843,6 +1288,9 @@ func _start_round() -> void:
 	_clear_unplayable()
 	_draw(5 if round_num == 1 else 2)
 	_declare_intents()
+	if round_num > 1:
+		_seal_of_names_litany()
+	_act3_phase_summons()
 	acted_this_plan = false
 	_plan_start = _capture()
 
@@ -905,6 +1353,10 @@ func _capture() -> Dictionary:
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
 		"gate_damage": gate_damage, "extra_waves": extra_waves.duplicate(true),
 		"claimed": claimed.duplicate(true), "hades_damage": hades_damage, "hades_freed": hades_freed,
+		"breaches": breaches.duplicate(), "sealmarks": sealmarks.duplicate(), "manacle_used": manacle_used,
+		"breach_ward_charges": breach_ward_charges,
+		"vault_bleed": vault_bleed, "sundered": sundered.duplicate(), "ward_saves": ward_saves.duplicate(),
+		"vault_cell": vault_cell.duplicate(true),
 		"power_uses": power_uses, "power_refunded": power_refunded, "power_invoked": power_invoked, "falls": falls,
 	}
 
@@ -954,6 +1406,14 @@ func restart_plan() -> String:
 	claimed = s["claimed"].duplicate()
 	hades_damage = s["hades_damage"]
 	hades_freed = s["hades_freed"]
+	breaches = s.get("breaches", {}).duplicate()
+	sealmarks = s.get("sealmarks", {}).duplicate()
+	manacle_used = s.get("manacle_used", false)
+	breach_ward_charges = s.get("breach_ward_charges", 0)
+	vault_bleed = s.get("vault_bleed", false)
+	sundered = s.get("sundered", {}).duplicate()
+	ward_saves = s.get("ward_saves", {}).duplicate()
+	vault_cell = s.get("vault_cell", {}).duplicate(true)
 	power_uses = s["power_uses"]
 	power_refunded = s["power_refunded"]
 	power_invoked = s["power_invoked"]
@@ -1100,6 +1560,32 @@ func _declare_intents() -> void:
 				lanes.sort()
 				var names: Array = lanes.map(func(l): return str(l + 1))
 				it = {"type": "constrict", "lanes": lanes, "text": "CONSTRICT lane%s %s" % ["s" if lanes.size() > 1 else "", " and ".join(names)]}
+			"warden_eternal":
+				it = {"type": "sealmark", "text": "SEALMARK your strongest lane, BREACH tax"}
+			"the_unbound":
+				it = {"type": "attack", "text": "Attack lane %d, UNRAVEL, Rift Roar" % (e.lane + 1)}
+			"seal_of_names":
+				it = {"type": "litany", "text": "LITANY emptiest lane, FALSE NAME"}
+			"door_of_gleipnir":
+				it = {"type": "sealmark", "text": "SEALMARK a lane (Bound to Anchors)"}
+			"canopic_lock":
+				it = {"type": "sealmark", "text": "SEALMARK fullest lane; Breach empty lanes"}
+			"mad_turnkey":
+				it = {"type": "sealmark", "text": "SEALMARK strongest lane, CELL marked prey"}
+			"skeleton_key":
+				it = {"type": "sealmark", "text": "SEALMARK, BREACH (Keybearer, Unravel)"}
+			"hundred_handed":
+				it = {"type": "attack", "text": "Attack lane %d (Bound to Thralls)" % (e.lane + 1)}
+			"unraveling_shade":
+				it = {"type": "attack", "text": "Attack lane %d (Unravel +1 ATK/round)" % (e.lane + 1)}
+			"void_hinge":
+				it = {"type": "attack", "text": "Attack lane %d, open BREACH" % (e.lane + 1)}
+			"key_acolyte":
+				it = {"type": "attack", "text": "Attack lane %d (Keybearer: Breaches stay open)" % (e.lane + 1)}
+			"vault_scribe":
+				it = {"type": "attack", "text": "Attack lane %d (+ATK if Breaches open)" % (e.lane + 1)}
+			"gold_seam":
+				it = {"type": "wait", "text": "BOUND: holds the largest enemy above half HP"}
 			"void_wisp":
 				it = {"type": "attack", "text": "Snipe lowest HP"}
 			"hollow_archer", "carrion_harpy":
@@ -1159,10 +1645,12 @@ func _costliest_player_unit():
 	return best
 
 
-func _lane_with_fewest_player_units() -> int:
-	var best := 0
+func _lane_with_fewest_player_units(exclude := -1) -> int:
+	var best := 0 if exclude != 0 else 1
 	var best_count := 99
 	for lane in LANES:
+		if lane == exclude:
+			continue
 		var count := 0
 		for row in 2:
 			if unit_at(PLAYER, row, lane) != null:
@@ -1171,6 +1659,15 @@ func _lane_with_fewest_player_units() -> int:
 			best_count = count
 			best = lane
 	return best
+
+
+func _player_lane_atk(lane: int) -> int:
+	var total := 0
+	for row in 2:
+		var u = unit_at(PLAYER, row, lane)
+		if u != null:
+			total += effective_atk(u)
+	return total
 
 
 func _lane_with_most_player_units(exclude := -1) -> int:
@@ -1296,11 +1793,11 @@ func _targets_for(def: Dictionary, kind: String) -> Array:
 					out.append([ENEMY, u.row, u.lane])
 		"enemy_front":
 			for u in units(ENEMY):
-				if u.row == FRONT and not u.has_kw("immovable") and not is_spellwarded(u):
+				if u.row == FRONT and not _resists_push(u) and not is_spellwarded(u):
 					out.append([ENEMY, FRONT, u.lane])
 		"enemy_pair":
 			for u in units(ENEMY):
-				if not u.has_kw("immovable") and not is_spellwarded(u):
+				if not _resists_push(u) and not is_spellwarded(u):
 					out.append([ENEMY, u.row, u.lane])
 	return out
 
@@ -1445,8 +1942,8 @@ func _check_targets(def: Dictionary, targets: Array, direction: int) -> String:
 				return "Choose an enemy front unit."
 			if is_spellwarded(_at(targets[0])):
 				return "That enemy is Spellward."
-			if _at(targets[0]).has_kw("immovable"):
-				return "Immovable units cannot be pushed."
+			if _resists_push(_at(targets[0])):
+				return "That unit cannot be pushed."
 			if direction != -1 and direction != 1:
 				return "Choose a push direction."
 		"enemy_pair":
@@ -1456,8 +1953,8 @@ func _check_targets(def: Dictionary, targets: Array, direction: int) -> String:
 			var b = _at(targets[1])
 			if a == null or b == null or a == b:
 				return "Choose two different enemy units."
-			if a.has_kw("immovable") or b.has_kw("immovable"):
-				return "Immovable units cannot be swapped."
+			if _resists_push(a) or _resists_push(b):
+				return "That unit cannot be swapped."
 			if is_spellwarded(a) or is_spellwarded(b):
 				return "Spellward units cannot be swapped."
 		"empty_ally_slot":
@@ -2004,16 +2501,29 @@ func _on_moved(u, from_lane: int) -> void:
 			_deal_damage(t, 1, "effect")
 
 
+## Immovable / enemy Sealmark: can't be pushed or swapped, and take no push-collision damage.
+func _resists_push(u) -> bool:
+	if u == null:
+		return false
+	if u.has_kw("immovable"):
+		return true
+	return u.side == ENEMY and (u.has_kw("sealmark") or int(sealmarks.get(100 + u.uid, 0)) > 0)
+
+
 ## Returns true if the unit moved, false if it hit the edge or another unit.
 func _push(u, direction: int, impact := 3) -> bool:
+	if _resists_push(u):
+		_log("%s cannot be pushed." % _unit_label(u))
+		return false
 	var dest: int = u.lane + direction
 	if dest < 0 or dest >= LANES:
 		_log("%s is slammed against the edge." % _unit_label(u))
 		_deal_damage(u, impact, "effect")
 		return false
 	var other = unit_at(ENEMY, FRONT, dest)
-	if other != null and other.has_kw("immovable"):
-		_log("%s collides with the Immovable %s." % [_unit_label(u), other.display_name()])
+	if other != null and _resists_push(other):
+		var wall := "Immovable" if other.has_kw("immovable") else "Sealmarked"
+		_log("%s collides with the %s %s." % [_unit_label(u), wall, other.display_name()])
 		_deal_damage(u, impact, "effect")
 		return false
 	if other != null:
@@ -2052,6 +2562,8 @@ func can_recall(u) -> bool:
 
 ## Why a unit can't move right now, or "" if it can.
 func move_block(u) -> String:
+	if u.side == PLAYER and sealmarks.get(u.lane, 0) > 0:
+		return "Sealmarked in this lane"
 	if is_fresh(u) and u.effect_used:
 		return "Its effect has already triggered"
 	# Reinforce (e.g. after Tyr's Oath) can attack during planning; that locks them in place.
@@ -2145,13 +2657,25 @@ func end_plan() -> Array:
 		return events
 	phase = "resolve"
 	_log("--- Round %d ---" % round_num)
+	# Expire marks from earlier rounds before resolve applies new ones, so a mark
+	# placed this resolve still locks the next planning phase.
+	_tick_sealmarks()
 	_pay_toll()
 	if result != "":
 		_finish_fight()
 		return events.duplicate()
 	_hades_claim()
+	_seal_of_names_false_name()
 	if wingbeat_dir != 0 and _has_living(ENEMY, "hraesvelgr"):
 		_wingbeat(wingbeat_dir)
+	# Warden Eternal: Sealmark the lane with the most ATK when planning ends.
+	if _has_living(ENEMY, "warden_eternal"):
+		var wlanes: Array = range(LANES)
+		var marks := 2 if units(ENEMY).any(func(e): return e.id == "warden_eternal" and e.hp * 2 <= e.max_hp) else 1
+		wlanes.sort_custom(func(a, b): return _player_lane_atk(a) > _player_lane_atk(b) or ( _player_lane_atk(a) == _player_lane_atk(b) and a < b))
+		for i in marks:
+			if i < wlanes.size():
+				sealmark_player_lane(wlanes[i], 1)
 
 	if sandstorm_row != -1:
 		_log("Sandstorm: your %s row has -1 ATK this round." % ("front" if sandstorm_row == FRONT else "back"))
@@ -2222,12 +2746,36 @@ func end_plan() -> Array:
 					_nidhogg_gnaw(boss)
 					if result == "":
 						_replenish("styx_lamprey", "Nidhogg")
+				"void_hinge":
+					_void_hinge_end(boss)
+				"door_of_gleipnir":
+					_door_of_gleipnir_end(boss)
+				"canopic_lock":
+					_canopic_lock_end(boss)
+				"mad_turnkey":
+					_mad_turnkey_end(boss)
+				"skeleton_key":
+					_skeleton_key_end(boss)
+				"warden_eternal":
+					_warden_eternal_end(boss)
+				"the_unbound":
+					_the_unbound_end(boss)
+				"seal_of_names":
+					_seal_of_names_end(boss)
 
 	if result == "":
 		var heads := units(ENEMY).filter(func(e): return e.id == "cerberus_head")
 		if heads.size() == 3:
 			for h in heads:
 				_heal(h, 2, "Cerberus")
+
+	if result == "":
+		_rift_tax()
+	if result == "":
+		_close_breaches_by_presence()
+	if result == "":
+		_vault_bleed_tax()
+	ward_saves.clear()
 
 	_end_round_checks()
 	return events.duplicate()
@@ -2321,6 +2869,15 @@ func _start_of_round(u) -> void:
 			_log("Zeus calls lightning.")
 			for t in hit:
 				_deal_damage(t, 2, "effect")
+	if u.has_kw("unravel") or u.id == "unraveling_shade":
+		u.atk += 1
+		_log("%s Unravels (+1 ATK)." % _unit_label(u))
+	if u.id == "vault_scribe" and breaches.values().count(true) > 0:
+		u.atk += 1
+		_log("Vault Scribe feeds on the Rift (+1 ATK).")
+	if u.id == "the_unbound" and u.hp * 2 > u.max_hp:
+		u.atk += 1
+		_log("The Unbound Unravels (+1 ATK).")
 
 
 func _end_of_round(u) -> void:
@@ -2487,6 +3044,8 @@ func _act(u) -> void:
 		_damage_core(atk, u.display_name(), true)
 	else:
 		_attack(u, target, atk)
+		if u.id == "gleipnir_echo" and target.side == PLAYER:
+			sealmark_player_lane(target.lane, 1)
 		if u.row == FRONT and is_wolf(u):
 			_flank(u, target)
 	if u.side == ENEMY and Data.ENEMIES[u.id].has("status_card"):
@@ -2711,8 +3270,19 @@ func _deal_damage(t, amount: int, kind: String) -> int:
 	t.shield -= absorbed
 	amount -= absorbed
 	var before: int = t.hp
+	var was_calm_boss: bool = t.id in ENRAGE_BOSSES and before * 2 > t.max_hp
 	t.hp -= amount
 	var excess: int = max(0, amount - before)
+	# Bound: clamp HP to the binder's floor (Broken Manacle skips the first clamp).
+	var floor_hp: int = bound_hp_floor(t)
+	if floor_hp > 0 and t.hp < floor_hp:
+		if has_relic("broken_manacle") and not manacle_used:
+			manacle_used = true
+			_log("Broken Manacle snaps: Bound fails this once.")
+		else:
+			excess = maxi(0, excess - (floor_hp - t.hp))
+			t.hp = floor_hp
+			_log("%s is Bound and cannot fall below %d HP." % [_unit_label(t), floor_hp])
 	if amount > 0 and actor != null and actor.side == PLAYER and t.side == ENEMY:
 		damage_dealt[actor.uid] = damage_dealt.get(actor.uid, 0) + amount
 	if t.id == "keeper_of_the_gate" and amount > 0:
@@ -2728,11 +3298,18 @@ func _deal_damage(t, amount: int, kind: String) -> int:
 		_log("%s takes %d." % [_unit_label(t), amount])
 	if t.id == "hades" and t.hp > 0 and not hades_freed and hades_damage >= HADES_FREE and not claimed.is_empty():
 		_hades_free_claim()
+	# The Unbound: big hits open Breaches.
+	if t.id == "the_unbound" and amount >= 5 and t.alive:
+		open_breach(PLAYER, t.lane, "Rift Roar")
 	if t.hp <= 0:
 		_kill(t)
+	elif _try_sunder(t, before):
+		pass
 	elif amount > 0 and t.has_kw("frenzy"):
 		t.atk += 1
 		_log("%s is driven into a Frenzy (+1 ATK)." % _unit_label(t))
+	elif was_calm_boss and boss_enraged(t):
+		_log("%s enrages!" % _unit_label(t), {"enrage": true, "enrage_slot": [t.side, t.row, t.lane]})
 	return excess
 
 
@@ -2762,6 +3339,9 @@ func _damage_core(amount: int, source: String, enemy_hit := false, extra := {}) 
 
 func _kill(u) -> void:
 	if not u.alive:
+		return
+
+	if u.side == ENEMY and _adamant_ward_save(u):
 		return
 
 	if u.side == PLAYER and u.row == FRONT and has_relic("aegis_fragment") and not aegis_used:
@@ -2829,6 +3409,43 @@ func _kill(u) -> void:
 	if u.side == ENEMY and u.has_kw("drown") and terrain_at(PLAYER, FRONT, u.lane) == "":
 		terrain[_key(PLAYER, FRONT, u.lane)] = "flooded"
 		_log("%s drowns: your lane %d front slot is Flooded." % [u.display_name(), u.lane + 1])
+	if u.side == ENEMY and (u.has_kw("breach_on_death") or u.id == "rift_mite"):
+		open_breach(ENEMY, u.lane, "%s's death" % u.display_name())
+	if u.side == ENEMY and u.id == "chain_thrall":
+		sealmark_player_lane(u.lane, 2)
+	if u.side == PLAYER and u.id != "" and actor != null and actor.alive and actor.id == "gleipnir_echo":
+		# Pierce + Sealmark: after it attacks a unit that dies, mark that unit's lane briefly — already applied on attack.
+		pass
+	if u.id == "cartouche_bound":
+		pass
+	# Partner death: Cartouche-Bound gains Frenzy when its binder dies.
+	if u.id in ["rift_mite", "gold_seam"]:
+		for c in units(ENEMY):
+			if c.id == "cartouche_bound" and c.alive:
+				if not c.has_kw("frenzy"):
+					c.bonus_kw.append("frenzy")
+				c.atk += 2
+				_log("%s breaks free (+2 ATK, Frenzy)." % _unit_label(c))
+	if u.id in ["chain_anchor", "chain_thrall", "gold_seam"]:
+		_check_pending_sunders()
+	if u.id == "canopic_lock":
+		breaches.clear()
+		_log("The Canopic Lock breaks: all Breaches close.")
+	if u.id == "mad_turnkey":
+		_try_release_vault_cell(true)
+	if u.id == "skeleton_key":
+		var mites_up := units(ENEMY).any(func(e): return e.id == "rift_mite")
+		if mites_up:
+			var a := _lane_with_fewest_player_units()
+			var b := _lane_of_strongest_player_unit()
+			if a == b:
+				b = (a + 1) % LANES
+			open_breach(PLAYER, a, "Skeleton Key shatters")
+			open_breach(PLAYER, b, "Skeleton Key shatters")
+			_log("The Skeleton Key breaks crooked — Breaches tear open.")
+		else:
+			breaches.clear()
+			_log("The Skeleton Key turns true — every Breach seals.")
 	if u.id == "cerberus_head":
 		for h in units(ENEMY):
 			if h.id == "cerberus_head":
@@ -2839,6 +3456,16 @@ func _kill(u) -> void:
 	if u.id == "keeper_of_the_gate" and not extra_waves.is_empty():
 		extra_waves.clear()
 		_log("With the Keeper gone, the Gate Guardians stay down.")
+	# Warden Eternal phase 2: front Seal Wardens revive once as Door Guardians.
+	if u.id == "seal_warden" and _has_living(ENEMY, "warden_eternal"):
+		var warden = _living("warden_eternal")
+		if warden != null and warden.hp * 2 <= warden.max_hp:
+			extra_waves.append([round_num + 2, "door_guardian", u.lane, u.row, "return"])
+	if u.id == "door_guardian" and _has_living(ENEMY, "warden_eternal"):
+		# Once only: Door Guardians do not re-queue.
+		pass
+	if u.id == "warden_eternal":
+		extra_waves = extra_waves.filter(func(w): return w[1] != "door_guardian")
 	if u.side == PLAYER and actor != null and actor.side == ENEMY and actor.alive and actor.has_kw("devour"):
 		actor.atk += 1
 		_heal(actor, 3, "Devour")
@@ -2860,10 +3487,11 @@ func _kill(u) -> void:
 	if u.side == PLAYER:
 		for hel in units(ENEMY):
 			if hel.id == "hel":
-				_log("Toll of the Dead.")
+				_log("Toll of the Dead.", {"boss_pose": "toll", "pose_slot": [hel.side, hel.row, hel.lane]})
 				_heal(hel, 2, "Toll of the Dead")
 				_damage_core(2, "Toll of the Dead")
-	if u.id in ["hel", "apep", "hades", "ammit", "nidhogg"]:
+	if u.id in ["hel", "apep", "hades", "ammit", "nidhogg", "warden_eternal", "the_unbound", "seal_of_names",
+			"door_of_gleipnir", "hundred_handed", "canopic_lock", "mad_turnkey", "skeleton_key"]:
 		extra_waves.clear()
 		for minion in units(ENEMY):
 			minion.alive = false
@@ -3008,6 +3636,10 @@ func _end_round_checks() -> void:
 
 
 func _finish_fight() -> void:
+	if not vault_cell.is_empty():
+		discard.append(vault_cell["card"])
+		_log("%s is freed from the cell as the fight ends." % card_def(vault_cell["card"])["name"])
+		vault_cell = {}
 	if result == "timeout":
 		for e in units(ENEMY):
 			if e.threat > 0:

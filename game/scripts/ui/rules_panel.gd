@@ -134,22 +134,22 @@ func _basics(page: VBoxContainer) -> void:
 	])
 
 	var act2: Dictionary = Data.ACTS[1]
+	var act3: Dictionary = Data.ACTS[2]
 	_heading(page, "map/void.png", "The run: %d acts" % Data.ACTS.size())
 	_grid(page, 3, [
 		["map/void.png", "Acts", "Each act is a %d-floor map that ends with a boss. Beat the last act's boss to win the run. No boss appears twice in a run." % Run.FLOORS],
 		["opt_heal", "Between acts", "Beating an act boss heals [b]%d%% of your missing Core HP[/b], recharges your god power and grants [b]a free god power upgrade[/b]." % roundi(Data.ACT_HEAL * 100)],
-		["map/elite.png", "Deeper acts", "Act 2 has its own enemies, elites and bosses. Rewards roll Uncommon and Rare cards more often, shop prices are %d%% higher, %d new shrine events join the pool, and a few relics (%s) only drop from Act 2 on." % [
-			roundi((act2["price_mult"] - 1.0) * 100), Data.EVENTS.values().filter(func(e): return e.get("act", 1) > 1).size(),
-			", ".join(Data.RELICS.keys().filter(func(id): return Data.RELICS[id].get("act", 1) > 1).map(func(id): return Data.RELICS[id]["name"]))]],
+		["map/elite.png", "Deeper acts", "Act 2 (Drowned Underworld) and Act 3 (Binding Vault) each have their own enemies, elites and bosses. Later acts roll rarer rewards and cost more in the shop (Act 2 +%d%%, Act 3 +%d%%). Vault relics only drop from Act 3 on." % [
+			roundi((act2["price_mult"] - 1.0) * 100), roundi((act3["price_mult"] - 1.0) * 100)]],
 	])
 	_tip(page, "Save and exit (beside Abandon run) keeps the run and returns to the menu. Continue Run, above New Run, resumes it. Saving from the map right after a card reward returns you to that reward so a misclicked pick can be redone; entering the next node locks the pick in. Abandoning, winning, or losing deletes the save. A battle in progress starts again from the beginning.")
 	_tip(page, "Winning a run unlocks badges for exceptional play (untouched bosses, gold milestones, full Core, relic hoards). Open Badges from the menu to see what you've earned. The victory screen also lets you review your final deck and relics.")
 	_tip(page, "The Shrine of the Amalgam wakes one neutral beast. It always has Chimera (counts as every token type), plus three keywords rolled from Frenzy, Revive, Cleave, Taunt, Ranged and Pierce. It never appears in rewards or shops.")
-	_tip(page, "The market sells Common, Uncommon and Rare cards for %d, %d and %d gold, and relics for %d, %d and %d. Removing a card starts at %d gold and healing %d Core HP starts at %d; each time you buy that service during the run, it costs %d or %d more. Act 2 raises every shop price by %d%%." % [
+	_tip(page, "The market sells Common, Uncommon and Rare cards for %d, %d and %d gold, and relics for %d, %d and %d. Removing a card starts at %d gold and healing %d Core HP starts at %d; each time you buy that service during the run, it costs %d or %d more. Later acts raise every shop price." % [
 		Run.CARD_PRICES["Common"], Run.CARD_PRICES["Uncommon"], Run.CARD_PRICES["Rare"],
 		Run.RELIC_PRICES["Common"], Run.RELIC_PRICES["Uncommon"], Run.RELIC_PRICES["Rare"],
 		Data.BALANCE["remove_price"], Data.BALANCE["shop_heal_amount"], Data.BALANCE["shop_heal_price"],
-		Data.BALANCE["remove_step"], Data.BALANCE["shop_heal_step"], roundi((Data.ACTS[1]["price_mult"] - 1.0) * 100)])
+		Data.BALANCE["remove_step"], Data.BALANCE["shop_heal_step"]])
 
 	_heading(page, "battle/tile_player.jpg", "The battlefield")
 	var row := HBoxContainer.new()
@@ -254,16 +254,25 @@ func _keywords(page: VBoxContainer) -> void:
 		["toll", "Toll", "Act 2. When you end planning, it takes 1 unspent Faith; with none left, the Core takes 2. The Faith counter shows the Toll while one lives - keep a Faith in reserve or kill it."],
 		["judgement", "Judgement", "Act 2. Attacks the unit of yours that made the last kill in the previous round, wherever it stands (Taunt and Airborne don't stop it). The judged unit shows a scales badge. With no judged unit, it attacks normally."],
 		["vengeance", "Vengeance", "Act 2 (the Erinyes). Attacks the unit of yours that dealt the most damage to enemies last round, wherever it stands; that unit shows a badge. With none, it attacks normally. Only one Fury is Airborne each round. Spreading your damage keeps your carry safe."],
-		["ferry", "Ferry", "Act 2 (Charon). At the end of each round, your back-row unit with the lowest HP leaves the fight. It isn't a death (no On-Death, no Revive): its card goes to your discard pile to be drawn again, and tokens are lost. The current passenger shows a badge."],
+		["ferry", "Ferry", "Act 2 (Charon). At the end of each round, your back-row unit with the lowest HP leaves the fight. It isn't a death (no On-Death, no Revive): its card goes to your discard pile to be drawn again, and tokens are lost. The current passenger shows a badge. Act 3's Mad Turnkey uses a related Cell lock: a marked unit is removed for one round without discarding, then returns."],
 		["linked", "Linked", "Act 2 (Cerberus). When one Head dies, the other Heads gain +2 ATK. At the end of a round where all three Heads live, each heals 2. Spread damage, then finish them close together."],
 		["wingbeat", "Wingbeat", "Act 2 (Hraesvelgr). When you end planning, all your units are pushed one lane in the direction shown beside your grid. A unit that would leave the board or hit an occupied slot stays put and takes 2. Immovable units don't move."],
 		["seal", "Seal", "Act 2 (Keeper of the Twelfth Gate). Your units in the sealed lane (marked SEALED) can't attack this round, until the Keeper has taken %d damage this round. While the Keeper lives, each fallen Gate Guardian comes back two rounds later (marked RETURNS on its slot)." % 6],
 		["claim", "Claim Soul", "Act 2 boss (Hades). When you end planning, Hades claims the costliest card left in your hand (two at half HP); it's out of play for the fight and listed beside the enemy grid. Dealing him 8 damage in one round frees the latest claimed card back to your hand."],
 		["weighing", "Weighing", "Act 2 boss (Ammit). At the end of each round, the heavier of your lanes 1-2 and lanes 3-4 (by total ATK) takes the difference x2, split across its front units."],
 		["gnaw", "Gnaw", "Act 2 boss (Nidhogg). At the end of each round the slot marked GNAW becomes Rotted for the rest of the fight."],
+		["bound_floor", "Bound", "Act 3. While the binder lives, a named ally cannot drop below 1 HP (or below half HP for Gold Seam). Kill the binder — or race once the floor is gone."],
+		["bound_half", "Bound (half)", "Act 3. Gold Seam: the largest other enemy cannot fall below half HP until the Seam dies."],
+		["sealmark", "Sealmark", "Act 3. Marked player lane: your units there can't leave by move during the next planning phase(s). Marked enemies can't be pushed or swapped and take no collision damage from pushes."],
+		["breach_on_death", "Breach", "Act 3. Opens a Breach. End of round: Core takes 1 per open Breach. A living unit of yours in that lane closes one unless a Keybearer lives."],
+		["keybearer", "Keybearer", "Act 3. While it lives, Breaches cannot be closed by presence."],
+		["unravel", "Unravel", "Act 3. +1 ATK at the start of each round."],
+		["sunder", "Sunder", "Act 3. At half HP the body leaves without dying (no On-Death / Revive) and splits into lesser units."],
 	])
 	_heading(page, "flooded", "Ferry arrivals")
 	page.add_child(_rich("Some Act 2 battles have enemies arriving by ferry mid-fight. Their slot is marked [color=#9fe6f0]FERRY R3[/color] (the round they arrive) from the start of the fight; hover it for details. They arrive at the start of that round's planning, in that slot or the nearest empty one. If every front slot is full they wait in the back ([b]WAIT[/b]) and, at the start of a later round, step into an empty front slot when one opens. A fight isn't won while arrivals are still to come, but arrivals planned after the round limit never come."))
+	_heading(page, "map/void.png", "Act 3 focus order")
+	page.add_child(_rich("In the Binding Vault, [b]kill order is a strategy choice[/b]. Aggressive decks often race the main body and accept Breach tax or Sealmarks; patient decks cut binders, Keybearers and Unravel first and reseal by standing in lanes. Elites and bosses are built so both paths can win."))
 
 
 func _cards(page: VBoxContainer) -> void:
@@ -350,6 +359,21 @@ func _enemies(page: VBoxContainer) -> void:
 		["enemies/hades.jpg", "Hades", "Claim Soul: when you end planning he takes the costliest card left in your hand for the rest of the fight - play it first to keep it. Dominion of the Dead: at the end of each round the Core takes 1 per card he holds, so deal him %d damage in one round to free the latest one. Every 3rd round his Helm of Darkness makes him untargetable. A Shade arrives by ferry every other round. At half HP he claims two cards a round and two Shades come at a time." % 8],
 		["enemies/ammit.jpg", "Ammit", "Weighing of the Heart: at the end of each round your total ATK in lanes 1-2 is weighed against lanes 3-4. The heavier side's front units split the difference x2 (the Core takes it if that side has no front units). At half HP it's x3 and she heals 4 per unit it kills. She attacks your highest-ATK unit and keeps two Soul Eaters in front of her."],
 		["enemies/nidhogg.jpg", "Nidhogg", "Each round it gnaws one of your slots (your highest-ATK unit's, marked GNAW); at the end of the round it becomes [b]Rotted[/b] for the fight. A unit there flees to an adjacent free slot or takes 4. After 4 Rotted slots it gnaws the Core for 2 each round instead. Every other round its poison breath hits your most crowded lane (Poison and 3 damage), and it keeps two Styx Lampreys in front of it."],
+	], 92)
+	_heading(page, "map/elite.png", "Act 3 elites")
+	page.add_child(_rich("Vault elites each offer two focus paths:"))
+	_grid(page, 3, [
+		["map/elite.png", "Door of Gleipnir", "Anchors bind the Door. Burst both Anchors then the Door, or weather Sealmarks while peeling one Anchor at a time."],
+		["map/elite.png", "Hundred-Handed", "Thralls hold it above half. Clear them for a clean Sunder, or chip to half and finish both Arms in one window."],
+		["map/elite.png", "Canopic Lock", "Race the Lock (its death closes every Breach), or fill lanes, starve Scribes, then crack it safely."],
+		["map/elite.png", "Mad Turnkey", "Key Acolyte Binds it and blocks resealing. It Sealmarks then locks a marked unit in a cell for a round. Chip to 1 then cut the Key, or kill the Key first and reseal."],
+		["map/elite.png", "Skeleton Key", "Keybearer + Unravel; Mites open Breaches on death. Race it and eat a Breach burst while Mites live, or clear Mites so its death seals every rift."],
+	], 72)
+	page.add_child(_rich("[b]Act 3 bosses[/b] (the Binding Vault):"))
+	_grid(page, 3, [
+		["map/void.png", "Warden Eternal", "Sealmarks your strongest lane and taxes Breaches. Race the Warden (aggressive) or kill front Wardens, keep lanes filled, and reseal (patient). Phase 2 adds a Key Acolyte."],
+		["map/void.png", "The Unbound", "Gold Seam holds half HP while Unravel grows. Big hits open Breaches. Cut the Seam and dump into Sunder husks, or chip patiently and keep every slot filled for phase-2 bleed."],
+		["map/void.png", "Seal of Names", "Litany punishes empty lanes; False Name steals Faith or opens a Breach. Wide decks fill and grind; Faith decks dump or race. Phase 2 Key Acolyte: kill to reseal, or ignore Breaches and finish the Seal."],
 	], 92)
 	_tip(page, "When a boss falls, its minions go with it.")
 

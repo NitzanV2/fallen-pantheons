@@ -68,6 +68,13 @@ const KEYWORD_INFO := {
 	"claim": ["Claim Soul", "When you end planning, Hades claims your costliest card for the fight. 8 damage to him in a round frees the latest."],
 	"weighing": ["Weighing", "End of round: the heavier of your lanes 1-2 and 3-4 takes the ATK difference x2 on its front units."],
 	"gnaw": ["Gnaw", "End of round: the marked slot of yours becomes Rotted for the fight; a unit there must flee or take 4."],
+	"bound_floor": ["Bound", "While this binder lives, another enemy cannot drop below 1 HP."],
+	"bound_half": ["Bound", "While this lives, the largest other enemy cannot fall below half HP."],
+	"sealmark": ["Sealmark", "Marked player lanes: your units there can't leave by move for that many planning phases. Marked enemies can't be pushed or swapped and take no collision damage from pushes."],
+	"breach_on_death": ["Breach", "On death, opens a Breach. Core takes 1 per open Breach each round; presence reseals unless a Keybearer lives."],
+	"keybearer": ["Keybearer", "While it lives, Breaches cannot be closed."],
+	"unravel": ["Unravel", "+1 ATK at the start of each round."],
+	"sunder": ["Sunder", "At half HP it leaves without dying and splits into lesser units."],
 	"flooded": ["Flooded", "Terrain: the unit there has -1 ATK and can't Revive."],
 	"sunlit": ["Sunlit", "Terrain on your side: the unit there has +1 ATK, and its attacks apply Burn 1."],
 	"spellward": ["Spellward", "Your spells can't target it or the enemies next to it."],
@@ -109,10 +116,19 @@ static func board_sprite_stem(id: String) -> String:
 	return id
 
 
-## Path for a board sprite. Prefer `{id}_airborne[.png|_attack.png]` when `airborne` and that file exists.
-static func board_sprite_path(id: String, attack := false, airborne := false) -> String:
+## Path for a board sprite. Prefer `{id}_airborne[.png|_attack.png]` when `airborne`.
+## Prefer `{id}_{pose}[.png|_attack.png]` when `pose` is set (enraged / helm / toll / breath).
+static func board_sprite_path(id: String, attack := false, airborne := false, pose := "") -> String:
 	var stem := board_sprite_stem(id)
 	var suffix := "_attack" if attack else ""
+	if pose != "":
+		if airborne:
+			var air_pose := "res://art/sprites/%s_airborne_%s%s.png" % [stem, pose, suffix]
+			if ResourceLoader.exists(air_pose):
+				return air_pose
+		var posed := "res://art/sprites/%s_%s%s.png" % [stem, pose, suffix]
+		if ResourceLoader.exists(posed):
+			return posed
 	if airborne:
 		var air := "res://art/sprites/%s_airborne%s.png" % [stem, suffix]
 		if ResourceLoader.exists(air):
@@ -123,9 +139,10 @@ static func board_sprite_path(id: String, attack := false, airborne := false) ->
 ## Frameless board sprite when `res://art/sprites/{id}.png` exists. Null otherwise.
 ## Pass `attack` true for the strike pose used during the lunge / shot (`{id}_attack.png`).
 ## Pass `airborne` true to use `{id}_airborne` art when present (Erinyes flying Fury).
+## Pass `pose` for boss state art: enraged, helm, toll, breath (`{id}_{pose}.png`).
 ## Returns a host Control; the TextureRect is in meta `board_tex` (aspect-fit, floor-pinned).
-static func board_sprite(id: String, attack := false, airborne := false) -> Control:
-	var path := board_sprite_path(id, attack, airborne)
+static func board_sprite(id: String, attack := false, airborne := false, pose := "") -> Control:
+	var path := board_sprite_path(id, attack, airborne, pose)
 	if not ResourceLoader.exists(path):
 		return null
 	var host := Control.new()
@@ -166,8 +183,8 @@ static func board_sprite_relayout(art: Control) -> void:
 		(host.get_meta("board_layout") as Callable).call()
 
 
-static func board_sprite_texture(id: String, attack := false, airborne := false) -> Texture2D:
-	var path := board_sprite_path(id, attack, airborne)
+static func board_sprite_texture(id: String, attack := false, airborne := false, pose := "") -> Texture2D:
+	var path := board_sprite_path(id, attack, airborne, pose)
 	return load(path) as Texture2D if ResourceLoader.exists(path) else null
 
 
@@ -443,6 +460,32 @@ static func card_button(card_id: String, selected := false, cost := -1) -> Butto
 	return button
 
 
+## Compact enemy/elite/boss card for the sandbox list. Hover shows the full enemy face.
+static func enemy_button(enemy_id: String) -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = CARD_SIZE
+	button.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	var face := enemy_face(enemy_id, CARD_SIZE)
+	button.add_child(face)
+	button.mouse_entered.connect(func():
+		face.position.y = -6
+		var preview = _preview()
+		if preview:
+			preview.show_enemy(enemy_id, button))
+	button.mouse_exited.connect(func():
+		face.position.y = 0
+		var preview = _preview()
+		if preview:
+			preview.hide_card(button))
+	button.tree_exiting.connect(func():
+		var preview = _preview()
+		if preview:
+			preview.hide_card(button))
+	return button
+
+
 static func _preview():
 	var tree := Engine.get_main_loop() as SceneTree
 	return tree.get_first_node_in_group("card_preview") if tree else null
@@ -671,9 +714,31 @@ static func glossary_icons(def: Dictionary, card_id: String) -> Array:
 static func bold_keywords(text: String) -> String:
 	for i in NOT_KEYWORDS.size():
 		text = text.replace(NOT_KEYWORDS[i], "{%d}" % i)
+	# Longest first so "Sealmark" isn't eaten by "Seal", "Claim Soul" by shorter words, etc.
+	var words: Array = []
+	var seen := {}
 	for id in KEYWORD_INFO:
 		var word: String = KEYWORD_INFO[id][0]
-		text = text.replace(word, "[b]%s[/b]" % word)
+		if seen.has(word):
+			continue
+		seen[word] = true
+		words.append(word)
+	words.sort_custom(func(a: String, b: String) -> bool: return a.length() > b.length())
+	var placeholders: Array = []
+	for word in words:
+		var pattern := "\\b%s(?:ing|s)?\\b" % word.replace("-", "\\-").replace(" ", "\\s+")
+		var re := RegEx.create_from_string(pattern)
+		var start := 0
+		while true:
+			var m := re.search(text, start)
+			if m == null:
+				break
+			var ph := "§%d§" % placeholders.size()
+			placeholders.append(m.get_string())
+			text = text.substr(0, m.get_start()) + ph + text.substr(m.get_end())
+			start = m.get_start() + ph.length()
+	for i in placeholders.size():
+		text = text.replace("§%d§" % i, "[b]%s[/b]" % placeholders[i])
 	for i in NOT_KEYWORDS.size():
 		text = text.replace("{%d}" % i, NOT_KEYWORDS[i])
 	return text

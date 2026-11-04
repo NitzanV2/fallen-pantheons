@@ -122,6 +122,19 @@ func _music_kind() -> String:
 	return "battle"
 
 
+## Act 1 default courtyard; Act 2 necropolis; Act 3 vault antechamber, or innermost gate for bosses.
+func _battle_background_path() -> String:
+	var battle: Dictionary = params["battle"]
+	var act: int = int(battle.get("act", 1))
+	if act == 3:
+		if _music_kind() == "boss":
+			return "res://art/battle/background_act3_boss.jpg"
+		return "res://art/battle/background_act3.jpg"
+	if act == 2:
+		return "res://art/battle/background_act2.jpg"
+	return "res://art/battle/background.jpg"
+
+
 func _exit_tree() -> void:
 	if run_mode:
 		Music.play_act_theme(int(params["battle"].get("act", 1)))
@@ -161,7 +174,7 @@ func _build() -> void:
 	fill.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(fill)
 	var bg := TextureRect.new()
-	bg.texture = load("res://art/battle/background_act2.jpg" if params["battle"].get("act", 1) == 2 else "res://art/battle/background.jpg")
+	bg.texture = load(_battle_background_path())
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_SCALE
 	bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
@@ -173,6 +186,8 @@ func _build() -> void:
 	board = BoardView.new()
 	board.position = BOARD_RECT.position
 	board.size = BOARD_RECT.size
+	if int(params["battle"].get("act", 1)) == 3:
+		board.use_vault_tiles = true
 	add_child(board)
 	board.slot_pressed.connect(_on_slot_pressed)
 	board.slot_hovered.connect(_on_slot_hovered)
@@ -632,7 +647,12 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 		var drowned: int = snap.get("drowned_lanes", []).count(lane)
 		if drowned > 0:
 			out.append(["", "Drowned lane", "Your units in this lane get -%d ATK this round." % drowned, TERRAIN_COLORS["flooded"]])
-	else:
+		var mark_left: int = int(snap.get("sealmarks", {}).get(lane, 0))
+		if mark_left > 0:
+			out.append(["sealmark", "Sealmarked (%d)" % mark_left, "Units here cannot leave this lane by move until the mark ends.", Color(1.0, 0.88, 0.45)])
+	if ("%d:%d" % [side, lane]) in snap.get("breaches", []):
+		out.append(["breach_on_death", "Breach", "Open Breach in this lane. End of round: Core takes 1 per open Breach. Your presence here closes it unless a Keybearer lives.", Color(0.95, 0.7, 1.0)])
+	if side == E:
 		for w in snap.get("waves", []):
 			if w["lane"] == lane and w["row"] == row and w.get("returning", false):
 				out.append(["", "Returns: round %d" % w["round"], "%s comes back here at the start of round %d (or in the nearest empty slot) unless the Keeper falls first." % [w["name"], w["round"]], Color(0.95, 0.8, 0.45)])
@@ -1105,12 +1125,18 @@ func _on_end_pressed() -> void:
 		last_actor = actor_uid
 		if not skip_animation:
 			_render(ev["snap"])
-			if actor_uid != -1:
+			if ev.get("enrage", false):
+				board.play_boss_pose(ev.get("enrage_slot"), "enraged", Color(0.85, 0.12, 0.18))
+			elif ev.get("boss_pose", "") != "":
+				board.play_boss_pose(ev.get("pose_slot"), str(ev["boss_pose"]))
+			elif actor_uid != -1:
 				board.play_event(ev, order, fresh)
 			var delay := STEP_DELAY
 			if ev.has("void_tide"):
 				_play_void_tide(ev["void_tide"])
 				delay = VOID_TIDE_DELAY
+			elif ev.get("enrage", false) or ev.get("boss_pose", "") != "":
+				delay = 0.7
 			elif ev.has("target") or ev.has("core"):
 				delay = ATTACK_DELAY
 			await get_tree().create_timer(delay).timeout

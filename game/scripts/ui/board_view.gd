@@ -41,12 +41,17 @@ var textures := {}
 var labels: Control
 ## When true, hit-test tiles only (ignore tall sprites overlapping neighboring slots). Used while choosing a move destination.
 var prefer_tiles := false
+## Act 3 Binding Vault: gold-inlaid charcoal flagstones instead of the default courtyard tiles.
+var use_vault_tiles := false
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	for id in ["player", "enemy", "ley_line", "ruins", "quicksand", "sunlit", "flooded", "rotted"]:
 		textures[id] = load("res://art/battle/tile_%s.jpg" % id)
+	if use_vault_tiles:
+		textures["player"] = load("res://art/battle/tile_vault_player.jpg")
+		textures["enemy"] = load("res://art/battle/tile_vault_enemy.jpg")
 	labels = Control.new()
 	labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	labels.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -219,6 +224,21 @@ func _draw_tile(side: int, row: int, lane: int, i: int) -> void:
 		if "%d:%d" % [row, lane] in snap.get("rot_targets", []):
 			draw_colored_polygon(quad, Color(0.5, 0.75, 0.2, 0.3 + 0.1 * sin(pulse * 4.0)))
 			_tile_text(quad, "GNAW", int(14 * depth), Color(0.8, 1.0, 0.5))
+		var mark_left: int = int(snap.get("sealmarks", {}).get(lane, 0))
+		if mark_left > 0:
+			draw_colored_polygon(quad, Color(0.95, 0.78, 0.35, 0.22 + 0.08 * sin(pulse * 3.5)))
+			if row == 0:
+				_tile_text(quad, "MARK %d" % mark_left, int(13 * depth), Color(1.0, 0.88, 0.45))
+	if not snap.is_empty() and ("%d:%d" % [side, lane]) in snap.get("breaches", []):
+		var pulse_a: float = 0.28 + 0.12 * sin(pulse * 5.0)
+		draw_colored_polygon(quad, Color(0.72, 0.22, 0.95, pulse_a))
+		# Crack lines so Breaches read even under tokens.
+		var c: Vector2 = (quad[0] + quad[1] + quad[2] + quad[3]) / 4.0
+		draw_line(quad[0], c, Color(0.95, 0.55, 1.0, 0.85), 2.0, true)
+		draw_line(quad[2], c, Color(0.85, 0.35, 1.0, 0.7), 1.5, true)
+		draw_line(quad[1], c, Color(0.7, 0.4, 1.0, 0.55), 1.5, true)
+		if row == 0:
+			_tile_text(quad, "BREACH", int(14 * depth), Color(0.95, 0.7, 1.0))
 	if side == E and not snap.is_empty():
 		for w in snap.get("waves", []):
 			if w["lane"] == lane and w["row"] == row:
@@ -284,6 +304,12 @@ func _draw_labels() -> void:
 		elif snap.get("sealed_lane", -1) == lane:
 			text = "SEAL BROKEN" if snap.get("seal_broken", false) else "SEALED"
 			color = Color(0.95, 0.8, 0.45)
+		elif int(snap.get("sealmarks", {}).get(lane, 0)) > 0:
+			text = "SEALMARK (%d)" % int(snap["sealmarks"][lane])
+			color = Color(1.0, 0.88, 0.45)
+		elif ("%d:%d" % [P, lane]) in snap.get("breaches", []) or ("%d:%d" % [E, lane]) in snap.get("breaches", []):
+			text = "BREACH"
+			color = Color(0.95, 0.7, 1.0)
 		else:
 			for row in 2:
 				if "%d:%d" % [row, lane] in snap.get("rot_targets", []):
@@ -324,6 +350,14 @@ func _draw_labels() -> void:
 		for k in lines.size():
 			labels.draw_string_outline(font, Vector2(x - 190, y + k * 18), lines[k], HORIZONTAL_ALIGNMENT_RIGHT, 190, 15, 5, Color(0, 0, 0, 0.9))
 			labels.draw_string(font, Vector2(x - 190, y + k * 18), lines[k], HORIZONTAL_ALIGNMENT_RIGHT, 190, 15, Color(1.0, 0.6, 0.55) if k == 0 else Color(0.85, 0.82, 0.9))
+	var cell_name: String = snap.get("vault_cell", "")
+	if cell_name != "":
+		var cy: float = ROW_Y[row_index(E, 0)][0] + 10
+		var cx: float = CENTER_X - half_width(cy) - 16
+		var cell_lines: Array = ["LOCKED IN CELL", cell_name]
+		for k in cell_lines.size():
+			labels.draw_string_outline(font, Vector2(cx - 190, cy + k * 18), cell_lines[k], HORIZONTAL_ALIGNMENT_RIGHT, 190, 15, 5, Color(0, 0, 0, 0.9))
+			labels.draw_string(font, Vector2(cx - 190, cy + k * 18), cell_lines[k], HORIZONTAL_ALIGNMENT_RIGHT, 190, 15, Color(0.95, 0.8, 0.45) if k == 0 else Color(0.9, 0.85, 0.7))
 	var dir: int = snap.get("wingbeat", 0)
 	if dir != 0:
 		var y: float = (ROW_Y[row_index(P, 0)][0] + ROW_Y[row_index(P, 1)][1]) / 2.0
@@ -437,7 +471,8 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 	var icon_band: float = 28 * sc
 	var art_bottom: float = size.y - bar_h - 4 * sc
 	var flying: bool = u.get("airborne", false)
-	var sprite := CardWidget.board_sprite(u["id"], false, flying)
+	var pose: String = str(u.get("sprite_pose", ""))
+	var sprite := CardWidget.board_sprite(u["id"], false, flying, pose)
 	var framed := sprite == null
 	if framed:
 		var frame := Panel.new()
@@ -476,8 +511,9 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 		var board_tex: TextureRect = sprite.get_meta("board_tex")
 		root.set_meta("sprite_art", board_tex)
 		root.set_meta("sprite_idle", board_tex.texture)
-		root.set_meta("sprite_attack", CardWidget.board_sprite_texture(u["id"], true, flying))
+		root.set_meta("sprite_attack", CardWidget.board_sprite_texture(u["id"], true, flying, pose))
 		root.set_meta("unit_id", u["id"])
+		root.set_meta("sprite_pose", pose)
 
 	if enemy and u.get("intent", "") != "":
 		var intent_y: float = icon_top - 22 * sc if sprite != null else art_bottom - 20 * sc
@@ -527,8 +563,9 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 	for kw in kws:
 		if CardWidget.KEYWORD_INFO.has(kw):
 			icons.add_child(CardWidget.icon(kw, 22 * sc))
-	for pair in [["judgement", u.get("judged", false)], ["vengeance", u.get("hunted", false)], ["ferry", u.get("ferried", false)], ["revive", u["revive"]], ["poison", u.get("poisoned", false)], ["veil", u.get("veil", false)],
-			["spellward", u.get("spellward", false)], ["helm", u.get("helm", false)], ["airborne", u.get("airborne", false)], ["frenzy", u["empowered"]]]:
+	for pair in [["judgement", u.get("judged", false)], ["vengeance", u.get("hunted", false)], ["ferry", u.get("ferried", false) or u.get("celled", false)], ["revive", u["revive"]], ["poison", u.get("poisoned", false)], ["veil", u.get("veil", false)],
+			["spellward", u.get("spellward", false)], ["helm", u.get("helm", false)], ["bound", u.get("bound", false)],
+			["airborne", u.get("airborne", false)], ["frenzy", u["empowered"]]]:
 		if pair[1] and not kws.has(pair[0]):
 			icons.add_child(CardWidget.icon(pair[0], 22 * sc))
 	if u.get("burn", 0) > 0:
@@ -649,6 +686,12 @@ static func short_intent(text: String, type: String) -> String:
 
 ## Animates one resolve event: turn-order badge (no gold frame), melee lunges, ranged bolts.
 func play_event(ev: Dictionary, order: int, fresh: bool) -> void:
+	if ev.get("enrage", false):
+		play_boss_pose(ev.get("enrage_slot"), "enraged", Color(0.85, 0.12, 0.18))
+		return
+	if ev.get("boss_pose", "") != "":
+		play_boss_pose(ev.get("pose_slot"), str(ev["boss_pose"]), _pose_flash_color(str(ev["boss_pose"])))
+		return
 	var token := _token_for(ev.get("actor"))
 	if token == null:
 		return
@@ -670,6 +713,56 @@ func play_event(ev: Dictionary, order: int, fresh: bool) -> void:
 			_impact(target, hit_delay)
 	elif ev.get("core", false):
 		_lunge(token, token.position + Vector2(token.size.x / 2, token.size.y + 400))
+
+
+func _pose_flash_color(pose: String) -> Color:
+	match pose:
+		"toll":
+			return Color(0.55, 0.15, 0.75)
+		"helm":
+			return Color(0.25, 0.2, 0.55)
+		"breath":
+			return Color(0.35, 0.85, 0.35)
+		_:
+			return Color(0.85, 0.12, 0.18)
+
+
+## Short pulse when a boss enters a special pose: flash, scale kick, swap to posed art if present.
+func play_boss_pose(slot, pose: String, flash_color := Color(0.85, 0.12, 0.18)) -> void:
+	var token := _token_for(slot)
+	if token == null:
+		return
+	move_child(token, get_child_count() - 1)
+	move_child(labels, get_child_count() - 1)
+	var unit_id: String = str(token.get_meta("unit_id", ""))
+	if unit_id != "" and token.has_meta("sprite_art"):
+		var posed_idle := CardWidget.board_sprite_texture(unit_id, false, false, pose)
+		var posed_atk := CardWidget.board_sprite_texture(unit_id, true, false, pose)
+		if posed_idle != null:
+			token.set_meta("sprite_idle", posed_idle)
+			token.set_meta("sprite_attack", posed_atk if posed_atk != null else posed_idle)
+			var art: TextureRect = token.get_meta("sprite_art")
+			art.texture = posed_idle
+			CardWidget.board_sprite_relayout(art)
+	var flash := ColorRect.new()
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.color = Color(flash_color, 0.0)
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	token.add_child(flash)
+	var start_scale: Vector2 = token.scale
+	var tween := token.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(token, "scale", start_scale * 1.18, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(flash, "color:a", 0.55, 0.12)
+	tween.chain().set_parallel(true)
+	tween.tween_property(token, "scale", start_scale, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(flash, "color:a", 0.0, 0.35)
+	tween.chain().tween_callback(flash.queue_free)
+
+
+## Phase-2 enrage pulse (kept for callers).
+func play_enrage(slot) -> void:
+	play_boss_pose(slot, "enraged", Color(0.85, 0.12, 0.18))
 
 
 func _token_for(slot) -> Control:

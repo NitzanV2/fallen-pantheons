@@ -9,12 +9,20 @@
   act2_battle.ogg Act 2 normal fights.
   act2_elite.ogg  Act 2 elite fights.
   act2_boss.ogg   Act 2 boss fights.
+  act3_theme.ogg  Act 3 map screens (Binding Vault — bronze/charcoal C#m).
+  act3_battle.ogg Act 3 normal fights.
+  act3_elite.ogg  Act 3 elite fights.
+  act3_boss.ogg   Act 3 boss fights.
 
 Each loop is rendered three times back to back and the middle pass is kept, so reverb and
 release tails (and slightly early notes of the next pass) are already present at its edges.
 
-Usage: py -3 tools/compose_music.py   (needs numpy, scipy, soundfile)
+Usage: py -3 tools/compose_music.py [theme|act1|act2|act3|all]
+       (needs numpy, scipy, soundfile)
 """
+from __future__ import annotations
+
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -177,6 +185,24 @@ def snare():
 def hat():
     t = times(0.12)
     return highpass(rng.standard_normal(len(t)), 7000) * np.exp(-t * 60)
+
+
+def chain_rattle(bright=True):
+    """Short metallic scrape — Binding Vault chain / seal hinge."""
+    t = times(0.45 if bright else 0.7)
+    noise = highpass(rng.standard_normal(len(t)), 2500 if bright else 1200)
+    ring = np.sin(2 * np.pi * (1800 if bright else 900) * t) * np.exp(-t * 18)
+    return (noise * np.exp(-t * (14 if bright else 9)) + 0.35 * ring) * np.minimum(1, t / 0.002)
+
+
+def anvil(f=110.0):
+    """Hard bronze strike for vault doors and seals."""
+    t = times(1.4)
+    x = np.sin(2 * np.pi * f * t) * np.exp(-t * 9)
+    x += 0.55 * np.sin(2 * np.pi * f * 2.76 * t) * np.exp(-t * 14)
+    x += 0.25 * np.sin(2 * np.pi * f * 5.4 * t) * np.exp(-t * 22)
+    x += 0.2 * highpass(rng.standard_normal(len(t)), 4000) * np.exp(-t * 40)
+    return x * np.minimum(1, t / 0.001)
 
 
 def _hats(song, t0, beat, steps, gain=0.1, pan=0.3):
@@ -724,19 +750,265 @@ def act2_boss(song: Song, off: float) -> None:
     song.line("melody", bell, "B4:4 E5:4 A4:4 E4:4", off + 24 * bar, beat, 0.35, 0.2)
 
 
+def act3_theme(song: Song, off: float) -> None:
+    """Binding Vault map: locked C#m Phrygian — bronze drones, not Act 1 bells or Act 2 ferry."""
+    beat = 60 / 56
+    bar = 4 * beat
+    # Phrygian vault cycle: flat-II (D) and V (G#) seal the door
+    prog = ["C#m", "D", "C#m", "G#", "F#m", "D", "A", "G#",
+            "C#m", "D", "F#m", "G#", "A", "D", "C#m", "G#"]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        for j, m in enumerate([r - 5, r, r + 7, r + 12]):
+            song.add("pad", pad(hz(m), bar * 1.15), t0, 0.95, -0.4 + 0.25 * j)
+        song.add("bass", bass(hz(r - 12), bar * 0.9), t0, 0.9)
+        # Sparse anvil / chain — mechanical vault, not water drips or star bells
+        phrase = i // 4
+        if phrase == 0:
+            if i % 2 == 0:
+                song.add("drums", anvil(hz(r - 12)), t0, 0.45)
+            song.add("drums", chain_rattle(False), t0 + 3 * beat, 0.25, 0.35)
+        elif phrase == 1:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.55)
+            song.add("drums", chain_rattle(True), t0 + 2 * beat, 0.3, -0.3)
+            song.add("drums", frame_drum(), t0 + 3 * beat, 0.35)
+        elif phrase == 2:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.6)
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.4)
+            song.add("drums", chain_rattle(True), t0 + 2.5 * beat, 0.35, 0.4)
+            song.add("drums", chain_rattle(False), t0 + 3.5 * beat, 0.28, -0.4)
+            _hats(song, t0, beat, [0.35, 0, 0, 0, 0.2, 0, 0, 0, 0.3, 0, 0, 0, 0.15, 0, 0, 0], 0.06)
+        else:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.5)
+            if i == 14:
+                song.add("drums", chain_rattle(True), t0 + beat, 0.32, 0.2)
+                song.add("drums", frame_drum(), t0 + 2.5 * beat, 0.35)
+            elif i == 15:
+                song.add("drums", anvil(hz(r - 5)), t0 + 2 * beat, 0.55)
+                song.add("drums", chain_rattle(False), t0 + 3 * beat, 0.4, -0.25)
+        if i % 4 == 0:
+            song.add("melody", bell(hz(r + 19), bar * 0.7), t0 + beat, 0.35, 0.25)
+    # Descending fourths (falling chains) + low bronze choir
+    song.line("melody", bell, "C#4:3 G#3:1 C#4:2 D4:2 C#4:4 R:2 G#3:2 "
+              "A3:2 F#3:2 G#3:4 D4:3 C#4:1 G#3:4", off, beat, pan=-0.15)
+    song.line("choir", choir, "C#3:4 D3:4 C#3:4 G#2:4 F#3:2 A3:2 D3:4 G#2:4", off, beat, 0.75, 0.0, 0)
+    phrase2 = "C#5:4 B4:2 A4:2 G#4:4 F#4:4 R:2 D5:1 C#5:1 B4:2 A4:2 G#4:4 F#4:4"
+    song.line("choir", choir, phrase2, off + 8 * bar, beat, 0.85, 0.0, -12)
+    song.line("melody", bell, "G#4:2 R:2 C#4:4 R:2 D4:2 C#4:6", off + 8 * bar, beat, 0.5, 0.2)
+
+
+def act3_battle(song: Song, off: float) -> None:
+    """Seal-hinge fight: locked fifth ostinato + chain scrapes — not Act 1 gallop or Act 2 ferry."""
+    beat = 60 / 118
+    bar = 4 * beat
+    cycle = ["C#m", "A", "F#m", "G#", "C#m", "D", "F#m", "G#"]
+    prog = cycle + cycle + ["F#m", "A", "C#m", "G#", "D", "A", "C#m", "G#"]
+    # Mechanical seal-gear figure (straight 8ths with locked fifths)
+    steps = [0, 7, 0, 12, 0, 7, 12, 0, 0, 7, 0, 12, 7, 0, 12, 7]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        for j, m in enumerate([r, r + 7, r + 12, r + 12 + third]):
+            song.add("pad", pad(hz(m), bar), t0, 1.0, -0.3 + 0.2 * j)
+        ostinato(song, r, third, t0, beat, steps, gain=0.95)
+        for e in (0, 2, 4, 6):
+            song.add("bass", bass(hz(r - 12), beat * 0.7), t0 + e * beat / 2, 0.95 if e % 4 == 0 else 0.7)
+        arc = i // 8
+        song.add("drums", taiko(True), t0, 0.85)
+        if arc == 0:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.4)
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.55)
+            song.add("drums", chain_rattle(True), t0 + 2.5 * beat, 0.35, 0.3)
+            _hats(song, t0, beat, [0.5, 0, 0.25, 0, 0.35, 0, 0.2, 0, 0.45, 0, 0.25, 0, 0.3, 0, 0.2, 0], 0.08)
+        elif arc == 1:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.5)
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.7)
+            song.add("drums", chain_rattle(True), t0 + beat, 0.3, -0.35)
+            song.add("drums", snare(), t0 + 2.5 * beat, 0.4)
+            song.add("drums", chain_rattle(False), t0 + 3.5 * beat, 0.32, 0.4)
+            _hats(song, t0, beat, [0.6, 0, 0.3, 0.3, 0.45, 0, 0.5, 0.25, 0.55, 0, 0.3, 0.35, 0.4, 0, 0.45, 0.2], 0.1)
+        else:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.55)
+            song.add("drums", taiko(False), t0 + beat, 0.5)
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.75)
+            song.add("drums", taiko(True), t0 + 3 * beat, 0.55)
+            song.add("drums", snare(), t0 + 1.5 * beat, 0.35)
+            song.add("drums", snare(), t0 + 2.5 * beat, 0.45)
+            song.add("drums", chain_rattle(True), t0 + 3.5 * beat, 0.4, 0.25)
+            _hats(song, t0, beat, [0.7, 0.25, 0.4, 0.35, 0.55, 0.3, 0.55, 0.3, 0.65, 0.25, 0.4, 0.4, 0.5, 0.3, 0.55, 0.35], 0.11)
+        if i % 4 == 3:
+            _fill_taiko(song, t0, beat, 10, 0.22, 0.04)
+            song.add("drums", chain_rattle(True), t0 + 3.5 * beat, 0.35, -0.2)
+        if i % 4 == 0:
+            song.add("melody", bell(hz(r + 24), beat * 1.5), t0 + beat, 0.4, 0.3)
+        if i >= 16:
+            for m in [r + 7, r + 12, r + 19]:
+                song.add("choir", choir(hz(m), bar), t0, 0.28)
+    # Stacked fourths tightening into the seal — opposite of Act 2's falling ferry
+    song.line("melody", brass, "C#4:2 G#4:1 C#5:1 G#4:2 F#4:2 E4:1 F#4:1 G#4:2 C#4:4 "
+              "D4:2 A4:1 D5:1 A4:2 G#4:1 F#4:1 E4:2 D4:1 C#4:1 G#3:4", off + 8 * bar, beat)
+    song.line("melody", bell, "C#5:2 R:1 G#4:1 F#4:4 R:2 E4:2 C#4:4", off + 8 * bar, beat, 0.5, -0.2)
+    final = "C#5:3 G#4:1 F#4:4 A4:2 D5:2 C#5:8 G#4:2 F#4:2 C#4:4 G#3:4"
+    song.line("choir", choir, final, off + 16 * bar, beat, 1.0, 0.0, -12)
+    song.line("melody", brass, final, off + 16 * bar, beat, 0.5)
+    song.line("melody", bell, "C#5:4 G#4:4 F#4:4 C#4:4", off + 16 * bar, beat, 0.4, 0.15)
+
+
+def act3_elite(song: Song, off: float) -> None:
+    """Breach-hunt pulse: jagged seal cracks and short bronze cells."""
+    beat = 60 / 128
+    bar = 4 * beat
+    cycle = ["C#m", "D", "C#m", "G#", "F#m", "A", "F#m", "G#"]
+    prog = cycle + cycle + ["A", "G#", "C#m", "D", "F#m", "G#", "C#m", "G#"]
+    steps = [0, 0, 12, 7, 0, 12, "t", 7, 0, 1, 12, 7, 0, 12, 7, 0]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        for j, m in enumerate([r, r + 7, r + 12, r + 12 + third]):
+            song.add("pad", pad(hz(m), bar), t0, 1.0, -0.3 + 0.2 * j)
+        ostinato(song, r, third, t0, beat, steps, gain=1.1, low=True)
+        for e in range(8):
+            song.add("bass", bass(hz(r - 12), beat * 0.4), t0 + e * beat / 2, 1.05 if e % 2 == 0 else 0.7)
+        arc = i // 8
+        song.add("drums", taiko(True), t0, 1.0)
+        if arc == 0:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.5)
+            song.add("drums", taiko(False), t0 + 2 * beat, 0.7)
+            song.add("drums", chain_rattle(True), t0 + 3 * beat, 0.4, 0.35)
+            song.add("drums", snare(), t0 + 2 * beat, 0.4)
+            _hats(song, t0, beat, [0.7, 0, 0.35, 0, 0.5, 0, 0.3, 0, 0.65, 0, 0.35, 0, 0.45, 0, 0.25, 0], 0.11)
+        elif arc == 1:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.55)
+            song.add("drums", taiko(False), t0 + beat, 0.7)
+            song.add("drums", taiko(True), t0 + 2 * beat, 0.85)
+            song.add("drums", chain_rattle(False), t0 + 3 * beat, 0.45, -0.3)
+            for e in (1, 2, 3):
+                song.add("drums", snare(), t0 + e * beat, 0.45)
+            _hats(song, t0, beat, [0.8, 0.35, 0.5, 0.3, 0.7, 0.35, 0.45, 0.25, 0.75, 0.4, 0.5, 0.3, 0.65, 0.4, 0.55, 0.35], 0.12)
+        else:
+            song.add("drums", anvil(hz(r - 12)), t0, 0.6)
+            song.add("drums", anvil(hz(r - 5)), t0 + 2 * beat, 0.45)
+            song.add("drums", taiko(False), t0 + 0.5 * beat, 0.45)
+            song.add("drums", taiko(False), t0 + beat, 0.8)
+            song.add("drums", taiko(True), t0 + 2 * beat, 0.9)
+            song.add("drums", chain_rattle(True), t0 + 2.5 * beat, 0.4, 0.4)
+            song.add("drums", snare(), t0 + beat, 0.5)
+            song.add("drums", snare(), t0 + 2 * beat, 0.4)
+            song.add("drums", snare(), t0 + 3 * beat, 0.55)
+            _hats(song, t0, beat, [0.95, 0.45, 0.6, 0.4, 0.85, 0.45, 0.55, 0.35, 0.9, 0.5, 0.6, 0.4, 0.8, 0.55, 0.7, 0.45], 0.13)
+        if i % 4 == 3:
+            _fill_taiko(song, t0, beat, 8, 0.24 + 0.02 * arc, 0.05)
+            song.add("drums", chain_rattle(True), t0 + 3.75 * beat, 0.4, -0.25)
+        if i >= 8:
+            for m in [r + 12, r + 19]:
+                song.add("choir", choir(hz(m), bar), t0, 0.28)
+    song.line("melody", brass, "C#4:0.5 G#4:0.5 C#5:1 R:0.5 G#4:0.5 E4:1 C#4:2 "
+              "D4:0.5 A4:0.5 D5:1 R:0.5 A4:0.5 F#4:1 D4:2 "
+              "C#4:1 E4:1 G#4:2 F#4:1 D4:1 C#4:2 G#3:1 B3:1 C#4:4", off + 8 * bar, beat)
+    sting = "G#4:1 C#5:1 R:1 E5:1 C#5:2 G#4:2 F#4:1 A4:1 G#4:4 C#4:4"
+    song.line("choir", choir, sting, off + 16 * bar, beat, 0.9, 0.0, -12)
+    song.line("melody", brass, sting, off + 16 * bar, beat, 0.6)
+
+
+def act3_boss(song: Song, off: float) -> None:
+    """Warden / door processional: anvil pedals + tightening fourths — not Acts 1–2 transposed."""
+    beat = 60 / 138
+    bar = 4 * beat
+    a = ["C#m", "G#", "C#m", "D", "F#m", "G#", "A", "G#"]
+    prog = a + a + ["D", "F#m", "C#m", "G#", "A", "D", "F#m", "G#"] + a
+    # Locked gear ostinato — sparse then dense across sections
+    steps = [0, "t", 0, 12, 0, 7, 0, "t", 12, 0, 7, 0, 12, "t", 0, 7]
+    for i, c in enumerate(prog):
+        t0 = off + i * bar
+        r, third = chord(c)
+        section = i // 8
+        for j, m in enumerate([r - 5, r, r + 7, r + 12 + third]):
+            song.add("pad", pad(hz(m), bar), t0, 1.0, -0.35 + 0.22 * j)
+        ostinato(song, r, third, t0, beat, steps, low=True, gain=0.95)
+        for e in (0, 2, 4, 6):
+            song.add("bass", bass(hz(r - 12), beat * 0.85), t0 + e * beat / 2, 1.15 if e % 4 == 0 else 0.85)
+        song.add("drums", taiko(True), t0, 1.05)
+        song.add("drums", anvil(hz(r - 12)), t0, 0.55 if section < 2 else 0.65)
+        if section == 0:
+            song.add("drums", chain_rattle(False), t0 + 2 * beat, 0.4, 0.3)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.45)
+            _hats(song, t0, beat, [0.5, 0, 0, 0, 0.3, 0, 0, 0, 0.45, 0, 0, 0.25, 0, 0, 0.35, 0], 0.09)
+        elif section == 1:
+            song.add("drums", anvil(hz(r - 5)), t0 + 2 * beat, 0.4)
+            song.add("drums", chain_rattle(True), t0 + 2 * beat, 0.45, -0.35)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.65)
+            song.add("drums", snare(), t0 + 1.5 * beat, 0.45)
+            song.add("drums", snare(), t0 + 3.5 * beat, 0.4)
+            _hats(song, t0, beat, [0.65, 0, 0.3, 0, 0.45, 0.25, 0.3, 0, 0.55, 0, 0.3, 0.3, 0.4, 0, 0.45, 0.25], 0.1)
+        elif section == 2:
+            song.add("drums", taiko(True), t0 + beat, 0.55)
+            song.add("drums", anvil(hz(r - 12)), t0 + 2 * beat, 0.5)
+            song.add("drums", chain_rattle(True), t0 + 2.5 * beat, 0.4, 0.4)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.7)
+            song.add("drums", snare(), t0 + 1.5 * beat, 0.5)
+            song.add("drums", snare(), t0 + 3 * beat, 0.4)
+            song.add("drums", snare(), t0 + 3.5 * beat, 0.5)
+            _hats(song, t0, beat, [0.8, 0.3, 0.45, 0.3, 0.6, 0.35, 0.5, 0.3, 0.7, 0.3, 0.45, 0.4, 0.55, 0.35, 0.6, 0.4], 0.12)
+        else:
+            song.add("drums", chain_rattle(False), t0 + 2 * beat, 0.45, -0.2)
+            song.add("drums", taiko(False), t0 + 3 * beat, 0.5)
+            song.add("drums", snare(), t0 + 3.5 * beat, 0.4)
+            _hats(song, t0, beat, [0.55, 0, 0.25, 0, 0.4, 0, 0.25, 0, 0.5, 0, 0.3, 0.2, 0.35, 0, 0.4, 0], 0.09)
+        if i % 4 == 3:
+            for s in range(10, 16):
+                song.add("drums", chain_rattle(s % 2 == 0), t0 + s * beat / 4, 0.18 + 0.03 * (s - 10),
+                         0.3 if s % 2 == 0 else -0.3)
+            if section >= 1:
+                _fill_taiko(song, t0, beat, 12, 0.25, 0.05)
+        if section >= 1:
+            for m in [r - 12, r - 5]:
+                song.add("brass", brass(hz(m), beat * 2.2), t0, 0.85)
+            song.add("brass", brass(hz(r), beat * 0.5), t0 + 3 * beat, 0.55)
+        if section == 0 and i % 2 == 0:
+            song.add("melody", bell(hz(midi("C#4")), bar * 0.9), t0, 0.4)
+            song.add("drums", chain_rattle(False), t0 + 2 * beat, 0.3, 0.25)
+        if section == 2:
+            for m in [r + 7, r + 12, r + 19]:
+                song.add("choir", choir(hz(m), bar), t0, 0.3)
+    # Rising fourths into the door, then locked chant (8 bars)
+    melody = ("C#4:2 G#4:2 C#5:2 G#4:2 C#4:2 D4:2 A4:2 D5:2 C#5:2 B4:2 "
+              "A4:2 G#4:2 F#4:2 C#4:2 G#3:2 C#4:2")
+    song.line("melody", brass, melody, off + 8 * bar, beat)
+    song.line("melody", bell, "C#5:2 R:2 G#4:4 R:2 F#4:2 C#4:4", off + 8 * bar, beat, 0.4, -0.25)
+    chant = "C#4:4 G#3:4 A3:4 E3:4 G#3:2 C#4:2 D4:4 G#3:4"
+    song.line("choir", choir, chant, off + 16 * bar, beat, 1.0, 0.0, 0)
+    song.line("melody", brass, chant, off + 16 * bar, beat, 0.6, 0.0, 12)
+    song.line("melody", brass, melody, off + 24 * bar, beat)
+    song.line("choir", choir, melody, off + 24 * bar, beat, 0.5)
+    song.line("melody", bell, "G#4:4 C#5:4 F#4:4 C#4:4", off + 24 * bar, beat, 0.35, 0.2)
+
+
 THEME_LEVELS = {"pad": -7, "bass": -12, "harp": -6, "drums": -10, "melody": -5, "choir": -7}
 BATTLE_LEVELS = {"pad": -10, "ostinato": -5, "bass": -8, "drums": -3, "melody": -4, "choir": -8, "harp": -9}
 ELITE_LEVELS = {"pad": -10, "ostinato": -4, "bass": -7, "drums": -2, "melody": -3, "choir": -7}
 BOSS_LEVELS = {"pad": -10, "ostinato": -5, "bass": -7, "drums": -2, "brass": -7, "melody": -3, "choir": -6, "harp": -9}
 
+TRACKS = [
+    ("theme", 16 * 4 * 60 / 72, theme, THEME_LEVELS),
+    ("act1_theme", 16 * 4 * 60 / 72, act1_theme, THEME_LEVELS),
+    ("act1_battle", 24 * 4 * 60 / 126, act1_battle, BATTLE_LEVELS),
+    ("act1_elite", 24 * 4 * 60 / 136, act1_elite, ELITE_LEVELS),
+    ("act1_boss", 32 * 4 * 60 / 144, act1_boss, BOSS_LEVELS),
+    ("act2_theme", 16 * 4 * 60 / 64, act2_theme, THEME_LEVELS),
+    ("act2_battle", 24 * 4 * 60 / 112, act2_battle, BATTLE_LEVELS),
+    ("act2_elite", 24 * 4 * 60 / 124, act2_elite, ELITE_LEVELS),
+    ("act2_boss", 32 * 4 * 60 / 132, act2_boss, BOSS_LEVELS),
+    ("act3_theme", 16 * 4 * 60 / 56, act3_theme, THEME_LEVELS),
+    ("act3_battle", 24 * 4 * 60 / 118, act3_battle, BATTLE_LEVELS),
+    ("act3_elite", 24 * 4 * 60 / 128, act3_elite, ELITE_LEVELS),
+    ("act3_boss", 32 * 4 * 60 / 138, act3_boss, BOSS_LEVELS),
+]
+
 
 if __name__ == "__main__":
-    render("theme", 16 * 4 * 60 / 72, theme, THEME_LEVELS)
-    render("act1_theme", 16 * 4 * 60 / 72, act1_theme, THEME_LEVELS)
-    render("act1_battle", 24 * 4 * 60 / 126, act1_battle, BATTLE_LEVELS)
-    render("act1_elite", 24 * 4 * 60 / 136, act1_elite, ELITE_LEVELS)
-    render("act1_boss", 32 * 4 * 60 / 144, act1_boss, BOSS_LEVELS)
-    render("act2_theme", 16 * 4 * 60 / 64, act2_theme, THEME_LEVELS)
-    render("act2_battle", 24 * 4 * 60 / 112, act2_battle, BATTLE_LEVELS)
-    render("act2_elite", 24 * 4 * 60 / 124, act2_elite, ELITE_LEVELS)
-    render("act2_boss", 32 * 4 * 60 / 132, act2_boss, BOSS_LEVELS)
+    which = (sys.argv[1] if len(sys.argv) > 1 else "all").lower()
+    for name, dur, fn, levels in TRACKS:
+        if which not in ("all", name, name.split("_")[0]):
+            continue
+        render(name, dur, fn, levels)

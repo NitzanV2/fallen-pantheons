@@ -502,8 +502,10 @@ func _map_canvas(interactive: bool) -> Control:
 	var canvas = MapCanvas.new()
 	canvas.custom_minimum_size = MAP_SIZE
 	canvas.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	canvas.background = load("res://art/map/background_soft.jpg")
-	canvas.tint = run.act_def()["map_tint"]
+	var act_def: Dictionary = run.act_def()
+	var map_bg: String = act_def.get("map_bg", "res://art/map/background_soft.jpg")
+	canvas.background = load(map_bg)
+	canvas.tint = act_def["map_tint"]
 
 	var available: Array = run.available_nodes()
 	var paths: Array = []

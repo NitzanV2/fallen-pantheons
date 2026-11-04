@@ -17,6 +17,10 @@ Files in `game/art/sprites/`:
 - `amalgam.png` / `amalgam_attack.png` - shared by every `amalgam_*` unit id
 - `wolf.png`, `scarab.png` (+ `_attack`) - unique token summons
 - `{id}_airborne.png` / `{id}_airborne_attack.png` - optional flying pose when the unit is Airborne (Erinyes Fury)
+- `{id}_enraged.png` / `{id}_enraged_attack.png` - boss phase 2 only (Void Herald, Apep, Hades, Ammit) when HP ≤ half
+- `{id}_helm.png` - Hades every 3rd round (Helm of Darkness / untargetable)
+- `{id}_toll.png` - Hel when Toll of the Dead drains the Core after a permanent kill
+- `{id}_breath.png` - Nidhogg even-round Poison Breath intent / act
 
 ## Batch order
 

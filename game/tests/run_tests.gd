@@ -33,6 +33,8 @@ func _initialize() -> void:
 	test_herald_round()
 	test_hel()
 	test_apep()
+	test_boss_enrage()
+	test_vault_verbs()
 	test_charger_charges()
 	test_spells()
 	test_raiders()
@@ -813,6 +815,170 @@ func test_apep() -> void:
 		seen[run.boss_id] = true
 		check(run._pick_battle("boss", Run.FLOORS - 1) == run.boss_id, "boss: the map's boss is the one fought")
 	check(seen.size() == 3, "boss: runs pick all three bosses")
+
+
+func test_boss_enrage() -> void:
+	var c = fresh(40, true)
+	var herald = c.debug_place("void_herald", E, 1, F)
+	check(not c.boss_enraged(herald), "enrage: full-HP boss is calm")
+	check(c.boss_sprite_pose(herald) == "", "enrage: calm pose empty")
+	c.events.clear()
+	c._deal_damage(herald, herald.max_hp / 2, "effect")
+	check(c.boss_enraged(herald), "enrage: half HP triggers")
+	check(c.boss_sprite_pose(herald) == "enraged", "enrage: pose is enraged")
+	var enrage_evs: Array = c.events.filter(func(ev): return ev.get("enrage", false))
+	check(enrage_evs.size() == 1, "enrage: emits one enrage event")
+	check(enrage_evs[0].get("enrage_slot") == [E, F, 1], "enrage: event names the boss slot")
+	## Hel / Nidhogg do not enrage at half HP.
+	c = fresh(40, true)
+	var hel = c.debug_place("hel", E, 1, B)
+	hel.hp = hel.max_hp / 2
+	check(not c.boss_enraged(hel), "enrage: Hel is not an enrage boss")
+	check(c.boss_sprite_pose(hel) == "", "enrage: Hel half HP has no enrage pose")
+	## Hades helm overrides enraged art while untargetable.
+	c = fresh(70, true)
+	var hades = c.debug_place("hades", E, 0, F)
+	hades.hp = 1
+	c.round_num = 3
+	check(c.helm_active(hades), "pose: helm active on round 3")
+	check(c.boss_sprite_pose(hades) == "helm", "pose: helm beats enraged")
+	c.round_num = 2
+	check(c.boss_sprite_pose(hades) == "enraged", "pose: enraged when helm is down")
+	## Nidhogg breath pose on even rounds.
+	c = fresh(65, true)
+	var nid = c.debug_place("nidhogg", E, 1, B)
+	c.round_num = 2
+	c._declare_intents()
+	check(c.intents[nid.uid].get("type") == "breath", "pose: nidhogg breathes on even rounds")
+	check(c.boss_sprite_pose(nid) == "breath", "pose: nidhogg breath art")
+	## Hel toll event when a player unit dies for good.
+	c = fresh(40, true)
+	c.debug_place("hel", E, 1, B)
+	var victim = c.debug_place("ark_sentinel", P, 0, F)
+	c.events.clear()
+	c._deal_damage(victim, 99, "effect")
+	var tolls: Array = c.events.filter(func(ev): return ev.get("boss_pose", "") == "toll")
+	check(tolls.size() == 1, "pose: Hel toll emits boss_pose event")
+	check(ResourceLoader.exists("res://art/sprites/void_herald_enraged.png"), "art: void herald enraged")
+	check(ResourceLoader.exists("res://art/sprites/hades_enraged.png"), "art: hades enraged")
+	check(ResourceLoader.exists("res://art/sprites/hades_helm.png"), "art: hades helm")
+	check(ResourceLoader.exists("res://art/sprites/hel_toll.png"), "art: hel toll")
+	check(ResourceLoader.exists("res://art/sprites/nidhogg_breath.png"), "art: nidhogg breath")
+	check(CardWidget.board_sprite_path("hades", false, false, "enraged").ends_with("hades_enraged.png"), "path: enraged")
+	check(CardWidget.board_sprite_path("hades", false, false, "helm").ends_with("hades_helm.png"), "path: helm")
+	check(CardWidget.board_sprite_path("hel", false, false, "toll").ends_with("hel_toll.png"), "path: toll")
+	check(CardWidget.board_sprite_path("nidhogg", true, false, "breath").ends_with("nidhogg_breath_attack.png"), "path: breath attack")
+
+
+func test_vault_verbs() -> void:
+	## Bound: Seal Warden keeps the highest-HP ally in its row at 1 HP.
+	var c = fresh(40, true)
+	var warden = c.debug_place("seal_warden", E, 1, F)
+	var thrall = c.debug_place("chain_thrall", E, 0, F)
+	thrall.hp = 5
+	c._deal_damage(thrall, 99, "effect")
+	check(thrall.alive and thrall.hp == 1, "vault: Bound floor keeps thrall at 1")
+	c._deal_damage(warden, 99, "effect")
+	c._deal_damage(thrall, 99, "effect")
+	check(not thrall.alive, "vault: thrall dies after binder falls")
+	## Breach opens on Rift Mite death; presence reseals; Keybearer blocks.
+	c = fresh(40, true)
+	c.debug_place("ark_sentinel", P, 1, F)
+	var mite = c.debug_place("rift_mite", E, 1, F)
+	c._deal_damage(mite, 99, "effect")
+	check(c.breaches.has("1:1"), "vault: mite death opens Breach")
+	c._close_breaches_by_presence()
+	check(not c.breaches.has("1:1"), "vault: presence closes Breach")
+	c = fresh(40, true)
+	c.debug_place("ark_sentinel", P, 2, F)
+	c.debug_place("key_acolyte", E, 0, B)
+	c.open_breach(P, 2, "test")
+	c._close_breaches_by_presence()
+	check(c.breaches.has("0:2"), "vault: Keybearer blocks reseal")
+	## Gold Seam half-bind + Sunder when free.
+	c = fresh(50, true)
+	var seam = c.debug_place("gold_seam", E, 2, B)
+	var giant = c.debug_place("hundred_handed", E, 1, F)
+	c._deal_damage(giant, giant.max_hp, "effect")
+	check(giant.alive and giant.hp == maxi(1, giant.max_hp / 2), "vault: Seam holds half HP")
+	c._deal_damage(seam, 99, "effect")
+	check(c.units(E).any(func(u): return u.id == "arm"), "vault: Sunder spawns Arms when Seam breaks")
+	## Sealmark blocks move.
+	c = fresh(40, true)
+	var ally = c.debug_place("raider", P, 1, F)
+	ally.deployed_round = c.round_num
+	ally.from_hand = true
+	c.sealmark_player_lane(1, 2)
+	check(c.move_block(ally) == "Sealmarked in this lane", "vault: Sealmark blocks move")
+	## Duration-1 marks applied in resolve must still lock the next planning phase.
+	c = fresh(40, true)
+	c.debug_place("door_of_gleipnir", E, 1, B)
+	c.debug_place("chain_anchor", E, 0, F)
+	c.debug_place("chain_anchor", E, 2, F)
+	var stuck = c.debug_place("raider", P, 1, F)
+	stuck.deployed_round = 0
+	stuck.from_hand = false
+	c.end_plan()
+	check(c.phase == "plan", "vault: advanced to next plan after Door Sealmark")
+	check(int(c.sealmarks.get(stuck.lane, 0)) > 0, "vault: Sealmark survives into next plan")
+	check(c.move_block(stuck) == "Sealmarked in this lane", "vault: next-plan move blocked by Sealmark")
+	check(c.move_unit(stuck.lane, F, 2, F) != "", "vault: move out of Sealmark rejected")
+	## Enemy Sealmark: Rebuke can't target it, and pushing a neighbor into it only hurts the neighbor.
+	c = fresh(40, true)
+	var guard = c.debug_place("hinge_guard", E, 1, F)
+	var thrall = c.debug_place("chain_thrall", E, 0, F)
+	c.hand = [c._new_card("rebuke")]
+	c.faith = 3
+	check(not c.valid_targets(0).has([E, F, 1]), "vault: Sealmarked Hinge Guard is not a Rebuke target")
+	check(c.play_spell(0, [[E, F, 0]], 1) == "", "vault: Rebuke neighbor into Guard")
+	check(thrall.hp == thrall.max_hp - 3, "vault: pusher takes collision into Sealmark")
+	check(guard.hp == guard.max_hp, "vault: Sealmarked Guard takes no collision damage")
+	## Door Guardians: Seal Wardens return once in Warden Eternal phase 2.
+	c = fresh(50, true)
+	var we = c.debug_place("warden_eternal", E, 1, B)
+	we.hp = 1
+	var sw = c.debug_place("seal_warden", E, 1, F)
+	c._deal_damage(sw, 99, "effect")
+	check(c.extra_waves.any(func(w): return w[1] == "door_guardian"), "vault: Door Guardian queued in phase 2")
+	## Act 3 pools exist.
+	check(Data.ACTS.size() == 3 and Data.BATTLE_POOLS["warden_eternal"] == "act3_boss", "vault: act3 pools wired")
+	check(Data.battle("outer_seal").get("act", 0) == 3, "vault: early battle")
+	check(Data.RELICS["broken_manacle"].get("act", 1) == 3, "vault: relic gated to act 3")
+	var act3_elites: Array = Data.BATTLE_POOLS.keys().filter(func(id): return Data.BATTLE_POOLS[id] == "act3_elite")
+	check(act3_elites.size() == 5, "vault: five act3 elites (%d)" % act3_elites.size())
+	for eid in ["mad_turnkey", "skeleton_key"]:
+		check(Data.BATTLE_POOLS.get(eid, "") == "act3_elite", "vault: %s pooled" % eid)
+		check(not Data.battle(eid).is_empty(), "vault: %s battle exists" % eid)
+	## Mad Turnkey: Bound to Key Acolyte; Sealmark then cell a marked unit for a round.
+	c = fresh(50, true)
+	var turnkey = c.debug_place("mad_turnkey", E, 1, B)
+	var key = c.debug_place("key_acolyte", E, 2, F)
+	var marked = c.debug_place("ark_sentinel", P, 1, F)
+	var spare = c.debug_place("echo_archer", P, 3, F)
+	c._deal_damage(turnkey, 99, "effect")
+	check(turnkey.alive and turnkey.hp == 1, "vault: Turnkey Bound floor while Key lives")
+	c.sealmarks.clear()
+	c.sealmark_player_lane(1, 2)
+	c._mad_turnkey_end(turnkey)
+	check(not marked.alive and not c.vault_cell.is_empty(), "vault: Turnkey cells a marked unit")
+	check(spare.alive, "vault: unmarked unit stays")
+	check(c.snapshot()["vault_cell"] != "", "vault: cell shown in snapshot")
+	var release_at: int = int(c.vault_cell["release_round"])
+	c.round_num = release_at
+	c._try_release_vault_cell()
+	check(c.vault_cell.is_empty() and c.units(P).any(func(u): return u.id == "ark_sentinel"), "vault: cell releases after a round")
+	## Skeleton Key: dirty death (Mites up) opens Breaches; clean death seals them.
+	c = fresh(50, true)
+	c.debug_place("rift_mite", E, 0, F)
+	var sk = c.debug_place("skeleton_key", E, 1, B)
+	c._deal_damage(sk, 99, "effect")
+	check(c.breaches.values().count(true) >= 2, "vault: dirty Skeleton Key death tears Breaches")
+	c = fresh(50, true)
+	sk = c.debug_place("skeleton_key", E, 1, B)
+	c.open_breach(P, 1, "setup")
+	c.open_breach(P, 2, "setup")
+	c._deal_damage(sk, 99, "effect")
+	check(c.breaches.values().count(true) == 0, "vault: clean Skeleton Key death seals Breaches")
 
 
 func test_charger_charges() -> void:
@@ -2627,6 +2793,10 @@ func test_event_data() -> void:
 	var fx_keys := ["gold", "hp", "max_hp", "card", "curse", "relic", "remove", "remove_random", "choose", "goto", "lose_relic"]
 	var act2_events: Array = Data.EVENTS.keys().filter(func(id): return Data.EVENTS[id].get("act", 1) == 2)
 	check(act2_events.size() >= 4, "events: Act 2 has its own events")
+	var act3_events: Array = Data.EVENTS.keys().filter(func(id): return Data.EVENTS[id].get("act", 1) == 3)
+	check(act3_events.size() >= 5, "events: Act 3 has five events (%d)" % act3_events.size())
+	for eid in ["living_seam", "abandoned_manacle"]:
+		check(act3_events.has(eid), "events: %s is Act 3" % eid)
 	var run = Run.new()
 	run.setup(3, "myrmidon")
 	for n in 60:
@@ -2635,10 +2805,11 @@ func test_event_data() -> void:
 	run.act = 2
 	run.seen_events.clear()
 	var seen := {}
-	for n in Data.EVENTS.size():
+	var act2_pool: Array = Data.EVENTS.keys().filter(func(id): return Data.EVENTS[id].get("act", 1) <= 2)
+	for n in act2_pool.size():
 		run._pick_event()
 		seen[run.shrine["event"]] = true
-	check(seen.size() == Data.EVENTS.size(), "events: Act 2 cycles through every event before repeating")
+	check(seen.size() == act2_pool.size(), "events: Act 2 cycles through every event before repeating")
 	run.relics = ["obol", "sun_disk"]
 	run.start_event("lethes_spring")
 	var notes: Array = run._apply_fx({"lose_relic": true})
@@ -2725,7 +2896,7 @@ func test_acts() -> void:
 		var run = Run.new()
 		run.setup(s, "shieldmaiden", "tyrs_oath")
 		check(run.act == 1 and run.boss_ids.size() == Data.ACTS.size(), "acts: one boss per act")
-		check(run.boss_ids.size() == Data.ACTS.size() and run.boss_ids[0] != run.boss_ids[1], "acts: no boss repeats")
+		check(run.boss_ids.size() == Data.ACTS.size() and run.boss_ids[0] != run.boss_ids[1] and run.boss_ids[1] != run.boss_ids[2], "acts: no boss repeats")
 		check(run.boss_id == run.boss_ids[0], "acts: act 1 boss first")
 		var boss_node: int = run.floors[Run.FLOORS - 1][0]
 		run.current = boss_node
@@ -2759,6 +2930,21 @@ func test_acts() -> void:
 		check(boss_unit.max_hp == base["hp"] + Data.ACTS[1]["boss_bonus"].get("hp", 0), "acts: act 2 boss gets its act's bonus HP")
 		check(Data.BATTLE_POOLS[run.boss_id] == "act2_boss" and base.get("act", 1) == 2, "acts: act 2 has its own bosses")
 		check(c.units(E).filter(func(u): return Data.unit_def(u.id).get("kind", "") != "boss").all(func(u): return u.max_hp == Data.ENEMIES[u.id]["hp"]), "acts: boss minions get no bonus")
+		c.result = "win"
+		run.finish_combat(c)
+		check(run.state == "act_complete", "acts: act 2 boss leads to act-complete (Act 3 awaits)")
+		run.start_next_act()
+		check(run.act == 3 and run.state == "map", "acts: act 3 Binding Vault starts")
+		check(run.boss_id == run.boss_ids[2], "acts: act 3 boss")
+		check(Data.ACTS[2]["name"] == "The Binding Vault", "acts: act 3 name")
+		check(Data.ACTS[2].get("map_bg", "").ends_with("background_act3.jpg"), "acts: act 3 map bg")
+		run.current = run.floors[Run.FLOORS - 1][0]
+		run.battle_id = run._pick_battle("boss", Run.FLOORS - 1)
+		run.state = "combat"
+		c = run.make_combat()
+		boss_unit = c.units(E).filter(func(u): return Data.unit_def(u.id).get("kind", "") == "boss")[0]
+		base = Data.ENEMIES[boss_unit.id]
+		check(Data.BATTLE_POOLS[run.boss_id] == "act3_boss" and base.get("act", 1) == 3, "acts: act 3 has its own bosses")
 		c.result = "win"
 		run.finish_combat(c)
 		check(run.state == "victory", "acts: the last act's boss wins the run")
@@ -2903,7 +3089,10 @@ func _check_invariants(c, total_cards: int, tag: String) -> void:
 	var armed: Array = []
 	for u in c.units(P):
 		armed.append_array(u.armaments)
-	for pile in [c.hand, c.deck, c.discard, c.exhausted, c.claimed, armed]:
+	var piles: Array = [c.hand, c.deck, c.discard, c.exhausted, c.claimed, armed]
+	if not c.vault_cell.is_empty() and c.vault_cell.get("card", null) != null:
+		piles.append([c.vault_cell["card"]])
+	for pile in piles:
 		for card in pile:
 			check(not cids.has(card["cid"]), "%s: card %s is in two places" % [tag, card["id"]])
 			cids[card["cid"]] = true
