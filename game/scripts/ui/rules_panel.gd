@@ -219,7 +219,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["taunt", "Taunt", "Enemies attacking from its lane or an adjacent lane must target it."],
 		["ranged", "Ranged", "Can attack from the back row. Can't target units on Ruins."],
 		["cleave", "Cleave", "Also hits the units in the lanes on both sides of the target, in the same row, for full damage."],
-		["pierce", "Pierce", "Damage beyond what kills a front unit carries to the unit behind it. It never reaches the Core."],
+		["pierce", "Pierce", "Damage beyond what kills a front unit carries to the unit behind it. Anything left after the last unit in the lane hits the Core."],
 		["rally", "Rally X", "Start of round: row neighbours of its own faction gain +X ATK for the rest of the fight. Stacks every round."],
 		["support", "Support", "Start of round: helps the ally directly in front of it (same lane). Works from the back row."],
 		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot and attacks, if it has not already attacked this round. That swing is bonus — it still attacks normally later in the round. If it Reinforces or attacks during planning (Tyr's Oath), it loses free reposition and is locked in place for the rest of planning."],
@@ -351,15 +351,15 @@ func _enemies(page: VBoxContainer) -> void:
 	_heading(page, "map/void.png", "Bosses")
 	page.add_child(_rich("Each act ends with a boss, shown on the map from the start of the act (hover the boss node); no boss appears twice in a run. Boss fights have no round limit, and each boss favours some strategies and punishes others."))
 	_grid(page, 3, [
-		["enemies/void_herald.jpg", "Void Herald", "Fills lanes 2-3. Its Void Tide deals 5 to your Core every round, so slow decks suffer. Until it drops to half HP it summons a Void Spawn every round and a Void Wisp in its back row every second round."],
-		["enemies/hel.jpg", "Hel", "Hides behind Draugr that rise again each round. HARVEST hits your lowest-HP unit, and every unit you lose for good heals her 2 and costs the Core 2. She grows stronger each round - keep your units alive."],
-		["enemies/apep.jpg", "Apep", "Coils across the whole back row. Shield is useless while it lives, units it kills can't Revive, and CONSTRICT crushes whole lanes - move out of them."],
+		["enemies/void_herald.jpg", "Void Herald", "Fills lanes 2-3. The Core takes 5 every round, and it hammers your strongest lane. Raises Spawn each round and a back-row Wisp every other round until half HP, then switches to wide lane strikes."],
+		["enemies/hel.jpg", "Hel", "Hides behind Draugr that rise again each round. Always picks your lowest-HP unit; every unit you lose for good heals her 2 and costs the Core 2. She grows stronger each round — keep your units alive."],
+		["enemies/apep.jpg", "Apep", "Coils across the whole back row. Shields fail while it lives, units it kills cannot Revive, and it crushes crowded lanes — move out of them."],
 	], 92)
 	page.add_child(_rich("[b]Act 2 bosses[/b] (the Drowned Underworld):"))
 	_grid(page, 3, [
-		["enemies/hades.jpg", "Hades", "Claim Soul: when you end planning he takes the costliest card left in your hand for the rest of the fight - play it first to keep it. Dominion of the Dead: at the end of each round the Core takes 1 per card he holds, so deal him %d damage in one round to free the latest one. Every 3rd round his Helm of Darkness makes him untargetable. A Shade arrives by ferry every other round. At half HP he claims two cards a round and two Shades come at a time." % 8],
-		["enemies/ammit.jpg", "Ammit", "Weighing of the Heart: at the end of each round your total ATK in lanes 1-2 is weighed against lanes 3-4. The heavier side's front units split the difference x2 (the Core takes it if that side has no front units). At half HP it's x3 and she heals 4 per unit it kills. She attacks your highest-ATK unit and keeps two Soul Eaters in front of her."],
-		["enemies/nidhogg.jpg", "Nidhogg", "Each round it gnaws one of your slots (your highest-ATK unit's, marked GNAW); at the end of the round it becomes [b]Rotted[/b] for the fight. A unit there flees to an adjacent free slot or takes 4. After 4 Rotted slots it gnaws the Core for 2 each round instead. Every other round its poison breath hits your most crowded lane (Poison and 3 damage), and it keeps two Styx Lampreys in front of it."],
+		["enemies/hades.jpg", "Hades", "When you end planning he takes the costliest card left in your hand — play it first to keep it. The Core takes 1 per card he holds, so deal him %d in one round to free the latest. Every third round he cannot be targeted. A Shade ferries in every other round; below half HP he claims two cards and two Shades at once." % 8],
+		["enemies/ammit.jpg", "Ammit", "Each round lanes 1-2 are weighed against 3-4; the heavier side's fronts split the difference ×2 (Core if empty). Below half HP it's ×3 and she heals 4 per kill. She hunts your highest ATK and keeps Soul Eaters in front."],
+		["enemies/nidhogg.jpg", "Nidhogg", "Each round one slot becomes [b]Rotted[/b] for the fight — shove the unit aside or take 4. After four Rotted slots it gnaws the Core for 2 instead. Even rounds: poison breath on your crowded lane. Keeps Lampreys in front."],
 	], 92)
 	_heading(page, "map/elite.png", "Act 3 elites")
 	page.add_child(_rich("Vault elites each offer two focus paths:"))
@@ -372,9 +372,9 @@ func _enemies(page: VBoxContainer) -> void:
 	], 72)
 	page.add_child(_rich("[b]Act 3 bosses[/b] (the Binding Vault):"))
 	_grid(page, 3, [
-		["map/void.png", "Warden Eternal", "Tribunal: only the Accused may damage the Warden (others still clear Clerks/Bailiffs). Clerks force your highest ATK; kill them to choose. Authority taxes the Core unless you petition hard. Phase 2: Bailiffs, two Accused, Gavel."],
-		["map/void.png", "The Unbound", "Unravel while whole. Hits of 5+ Roar (Breach) and Shatter (Core). Cascade Sunder into Chain-Broke then Pierce Loose Links; empty slots bleed. Gold Filaments pulse behind it — cut them for full damage or pay when they snap."],
-		["map/void.png", "Seal of Names", "Litany punishes empty lanes. Leave ≥1 Faith or Blank Cartouche locks the Seal next round. Wide decks build then punch; chip decks keep Faith under Void Webs. Phase 2 Key Acolyte: kill to reseal, or ignore Breaches and finish the Seal."],
+		["map/void.png", "Warden Eternal", "Only the Accused may wound it. Odd: Contempt (2 to non-Accused). Even: Gavel Sweep (fullest lane; both in phase 2). Phase 2 Contempt also Sentences (5 + Sealmark). Officers cap at 3; each kill deals 2 to the Warden. Authority taxes the Core unless you petition."],
+		["map/void.png", "The Unbound", "Grows while whole. Big hits open Breaches and slap the Core. At half HP it cascades into Chain-Broke, then Pierce Unbound Remnants; empty slots bleed. Chain Weights and Adamant Links appear behind it — kill them to cut its ATK (−2 / −3). Gold Filaments pulse behind it — cut them for full damage or pay when they snap."],
+		["map/void.png", "Seal of Names", "Empty lanes are punished. Leave a Faith or next round a Blank Cartouche locks the Seal. Wide decks build then punch; chip decks keep Faith under Void Webs. Below half HP a Key Acolyte arrives — kill it to reseal, or finish the Seal through Breaches."],
 	], 92)
 	_tip(page, "When a boss falls, its minions go with it.")
 

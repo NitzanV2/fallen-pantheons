@@ -895,7 +895,13 @@ func _apply_fx(fx: Dictionary) -> Array:
 		else:
 			notes.append("%s joins your deck." % Data.CARDS[id]["name"])
 	if fx.has("relic"):
-		var relic := _random_relic(event_rng)
+		var relic := ""
+		var want = fx["relic"]
+		if typeof(want) == TYPE_STRING:
+			if Data.RELICS.has(want) and not relics.has(want):
+				relic = want
+		elif want:
+			relic = _random_relic(event_rng)
 		if relic == "":
 			gold += 40
 			notes.append("No relics remain. Gained 40 gold instead.")

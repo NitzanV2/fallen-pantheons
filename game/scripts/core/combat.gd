@@ -90,6 +90,10 @@ var breach_ward_charges := 0
 var vault_bleed := false
 ## Gold Filament behind The Unbound: rounds left before it snaps (0 = none).
 var filament_rounds_left := 0
+## Next Unbound ATK-suppressor to pulse: 0 = Chain Weight (−2), 1 = Adamant Link (−3).
+var unbound_suppressor_next := 0
+## Permanent ATK cut on The Unbound from killed Chain Weights (−2) / Adamant Links (−3).
+var unbound_atk_cut := 0
 ## Warden Eternal Tribunal: Authority meter (Core tax each end of round).
 var warden_authority := 0
 ## Player unit uids nominated as Accused this round (1, or 2 in phase 2).
@@ -118,6 +122,8 @@ var obol_used := false
 ## Ankh of Eternity: already blessed a unit this fight after first end_plan.
 var ankh_blessed := false
 var armaments_played := 0
+## Opening Litany: cards successfully played this fight (first costs 0).
+var cards_played := 0
 var valhalla_returned := {}
 var last_dead_ally = null
 var enemy_bonus := {"atk": 0, "hp": 0}
@@ -284,6 +290,8 @@ func _spawn(id: String, side: int, lane: int, row: int, card = null):
 		if wards > 0:
 			u.shield += 2 * wards
 			_log("Broodwarden shields the Scarab (+%d)." % (2 * wards))
+	if id == "adamant_link":
+		u.shield += 2
 	if side == PLAYER and is_wolf(u) and has_relic("gleipnir_fragment"):
 		u.max_hp += 1
 		u.hp += 1
@@ -331,6 +339,9 @@ func effective_atk(u) -> int:
 		a -= 1
 	if u.side == ENEMY and u.poisoned and _up("plague_3"):
 		a -= 1
+	if u.id == "the_unbound":
+		a -= _unbound_suppress_amount()
+		return maxi(1, a)
 	return max(a, 0)
 
 
@@ -629,7 +640,7 @@ func _check_pending_sunders() -> void:
 			_try_sunder(e, e.max_hp)
 
 
-## True while any Unbound cascade husk still lives (Chain-Broke or Loose Link).
+## True while any Unbound cascade husk still lives (Chain-Broke or Unbound Remnant).
 func _unbound_lineage_alive() -> bool:
 	return units(ENEMY).any(func(e): return e.id in ["chain_broke", "loose_link"] and e.alive)
 
@@ -674,6 +685,8 @@ func _sunder_unit(u) -> void:
 			break
 	if u.id == "the_unbound":
 		_clear_gold_filaments()
+		_clear_unbound_suppressors()
+		unbound_atk_cut = 0
 	_check_enemies_cleared()
 
 
@@ -682,6 +695,54 @@ func _clear_gold_filaments() -> void:
 	for f in units(ENEMY).filter(func(e): return e.id == "gold_filament" and e.alive):
 		f.alive = false
 		_remove(f)
+
+
+func _clear_unbound_suppressors() -> void:
+	for f in units(ENEMY).filter(func(e): return e.id in ["chain_weight", "adamant_link"] and e.alive):
+		f.alive = false
+		_remove(f)
+
+
+## ATK subtracted from The Unbound after Chain Weights (−2) / Adamant Links (−3) are killed.
+func _unbound_suppress_amount() -> int:
+	return unbound_atk_cut
+
+
+func _apply_unbound_suppressor_kill(id: String) -> void:
+	var cut := 0
+	if id == "chain_weight":
+		cut = 2
+	elif id == "adamant_link":
+		cut = 3
+	else:
+		return
+	unbound_atk_cut += cut
+	var boss = _living("the_unbound")
+	if boss != null:
+		_log("%s breaks — The Unbound loses %d ATK (now %d)." % [
+			Data.unit_def(id).get("name", id), cut, effective_atk(boss)])
+	else:
+		_log("%s breaks — The Unbound would lose %d ATK." % [Data.unit_def(id).get("name", id), cut])
+
+
+func _unbound_suppressor_alive() -> bool:
+	return units(ENEMY).any(func(e): return e.id in ["chain_weight", "adamant_link"] and e.alive)
+
+
+## Free back lane under The Unbound's width, preferring empty slots.
+func _unbound_back_slot(boss) -> int:
+	for off in [0, 1, -1, 2, -2]:
+		var cand: int = boss.lane + int(off)
+		if cand < 0 or cand >= LANES:
+			continue
+		if cand < boss.lane or cand >= boss.lane + boss.width:
+			continue
+		if unit_at(ENEMY, BACK, cand) == null:
+			return cand
+	for cand in range(boss.lane, mini(LANES, boss.lane + boss.width)):
+		if unit_at(ENEMY, BACK, cand) == null:
+			return cand
+	return -1
 
 
 func _vault_bleed_tax() -> void:
@@ -709,26 +770,33 @@ func _unbound_filament_pulse() -> void:
 		return
 	if round_num < 2 or round_num % 2 != 0:
 		return
-	var lane := -1
-	for off in [0, 1, -1, 2, -2]:
-		var cand: int = boss.lane + int(off)
-		if cand < 0 or cand >= LANES:
-			continue
-		if cand < boss.lane or cand >= boss.lane + boss.width:
-			continue
-		if unit_at(ENEMY, BACK, cand) == null:
-			lane = cand
-			break
-	if lane < 0:
-		for cand in range(boss.lane, mini(LANES, boss.lane + boss.width)):
-			if unit_at(ENEMY, BACK, cand) == null:
-				lane = cand
-				break
+	var lane: int = _unbound_back_slot(boss)
 	if lane < 0:
 		return
 	_spawn("gold_filament", ENEMY, lane, BACK, null)
 	filament_rounds_left = 2
 	_log("A Gold Filament strands behind The Unbound (half damage for 2 rounds).")
+
+
+## Even rounds while whole: one ATK-suppressor behind The Unbound if none live (Weight then Link).
+func _unbound_suppressor_pulse() -> void:
+	var boss = _living("the_unbound")
+	if boss == null or not boss.alive:
+		return
+	if _unbound_suppressor_alive():
+		return
+	if round_num < 2 or round_num % 2 != 0:
+		return
+	var lane: int = _unbound_back_slot(boss)
+	if lane < 0:
+		return
+	var id: String = "adamant_link" if unbound_suppressor_next == 1 else "chain_weight"
+	unbound_suppressor_next = 1 - unbound_suppressor_next
+	var u = _spawn(id, ENEMY, lane, BACK, null)
+	if u == null:
+		return
+	var cut: int = 3 if id == "adamant_link" else 2
+	_log("%s appears behind The Unbound — kill it to cut %d ATK." % [_unit_label(u), cut])
 
 
 ## End of round: Filament counts down; unkilled snap taxes Core and opens a Breach.
@@ -1012,17 +1080,42 @@ func _warden_eternal_end(w) -> void:
 				sealmark_player_lane(u.lane, 1)
 
 
+const WARDEN_MINIONS := ["door_clerk", "door_bailiff", "door_warder", "door_guardian"]
+const WARDEN_MINION_CAP := 3
+
+
+func _warden_minion_count() -> int:
+	return units(ENEMY).filter(func(e): return e.id in WARDEN_MINIONS and e.alive).size()
+
+
+func _warden_minion_room() -> int:
+	return maxi(0, WARDEN_MINION_CAP - _warden_minion_count())
+
+
+## Minion death feedback: always lands (bypasses the Accused gate).
+func _damage_warden_from_minion(amount: int) -> void:
+	var boss = _living("warden_eternal")
+	if boss == null or amount <= 0:
+		return
+	var prev = actor
+	actor = boss
+	_deal_damage(boss, amount, "effect")
+	actor = prev
+
+
 func _spawn_warden_bailiffs() -> void:
 	if warden_bailiffs_done or not _warden_phase_two():
 		return
 	warden_bailiffs_done = true
-	# Clear remaining clerks — court officers become Bailiffs.
+	# Clear remaining clerks — court officers become Bailiffs (not kills).
 	for c in units(ENEMY).filter(func(e): return e.id == "door_clerk" and e.alive):
 		c.alive = false
 		_remove(c)
+	var room: int = _warden_minion_room()
+	var want: int = mini(2, room)
 	var spawned := 0
 	for lane in [1, 2, 0, 3]:
-		if spawned >= 2:
+		if spawned >= want:
 			break
 		if unit_at(ENEMY, FRONT, lane) == null:
 			_spawn("door_bailiff", ENEMY, lane, FRONT, null)
@@ -1060,11 +1153,14 @@ func _warden_minion_spawn_slots() -> Array:
 
 
 ## Each round while the Warden lives: call Door Warders for non-Accused units to fight.
-## Back-row Warders get Ranged so they can actually strike.
+## Back-row Warders get Ranged so they can actually strike. Never exceed WARDEN_MINION_CAP.
 func _spawn_warden_minions() -> void:
 	if not _has_living(ENEMY, "warden_eternal"):
 		return
-	var count: int = 2 if _warden_phase_two() else 1
+	var room: int = _warden_minion_room()
+	if room <= 0:
+		return
+	var count: int = mini(2 if _warden_phase_two() else 1, room)
 	var slots: Array = _warden_minion_spawn_slots()
 	var spawned := 0
 	for slot in slots:
@@ -1076,6 +1172,100 @@ func _spawn_warden_minions() -> void:
 		spawned += 1
 	if spawned > 0:
 		_log("The Warden calls %d Door Warder%s." % [spawned, "s" if spawned != 1 else ""])
+
+
+## Odd rounds: Contempt. Even rounds: Gavel Sweep. Phase 2 Contempt also Sentences.
+func _warden_attack_kind() -> String:
+	if round_num % 2 == 1:
+		return "contempt"
+	return "gavel_sweep"
+
+
+func _warden_intent_text() -> String:
+	var acc_names: Array = []
+	for uid in accused_uids:
+		var au = _player_unit_by_uid(uid)
+		if au != null:
+			acc_names.append(au.display_name())
+	var acc_txt: String = ", ".join(acc_names) if not acc_names.is_empty() else "none"
+	var auth: String = "Authority %d, Accused: %s" % [warden_authority, acc_txt]
+	match _warden_attack_kind():
+		"contempt":
+			if _warden_phase_two():
+				return "CONTEMPT (2 to non-Accused), SENTENCE, %s" % auth
+			return "CONTEMPT (2 to non-Accused), %s" % auth
+		_:
+			if _warden_phase_two():
+				var a: int = _lane_with_most_player_units()
+				var b: int = _lane_with_most_player_units(a)
+				return "GAVEL SWEEP lanes %d & %d, %s" % [a + 1, b + 1, auth]
+			var lane: int = _lane_with_most_player_units()
+			return "GAVEL SWEEP lane %d, %s" % [lane + 1, auth]
+
+
+## Contempt of Court: 2 to every non-Accused unit (whole board if none Accused).
+func _warden_contempt() -> void:
+	var targets: Array = []
+	var any_accused := false
+	for u in units(PLAYER):
+		if is_accused(u):
+			any_accused = true
+		else:
+			targets.append(u)
+	if not any_accused:
+		targets = units(PLAYER)
+	if targets.is_empty():
+		_log("Contempt of Court finds no one to cite.")
+		return
+	_log("Contempt of Court!")
+	for u in targets:
+		if u.alive:
+			_deal_damage(u, 2, "effect")
+
+
+## Gavel Sweep: hit every unit in the fullest player lane(s) for the Warden's ATK.
+func _warden_gavel_sweep(warden) -> void:
+	var lanes: Array = [_lane_with_most_player_units()]
+	if _warden_phase_two():
+		lanes.append(_lane_with_most_player_units(lanes[0]))
+	var dmg: int = maxi(1, effective_atk(warden))
+	var names: Array = lanes.map(func(l): return str(l + 1))
+	_log("Gavel Sweep on lane%s %s!" % ["s" if lanes.size() > 1 else "", " & ".join(names)])
+	for lane in lanes:
+		for row in [FRONT, BACK]:
+			var u = unit_at(PLAYER, row, lane)
+			if u != null and u.alive:
+				_deal_damage(u, dmg, "ranged")
+
+
+## Sentence (phase 2): 5 to the highest-HP non-Accused unit and Sealmark its lane.
+func _warden_sentence() -> void:
+	var best = null
+	for u in units(PLAYER):
+		if is_accused(u):
+			continue
+		if best == null or u.hp > best.hp or (u.hp == best.hp and effective_atk(u) > effective_atk(best)):
+			best = u
+	if best == null:
+		_log("Sentence finds no non-Accused defendant.")
+		return
+	_log("Sentence falls on %s!" % best.display_name())
+	_deal_damage(best, 5, "ranged")
+	if best.alive:
+		sealmark_player_lane(best.lane, 2)
+	elif best.lane >= 0:
+		sealmark_player_lane(best.lane, 2)
+
+
+func _warden_act(u) -> void:
+	u.attacked_round = round_num
+	match _warden_attack_kind():
+		"contempt":
+			_warden_contempt()
+			if _warden_phase_two() and result == "":
+				_warden_sentence()
+		_:
+			_warden_gavel_sweep(u)
 
 
 func _the_unbound_end(u) -> void:
@@ -1622,6 +1812,7 @@ func _start_round() -> void:
 	_clear_unplayable()
 	_draw(5 if round_num == 1 else 2)
 	_act3_phase_summons()
+	_unbound_suppressor_pulse()
 	_unbound_filament_pulse()
 	if _has_living(ENEMY, "warden_eternal"):
 		warden_authority += 2 if _warden_phase_two() else 1
@@ -1689,6 +1880,7 @@ func _capture() -> Dictionary:
 		"intents": intents.duplicate(true), "petrified_lane": petrified_lane, "sandstorm_row": sandstorm_row,
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
 		"styx_used": styx_used, "obol_used": obol_used, "ankh_blessed": ankh_blessed, "armaments_played": armaments_played,
+		"cards_played": cards_played,
 		"last_dead_ally": last_dead_ally.duplicate(true) if last_dead_ally != null else null, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
 		"gate_damage": gate_damage, "extra_waves": extra_waves.duplicate(true),
@@ -1697,6 +1889,7 @@ func _capture() -> Dictionary:
 		"breach_ward_charges": breach_ward_charges, "rift_intensity": rift_intensity,
 		"seal_blank_round": seal_blank_round,
 		"vault_bleed": vault_bleed, "filament_rounds_left": filament_rounds_left,
+		"unbound_suppressor_next": unbound_suppressor_next, "unbound_atk_cut": unbound_atk_cut,
 		"warden_authority": warden_authority, "accused_uids": accused_uids.duplicate(),
 		"accused_damage_this_round": accused_damage_this_round, "warden_bailiffs_done": warden_bailiffs_done,
 		"sundered": sundered.duplicate(), "ward_saves": ward_saves.duplicate(),
@@ -1739,6 +1932,7 @@ func restart_plan() -> String:
 	obol_used = s["obol_used"]
 	ankh_blessed = s.get("ankh_blessed", false)
 	armaments_played = s["armaments_played"]
+	cards_played = s.get("cards_played", 0)
 	valhalla_returned = s["valhalla_returned"]
 	last_dead_ally = s["last_dead_ally"]
 	_next_uid = s["next_uid"]
@@ -1759,6 +1953,8 @@ func restart_plan() -> String:
 	seal_blank_round = int(s.get("seal_blank_round", 0))
 	vault_bleed = s.get("vault_bleed", false)
 	filament_rounds_left = int(s.get("filament_rounds_left", 0))
+	unbound_suppressor_next = int(s.get("unbound_suppressor_next", 0))
+	unbound_atk_cut = int(s.get("unbound_atk_cut", 0))
 	warden_authority = int(s.get("warden_authority", 0))
 	accused_uids = s.get("accused_uids", []).duplicate()
 	accused_damage_this_round = int(s.get("accused_damage_this_round", 0))
@@ -1913,13 +2109,14 @@ func _declare_intents() -> void:
 				var names: Array = lanes.map(func(l): return str(l + 1))
 				it = {"type": "constrict", "lanes": lanes, "text": "CONSTRICT lane%s %s" % ["s" if lanes.size() > 1 else "", " and ".join(names)]}
 			"warden_eternal":
-				var acc_names: Array = []
-				for uid in accused_uids:
-					var au = _player_unit_by_uid(uid)
-					if au != null:
-						acc_names.append(au.display_name())
-				var acc_txt: String = ", ".join(acc_names) if not acc_names.is_empty() else "none"
-				it = {"type": "attack", "text": "AUTHORITY %d, Accused: %s" % [warden_authority, acc_txt]}
+				it = {"type": _warden_attack_kind(), "text": _warden_intent_text()}
+				if _warden_attack_kind() == "gavel_sweep":
+					var lane_a: int = _lane_with_most_player_units()
+					it["lane"] = lane_a
+					if _warden_phase_two():
+						it["lanes"] = [lane_a, _lane_with_most_player_units(lane_a)]
+					else:
+						it["lanes"] = [lane_a]
 			"door_clerk":
 				it = {"type": "attack", "text": "Attack lane %d (nominates Accused)" % (e.lane + 1)}
 			"door_bailiff":
@@ -1927,8 +2124,17 @@ func _declare_intents() -> void:
 			"door_warder":
 				it = {"type": "attack", "text": "Attack lane %d" % (e.lane + 1)}
 			"the_unbound":
-				var fil := " FILAMENT" if _filament_covers_unbound() else ""
-				it = {"type": "attack", "text": "Attack lane %d, UNRAVEL, Roar/Shatter%s" % [e.lane + 1, fil]}
+				var tags := ""
+				var suppress: int = _unbound_suppress_amount()
+				if suppress > 0:
+					tags += ", cut −%d ATK" % suppress
+				if _filament_covers_unbound():
+					tags += ", FILAMENT"
+				it = {"type": "attack", "text": "Attack lane %d, UNRAVEL, Roar/Shatter%s" % [e.lane + 1, tags]}
+			"chain_weight":
+				it = {"type": "wait", "text": "CHAIN WEIGHT: kill for Unbound −2 ATK"}
+			"adamant_link":
+				it = {"type": "wait", "text": "ADAMANT LINK: kill for Unbound −3 ATK"}
 			"seal_of_names":
 				it = {"type": "litany", "text": _seal_intent_text(e)}
 			"door_of_gleipnir":
@@ -2104,6 +2310,8 @@ func card_cost(card: Dictionary) -> int:
 	var def := card_def(card)
 	if card.get("free_round", -1) == round_num:
 		return 0
+	if cards_played == 0 and has_relic("opening_litany"):
+		return 0
 	if def["type"] == "spell" and free_spell_active():
 		return 0
 	if def["type"] == "armament" and armaments_played == 0 and has_relic("anvil_of_lemnos"):
@@ -2209,16 +2417,19 @@ func play_unit(hand_index: int, lane: int, row: int) -> String:
 		return "%s can't be played." % def["name"]
 	if def["type"] != "unit":
 		return "That card is a spell."
-	if def["cost"] > faith:
+	var cost := card_cost(card)
+	if cost > faith:
 		return "Not enough Faith."
 	if unit_at(PLAYER, row, lane) != null:
 		return "That slot is occupied."
 	if not slot_open(PLAYER, row, lane):
 		return "That slot is Rotted."
-	faith -= def["cost"]
+	faith -= cost
 	hand.remove_at(hand_index)
+	cards_played += 1
 	var u = _spawn(card["id"], PLAYER, lane, row, card)
 	u.from_hand = true
+	u.paid_cost = cost
 	acted_this_plan = true
 	events.clear()
 	_log("Deployed %s." % _unit_label(u))
@@ -2258,6 +2469,7 @@ func play_spell(hand_index: int, targets: Array, direction := 0) -> String:
 		return err
 	faith -= cost
 	hand.remove_at(hand_index)
+	cards_played += 1
 	if def["type"] == "armament":
 		armaments_this_round += 1
 		armaments_played += 1
@@ -3046,11 +3258,13 @@ func recall_unit(row: int, lane: int) -> String:
 	if hand.size() >= MAX_HAND:
 		return "Your hand is full."
 	var card: Dictionary = u.card
-	var cost: int = u.def["cost"]
+	var cost: int = u.paid_cost
 	_remove(u)
 	u.alive = false
 	hand.append(card)
 	faith += cost
+	if cards_played > 0:
+		cards_played -= 1
 	acted_this_plan = true
 	events.clear()
 	_log("Returned %s to your hand." % card_def(card)["name"])
@@ -3416,6 +3630,9 @@ func _act(u) -> void:
 	if u.id == "siege_engine":
 		_siege_act(u)
 		return
+	if u.id == "warden_eternal":
+		_warden_act(u)
+		return
 	if u.row == BACK and not u.has_kw("ranged"):
 		return
 	if u.id == "benben_stone":
@@ -3440,13 +3657,6 @@ func _act(u) -> void:
 		if hunted != null:
 			target = hunted
 			_log("%s takes Vengeance on %s." % [_unit_label(u), hunted.display_name()])
-	if u.id == "warden_eternal":
-		for uid in accused_uids:
-			var accused = _player_unit_by_uid(uid)
-			if accused != null and accused.alive and _can_target(u, accused):
-				target = accused
-				_log("%s turns the court on %s." % [_unit_label(u), accused.display_name()])
-				break
 	if target == null:
 		return
 	if target is String:
@@ -3514,8 +3724,13 @@ func _attack(u, target, atk: int) -> void:
 			burn_amt += _count_living(PLAYER, "solar_scarab")
 		_add_burn(target, burn_amt)
 
-	if u.has_kw("pierce") and excess > 0 and behind != null and behind.alive:
-		_deal_damage(behind, excess, "pierce")
+	if u.has_kw("pierce") and excess > 0:
+		var leftover: int = excess
+		if behind != null and behind.alive:
+			leftover = _deal_damage(behind, leftover, "pierce")
+		## Leftover after the last unit in the lane still reaches the Core.
+		if leftover > 0 and target.side == PLAYER:
+			_damage_core(leftover, "%s (Pierce)" % u.display_name(), true)
 
 	if u.has_kw("cleave"):
 		for lane in [target.lane - 1, target.lane + target.width]:
@@ -3855,6 +4070,8 @@ func _kill(u) -> void:
 	if u.id == "gold_filament":
 		filament_rounds_left = 0
 		_log("The Gold Filament is cut — The Unbound feels full blows again.")
+	if u.id in ["chain_weight", "adamant_link"]:
+		_apply_unbound_suppressor_kill(u.id)
 	if u.id in ["chain_anchor", "chain_thrall", "gold_seam"]:
 		_check_pending_sunders()
 	if u.id == "canopic_lock":
@@ -3891,6 +4108,10 @@ func _kill(u) -> void:
 		_damage_core(3, "Gavel")
 		_log("The Gavel falls — Authority rises to %d." % warden_authority)
 		accused_uids.erase(u.uid)
+	# Tribunal officers: killing one wounds the Warden.
+	if u.id in WARDEN_MINIONS and _has_living(ENEMY, "warden_eternal"):
+		_log("%s's fall rattles the court." % u.display_name())
+		_damage_warden_from_minion(2)
 	if u.id == "warden_eternal":
 		accused_uids.clear()
 		warden_authority = 0

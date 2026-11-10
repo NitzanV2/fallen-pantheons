@@ -280,14 +280,22 @@ func test_pierce() -> void:
 	check(not ein.alive, "pierce: einherjar dies")
 	check(back.hp == 2, "pierce: 2 excess damage reaches the back unit")
 	check(back.atk == 4, "pierce: einherjar's on-death buffs its lane")
-	check(c.core_hp == 50, "pierce: Core untouched")
+	check(c.core_hp == 50, "pierce: Core untouched when the back unit soaks the excess")
 
 	c = fresh()
 	var lone = c.debug_place("echo_archer", P, 0, F)
 	c.debug_place("void_charger", E, 0, F)
 	c._declare_intents()
 	c.end_plan()
-	check(not lone.alive and c.core_hp == 50, "pierce: an enemy's excess damage stops at your last unit, not the Core")
+	check(not lone.alive and c.core_hp == 48, "pierce: leftover excess after the last unit hits the Core")
+
+	c = fresh()
+	c.debug_place("raven_of_odin", P, 0, F)
+	c.debug_place("raven_of_odin", P, 0, B)
+	c.debug_place("void_charger", E, 0, F)
+	c.end_plan()
+	check(c.unit_at(P, F, 0) == null and c.unit_at(P, B, 0) == null and c.core_hp == 48,
+		"pierce: excess after front and back both die still hits the Core")
 
 
 func test_valkyrie_reinforce() -> void:
@@ -983,12 +991,12 @@ func test_vault_verbs() -> void:
 	check(broke.all(func(u): return u.atk >= 9), "vault: Chain-Broke inherit Unbound ATK")
 	check(c.vault_bleed, "vault: empty-slot bleed starts on the split")
 	check(c.core_hp <= core_pre_sunder - 2, "vault: Sunder shock taxes Core")
-	## Cascade: each Chain-Broke Sundering-splits into Loose Links (partial inherit).
+	## Cascade: each Chain-Broke Sundering-splits into Unbound Remnants (partial inherit).
 	var parent_atk: int = broke[0].atk
 	c._deal_damage(broke[0], broke[0].max_hp, "effect")
 	var links: Array = c.units(E).filter(func(u): return u.id == "loose_link")
-	check(links.size() == 2, "vault: Chain-Broke cascades into two Loose Links")
-	check(links.all(func(u): return u.atk >= maxi(4, parent_atk - 2) and u.has_kw("pierce")), "vault: Loose Links Pierce and inherit ATK-2")
+	check(links.size() == 2, "vault: Chain-Broke cascades into two Unbound Remnants")
+	check(links.all(func(u): return u.atk >= maxi(4, parent_atk - 2) and u.has_kw("pierce")), "vault: Unbound Remnants Pierce and inherit ATK-2")
 	c._deal_damage(broke[1], 99, "effect")
 	for link in c.units(E).filter(func(u): return u.id == "loose_link"):
 		c._deal_damage(link, 99, "effect")
@@ -1016,6 +1024,26 @@ func test_vault_verbs() -> void:
 	hp_before = unbound.hp
 	c._deal_damage(unbound, 10, "effect")
 	check(unbound.hp == hp_before - 10, "vault: cutting Filament restores full damage")
+	## Chain Weight / Adamant Link cut Unbound ATK when killed (not while alive).
+	c = fresh(50, true)
+	unbound = c.debug_place("the_unbound", E, 1, F)
+	unbound.atk = 8
+	c.round_num = 2
+	c._unbound_suppressor_pulse()
+	check(c._has_living(E, "chain_weight"), "vault: Chain Weight pulses on even round while whole")
+	check(c.effective_atk(unbound) == 8, "vault: living Chain Weight does not cut Unbound ATK")
+	c._deal_damage(c.units(E).filter(func(u): return u.id == "chain_weight")[0], 99, "effect")
+	check(c.unbound_atk_cut == 2 and c.effective_atk(unbound) == 6, "vault: killing Weight cuts Unbound by 2 ATK")
+	c._unbound_suppressor_pulse()
+	var link = c.units(E).filter(func(u): return u.id == "adamant_link")
+	check(link.size() == 1 and link[0].shield == 2, "vault: next pulse is Adamant Link with Shield 2")
+	check(c.effective_atk(unbound) == 6, "vault: living Adamant Link does not add another cut")
+	c._deal_damage(link[0], 99, "effect")
+	check(c.unbound_atk_cut == 5 and c.effective_atk(unbound) == 3, "vault: killing Link stacks −3 ATK cut")
+	c._unbound_suppressor_pulse()
+	check(c._has_living(E, "chain_weight"), "vault: suppressors alternate Weight then Link then Weight")
+	c._deal_damage(unbound, unbound.max_hp, "effect")
+	check(not c._unbound_suppressor_alive() and c.unbound_atk_cut == 0, "vault: Sunder clears living suppressors and ATK cut")
 	## Sealmark blocks move.
 	c = fresh(40, true)
 	var ally = c.debug_place("raider", P, 1, F)
@@ -1070,8 +1098,10 @@ func test_vault_verbs() -> void:
 	c.actor = carry
 	c._deal_damage(we, 4, "melee")
 	check(we.hp == we_hp - 4 and c.accused_damage_this_round == 4, "vault: Accused damages the Warden")
+	we_hp = we.hp
 	c._deal_damage(clerk, 99, "effect")
 	check(c.can_choose_accused(), "vault: killing Clerk allows choosing Accused")
+	check(we.hp == we_hp - 2, "vault: killing a Clerk deals 2 to the Warden")
 	check(c.choose_accused(chump.uid) == "" and c.is_accused(chump), "vault: player chooses Accused")
 	## Warders spawn away from the Accused's lane.
 	c = fresh(50, true)
@@ -1083,14 +1113,25 @@ func test_vault_verbs() -> void:
 	var warders: Array = c.units(E).filter(func(u): return u.id == "door_warder")
 	check(warders.size() == 1, "vault: Warden spawns a Door Warder")
 	check(warders[0].lane != 0, "vault: Warder prefers a lane that is not the Accused's")
-	## Fill fronts so the next Warder must go back — and be Ranged.
+	## Clear that Warder, pack fronts with non-officers so the next call must go back — and be Ranged.
+	warders[0].alive = false
+	c._remove(warders[0])
 	for lane in 4:
 		if c.unit_at(E, F, lane) == null:
-			c.debug_place("door_warder", E, lane, F)
+			c.debug_place("husk", E, lane, F)
 	c._spawn_warden_minions()
 	var back_warders: Array = c.units(E).filter(func(u): return u.id == "door_warder" and u.row == B)
 	check(back_warders.size() >= 1 and back_warders.any(func(u): return u.has_kw("ranged")),
 		"vault: back-row Door Warders are Ranged")
+	## Cap: never more than 3 living Warden officers.
+	c = fresh(50, true)
+	we = c.debug_place("warden_eternal", E, 1, B)
+	c.debug_place("door_clerk", E, 0, F)
+	c.debug_place("door_clerk", E, 1, F)
+	c.debug_place("door_warder", E, 2, F)
+	check(c._warden_minion_count() == 3, "vault: three officers already alive")
+	c._spawn_warden_minions()
+	check(c._warden_minion_count() == 3, "vault: Warden will not spawn past 3 officers")
 	## Phase 2 Bailiffs.
 	c = fresh(50, true)
 	we = c.debug_place("warden_eternal", E, 1, B)
@@ -1101,6 +1142,55 @@ func test_vault_verbs() -> void:
 	c.actor = null
 	check(c._warden_phase_two() and c.warden_bailiffs_done, "vault: half HP summons Bailiffs")
 	check(c.units(E).any(func(u): return u.id == "door_bailiff"), "vault: Bailiffs on the board")
+	## Contempt of Court: 2 to non-Accused; Accused is spared.
+	c = fresh(50, true)
+	we = c.debug_place("warden_eternal", E, 1, B)
+	carry = c.debug_place("ark_sentinel", P, 0, F)
+	chump = c.debug_place("echo_archer", P, 3, F)
+	var bystander = c.debug_place("hoplite", P, 1, F)
+	c.accused_uids = [carry.uid]
+	c.round_num = 1
+	c.actor = we
+	c._warden_contempt()
+	c.actor = null
+	check(carry.hp == carry.max_hp, "vault: Contempt spares the Accused")
+	check(chump.hp == chump.max_hp - 2 and bystander.hp == bystander.max_hp - 2, "vault: Contempt hits non-Accused for 2")
+	## No Accused: Contempt hits everyone.
+	c.accused_uids = []
+	var hp_carry: int = carry.hp
+	c.actor = we
+	c._warden_contempt()
+	c.actor = null
+	check(carry.hp == hp_carry - 2, "vault: Contempt with no Accused hits the whole board")
+	## Gavel Sweep: fullest lane takes Warden ATK.
+	c = fresh(50, true)
+	we = c.debug_place("warden_eternal", E, 1, B)
+	we.atk = 4
+	var front = c.debug_place("ark_sentinel", P, 2, F)
+	var back = c.debug_place("echo_archer", P, 2, B)
+	c.debug_place("hoplite", P, 0, F)
+	c.round_num = 2
+	c.actor = we
+	c._warden_gavel_sweep(we)
+	c.actor = null
+	check(front.hp == front.max_hp - 4 and back.hp == back.max_hp - 4, "vault: Gavel Sweep hits every unit in the fullest lane")
+	## Phase 2 Sentence: 5 + Sealmark on highest-HP non-Accused.
+	c = fresh(50, true)
+	we = c.debug_place("warden_eternal", E, 1, B)
+	we.hp = we.max_hp / 2
+	carry = c.debug_place("ark_sentinel", P, 0, F)
+	carry.max_hp = 20
+	carry.hp = 20
+	chump = c.debug_place("echo_archer", P, 3, F)
+	chump.max_hp = 12
+	chump.hp = 12
+	c.accused_uids = [carry.uid]
+	check(c._warden_phase_two(), "vault: Sentence setup is phase 2")
+	c.actor = we
+	c._warden_sentence()
+	c.actor = null
+	check(chump.hp == 7, "vault: Sentence deals 5 to highest-HP non-Accused")
+	check(c.sealmarks.has(3), "vault: Sentence Sealmarks the victim's lane")
 	## Act 3 pools exist.
 	check(Data.ACTS.size() == 3 and Data.BATTLE_POOLS["warden_eternal"] == "act3_boss", "vault: act3 pools wired")
 	check(Data.battle("outer_seal").get("act", 0) == 3, "vault: early battle")
@@ -2248,6 +2338,28 @@ func test_act2_relics() -> void:
 	check(c.play_spell(c.hand.find(spears[0]), [[P, F, 0]]) == "", "relic: free Armament played with 0 Faith")
 	check(c.card_cost(spears[1]) == Data.CARDS["bronze_spear"]["cost"], "relic: Anvil only once per fight")
 	check(holder.armaments.size() == 1, "relic: Armament attached")
+
+	c = Combat.new()
+	c.setup({"core": 50, "enemies": [["void_spawn", 3, 0]], "terrain": []},
+			["ark_sentinel", "ark_sentinel", "rebuke"], ["opening_litany"], 1)
+	var first_unit: Dictionary = c.hand.filter(func(k): return k["id"] == "ark_sentinel")[0]
+	check(c.card_cost(first_unit) == 0, "relic: Opening Litany makes the first card free")
+	c.faith = 0
+	check(c.play_unit(c.hand.find(first_unit), 0, F) == "", "relic: free unit played with 0 Faith")
+	check(c.cards_played == 1 and c.unit_at(P, F, 0) != null, "relic: Opening Litany spent on the first play")
+	var next_unit: Dictionary = c.hand.filter(func(k): return k["id"] == "ark_sentinel")[0]
+	check(c.card_cost(next_unit) == Data.CARDS["ark_sentinel"]["cost"], "relic: Opening Litany only once per fight")
+	c.faith = 3
+	check(c.recall_unit(F, 0) == "" and c.cards_played == 0 and c.faith == 3, "relic: recalling restores the Litany")
+	check(c.card_cost(c.hand.filter(func(k): return k["id"] == "ark_sentinel")[0]) == 0, "relic: Litany is free again after recall")
+	check(not Run.new()._relic_droppable("opening_litany"), "relic: Opening Litany is shrine-only")
+	var litany_run = Run.new()
+	litany_run.setup(5, "myrmidon")
+	var before_hp: int = litany_run.max_hp
+	litany_run.start_event("altar_of_first_light")
+	check(litany_run.choose_option(0) == "", "altar: offer vitality for Opening Litany")
+	check(litany_run.max_hp == before_hp - 8 and litany_run.relics.has("opening_litany"), "altar: grants Opening Litany")
+	check(Data.EVENTS["altar_of_first_light"].get("weight", 10) == 3, "altar: rare shrine weight")
 
 	c = Combat.new()
 	c.setup({"core": 50, "enemies": [["void_spawn", 3, 0]], "terrain": []}, [], ["sun_disk"], 3)

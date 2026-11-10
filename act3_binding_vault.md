@@ -195,10 +195,11 @@ Each boss is a face of the vault: **Warden**, **Prisoner**, **Seal**. Same patte
 
 **Rules (Tribunal).**
 
-- **Accused.** Only the Accused may damage the Warden; other hits on the Warden are refused (no Core tax). Clerks, Bailiffs, and Warders can still be attacked by anyone. While any Clerk/Bailiff lives, the court nominates your highest-ATK unit(s). Kill them to choose the Accused yourself (Shift-click). The Accused is Sealmarked that planning phase. Warden prefers attacking the Accused.
-- **Door Warders.** Each round the Warden calls Warders (1, or 2 in phase 2) into empty slots, preferring lanes that are **not** the Accused’s — fodder for everyone else.
+- **Accused.** Only the Accused may damage the Warden; other hits on the Warden are refused (no Core tax). Clerks, Bailiffs, and Warders can still be attacked by anyone. While any Clerk/Bailiff lives, the court nominates your highest-ATK unit(s). Kill them to choose the Accused yourself (Shift-click). The Accused is Sealmarked that planning phase.
+- **Board attacks.** Odd rounds: **Contempt of Court** (2 to every non-Accused; whole board if none). Even rounds: **Gavel Sweep** (Warden ATK to every unit in your fullest lane; both fullest lanes in phase 2). Phase 2 Contempt also **Sentences** the highest-HP non-Accused (5 + Sealmark).
+- **Door Warders.** Each round the Warden calls Warders (1, or 2 in phase 2) into empty slots, preferring lanes that are **not** the Accused’s — at most **3** officers alive. Killing an officer deals **2** to the Warden.
 - **Authority.** +1/round (+2 in phase 2). End of round: Core takes Authority. If the Accused dealt ≥6 (≥8 in phase 2) to the Warden, Authority −2. **Failure to Appear** (0 damage): Sealmark the Accused’s lane again.
-- **Phase 2 (half HP).** Door Bailiffs take the floor (forced nomination returns); two Accused; faster Authority; **Gavel** — if an Accused dies, Core 3 and Authority +1.
+- **Phase 2 (half HP).** Door Bailiffs take the floor (forced nomination returns); two Accused; faster Authority; **Gavel** — if an Accused dies, Core 3 and Authority +1. Sentence joins Contempt.
 
 **What it checks.** Who may strike the boss; carry vs chump petitioner; clearing Clerks for agency; Authority clock vs petition burst.
 
@@ -217,7 +218,7 @@ Each boss is a face of the vault: **Warden**, **Prisoner**, **Seal**. Same patte
 - **Unravel.** +1 ATK at the start of each round while the body is still whole. Intent shows the rising ATK.
 - **Rift Roar / Shatter.** Whenever it takes 5+ damage in one hit, open a Breach in its lane **and** the Core takes 3.
 - **Gold Filament.** On even rounds while whole, a short-lived Filament (6 HP, 2 rounds) strands behind it. While it lives, Unbound takes half damage. Kill it early for full damage; if it expires unkilled, Core takes 3 and a Breach opens.
-- **Cascade Sunder.** At half HP it splits into two **Chain-Broke** (inherit ATK, Unravel). Each Chain-Broke at half splits into two **Loose Links** (Pierce, partial ATK inherit). Each Sunder event deals 2 to the Core and opens a Breach. Empty player slots deal 1 to the Core at end of round until the last husk dies.
+- **Cascade Sunder.** At half HP it splits into two **Chain-Broke** (inherit ATK, Unravel). Each Chain-Broke at half splits into two **Unbound Remnants** (Pierce, partial ATK inherit; same face as the boss). Each Sunder event deals 2 to the Core and opens a Breach. Empty player slots deal 1 to the Core at end of round until the last husk dies. Chain Weights / Adamant Links pulse behind it while whole — **kill them** to cut its ATK by 2 / 3.
 
 **What it checks.** Burst vs chip (Shatter tax vs Unravel clock); backline tempo vs Filament snaps; finishing gen-1 husks before Pierce gen-2; formation vs empty-slot bleed.
 

@@ -41,7 +41,7 @@ const KEYWORD_INFO := {
 	"ranged": ["Ranged", "Can attack from the back row. Can't target units on Ruins."],
 	"taunt": ["Taunt", "Enemies attacking from its lane or an adjacent lane must target it."],
 	"cleave": ["Cleave", "Also hits the units in the lanes on both sides of the target, in the same row."],
-	"pierce": ["Pierce", "Damage beyond what kills the target carries to the unit behind it."],
+	"pierce": ["Pierce", "Damage beyond what kills the target carries to the unit behind it. Leftover still hits the Core."],
 	"revive": ["Revive", "Once per fight: when it dies, it returns in the same slot with 1 HP."],
 	"reinforce": ["Reinforce", "When the ally in front of it dies, it steps into the front slot and attacks (if it has not already attacked this round). That swing does not spend its normal attack. Reinforcing or attacking during planning locks it in place."],
 	"immovable": ["Immovable", "Can't be pushed or swapped and takes no collision damage."],
@@ -113,11 +113,6 @@ const BOARD_SPRITE_WIDE_ASPECT := 1.4
 static func board_sprite_stem(id: String) -> String:
 	if id.begins_with("amalgam_"):
 		return "amalgam"
-	# Unbound cascade / filament reuse existing vault art until bespoke sprites exist.
-	if id == "loose_link":
-		return "husk"
-	if id == "gold_filament":
-		return "gold_seam"
 	return id
 
 
