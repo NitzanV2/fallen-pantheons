@@ -546,6 +546,10 @@ func finish_combat(c) -> void:
 		if type == "elite" and has_relic("obol"):
 			reward["gold"] += 10
 			reward["notes"].append("Obol: +10 gold.")
+		if type == "elite" and has_relic("titans_marrow"):
+			max_hp += 3
+			core_hp = mini(core_hp + 3, max_hp)
+			reward["notes"].append("Titan's Marrow: +3 max Core HP.")
 		if has_relic("healing_ampoule"):
 			reward["notes"].append("Healing Ampoule: healed %d." % _heal(3))
 		reward["cards"] = _card_choices(act_def()["elite_odds" if type == "elite" else "normal_odds"], reward_rng)

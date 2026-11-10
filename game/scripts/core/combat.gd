@@ -78,12 +78,26 @@ const ROT_MAX := 4
 ## Act 3 Binding Vault: open Breaches as "side:lane" -> true. Sealmarks: player lane -> rounds left.
 var breaches := {}
 var sealmarks := {}
+## Rift intensity (S): after each rift hit, rises by N (open Breaches). Does not reset when sealed.
+var rift_intensity := 0
+## Seal of Names: Blank Cartouche locks the Seal on this round (set to round_num + 1 when Faith hits 0).
+var seal_blank_round := 0
 ## Broken Manacle: skip the first Bound clamp this fight.
 var manacle_used := false
 ## Reliquary Inlay / Key of the Outer Seal: prevent the next Breach open.
 var breach_ward_charges := 0
-## The Unbound phase 2: empty player slots deal 1 to the Core at end of round.
+## The Unbound phase 2+: empty player slots deal 1 to the Core at end of round while lineage lives.
 var vault_bleed := false
+## Gold Filament behind The Unbound: rounds left before it snaps (0 = none).
+var filament_rounds_left := 0
+## Warden Eternal Tribunal: Authority meter (Core tax each end of round).
+var warden_authority := 0
+## Player unit uids nominated as Accused this round (1, or 2 in phase 2).
+var accused_uids: Array = []
+## Damage Accused units have dealt to the Warden this round (petition relief).
+var accused_damage_this_round := 0
+## Phase 2 Bailiffs have been summoned once.
+var warden_bailiffs_done := false
 ## Uids that already Sundering-split (not a death).
 var sundered := {}
 ## Adamant Warden: already spent its once-per-round save this round (by uid).
@@ -101,6 +115,8 @@ var aegis_used := false
 var mead_used := false
 var styx_used := false
 var obol_used := false
+## Ankh of Eternity: already blessed a unit this fight after first end_plan.
+var ankh_blessed := false
 var armaments_played := 0
 var valhalla_returned := {}
 var last_dead_ally = null
@@ -439,9 +455,18 @@ func _living(id: String):
 	return null
 
 
-## Helm of Darkness: every 3rd round Hades can't be targeted or damaged.
+## Helm of Darkness / Blank Cartouche: unit can't be targeted or damaged this round.
 func helm_active(u) -> bool:
-	return u.id == "hades" and round_num % 3 == 0
+	if u == null:
+		return false
+	if u.id == "hades" and round_num % 3 == 0:
+		return true
+	return seal_blank(u)
+
+
+## Seal of Names Blank Cartouche: armed by ending planning at 0 Faith; locks the following round.
+func seal_blank(u) -> bool:
+	return u != null and u.id == "seal_of_names" and u.alive and round_num == seal_blank_round
 
 
 # ---------------------------------------------------------------- Act 3 Binding Vault
@@ -487,11 +512,27 @@ func _close_breaches_by_presence() -> void:
 		_log("Your presence reseals a Breach in lane %d." % (int(String(key).split(":")[1]) + 1))
 
 
+func open_breach_count() -> int:
+	return breaches.values().count(true)
+
+
+## Next end-of-round Core hit if Breaches stay as they are now: S+N while N>0, else 0.
+func rift_preview() -> int:
+	var n: int = open_breach_count()
+	if n <= 0:
+		return 0
+	return rift_intensity + n
+
+
+## End of round: while any Breach is open, Core takes S+N, then S rises by N.
 func _rift_tax() -> void:
-	var n: int = breaches.values().count(true)
+	var n: int = open_breach_count()
 	if n <= 0:
 		return
-	_damage_core(n, "Rift (%d Breach%s)" % [n, "es" if n != 1 else ""])
+	var amount: int = rift_intensity + n
+	_damage_core(amount, "Rift (intensity %d + %d Breach%s)" % [
+		rift_intensity, n, "es" if n != 1 else ""], false, {"rift": amount, "rift_intensity": rift_intensity})
+	rift_intensity += n
 
 
 func sealmark_player_lane(lane: int, rounds := 2) -> void:
@@ -588,15 +629,31 @@ func _check_pending_sunders() -> void:
 			_try_sunder(e, e.max_hp)
 
 
+## True while any Unbound cascade husk still lives (Chain-Broke or Loose Link).
+func _unbound_lineage_alive() -> bool:
+	return units(ENEMY).any(func(e): return e.id in ["chain_broke", "loose_link"] and e.alive)
+
+
 func _sunder_unit(u) -> void:
 	sundered[u.uid] = true
 	var kids: Array = u.def.get("sunder_into", ["husk", "husk"])
 	var home_lane: int = u.lane
 	var home_row: int = u.row
+	var inherit_atk: int = 0
+	var inherit_partial := false
+	if u.id == "the_unbound":
+		inherit_atk = u.atk
+	elif u.id == "chain_broke":
+		inherit_atk = u.atk
+		inherit_partial = true
 	_log("%s Sundering-splits!" % _unit_label(u), {"sunder": true, "pose_slot": [u.side, u.row, u.lane]})
 	if u.id == "the_unbound":
 		vault_bleed = true
-		_log("Broken chains: empty slots now bleed the Core.")
+		_log("Broken chains: empty slots now bleed the Core until the last husk falls.")
+	# Shatter tax: forcing a split is not free.
+	if u.id in ["the_unbound", "chain_broke"]:
+		_damage_core(2, "Sunder shock")
+		open_breach(PLAYER, home_lane, "Sunder shock")
 	u.alive = false
 	_remove(u)
 	# Not a death: skip On-Death / Revive / Hel toll / etc.
@@ -608,13 +665,31 @@ func _sunder_unit(u) -> void:
 				continue
 			if unit_at(ENEMY, home_row, lane) != null:
 				continue
-			_spawn(str(kid_id), ENEMY, lane, home_row, null)
+			var kid = _spawn(str(kid_id), ENEMY, lane, home_row, null)
+			if inherit_atk > 0 and kid != null:
+				if inherit_partial:
+					kid.atk = maxi(kid.atk, inherit_atk - 2)
+				else:
+					kid.atk = maxi(kid.atk, inherit_atk)
 			break
+	if u.id == "the_unbound":
+		_clear_gold_filaments()
 	_check_enemies_cleared()
+
+
+func _clear_gold_filaments() -> void:
+	filament_rounds_left = 0
+	for f in units(ENEMY).filter(func(e): return e.id == "gold_filament" and e.alive):
+		f.alive = false
+		_remove(f)
 
 
 func _vault_bleed_tax() -> void:
 	if not vault_bleed:
+		return
+	# Bleed lasts while any Unbound cascade husk remains.
+	if not _unbound_lineage_alive():
+		vault_bleed = false
 		return
 	var empty := 0
 	for row in 2:
@@ -623,6 +698,59 @@ func _vault_bleed_tax() -> void:
 				empty += 1
 	if empty > 0:
 		_damage_core(empty, "Broken chains (empty slots)")
+
+
+## Spawn / refresh cadence for Gold Filament behind The Unbound (even rounds while whole).
+func _unbound_filament_pulse() -> void:
+	var boss = _living("the_unbound")
+	if boss == null or not boss.alive:
+		return
+	if _has_living(ENEMY, "gold_filament"):
+		return
+	if round_num < 2 or round_num % 2 != 0:
+		return
+	var lane := -1
+	for off in [0, 1, -1, 2, -2]:
+		var cand: int = boss.lane + int(off)
+		if cand < 0 or cand >= LANES:
+			continue
+		if cand < boss.lane or cand >= boss.lane + boss.width:
+			continue
+		if unit_at(ENEMY, BACK, cand) == null:
+			lane = cand
+			break
+	if lane < 0:
+		for cand in range(boss.lane, mini(LANES, boss.lane + boss.width)):
+			if unit_at(ENEMY, BACK, cand) == null:
+				lane = cand
+				break
+	if lane < 0:
+		return
+	_spawn("gold_filament", ENEMY, lane, BACK, null)
+	filament_rounds_left = 2
+	_log("A Gold Filament strands behind The Unbound (half damage for 2 rounds).")
+
+
+## End of round: Filament counts down; unkilled snap taxes Core and opens a Breach.
+func _tick_gold_filament() -> void:
+	if not _has_living(ENEMY, "gold_filament"):
+		filament_rounds_left = 0
+		return
+	filament_rounds_left = maxi(0, filament_rounds_left - 1)
+	if filament_rounds_left > 0:
+		return
+	var fil = units(ENEMY).filter(func(e): return e.id == "gold_filament" and e.alive)
+	var lane: int = fil[0].lane if not fil.is_empty() else 1
+	for f in fil:
+		f.alive = false
+		_remove(f)
+	_log("The Gold Filament snaps!")
+	_damage_core(3, "Gold Filament")
+	open_breach(PLAYER, lane, "Gold Filament")
+
+
+func _filament_covers_unbound() -> bool:
+	return _has_living(ENEMY, "gold_filament")
 
 
 func _adamant_ward_save(dying) -> bool:
@@ -751,25 +879,209 @@ func _skeleton_key_end(key) -> void:
 	open_breach(PLAYER, _lane_with_fewest_player_units(), "Skeleton Key")
 
 
-func _warden_eternal_end(w) -> void:
-	if not w.alive or result != "":
+func _warden_clerks_alive() -> bool:
+	return units(ENEMY).any(func(e): return e.id in ["door_clerk", "door_bailiff"] and e.alive)
+
+
+func _warden_phase_two() -> bool:
+	var w = _living("warden_eternal")
+	return w != null and w.alive and w.hp * 2 <= w.max_hp
+
+
+func _warden_accused_count() -> int:
+	return 2 if _warden_phase_two() else 1
+
+
+func _warden_petition_threshold() -> int:
+	return 8 if _warden_phase_two() else 6
+
+
+func is_accused(u) -> bool:
+	return u != null and u.uid in accused_uids
+
+
+func _highest_atk_player_units(n: int) -> Array:
+	var pool: Array = units(PLAYER)
+	pool.sort_custom(func(a, b):
+		var aa := effective_atk(a)
+		var bb := effective_atk(b)
+		return aa > bb or (aa == bb and (a.lane < b.lane or (a.lane == b.lane and a.row < b.row)))
+	)
+	var out: Array = []
+	for i in mini(n, pool.size()):
+		out.append(pool[i])
+	return out
+
+
+## Sealmark Accused lanes for this planning phase (duration 1).
+func _sealmark_accused() -> void:
+	for uid in accused_uids:
+		var u = _player_unit_by_uid(uid)
+		if u != null and u.alive:
+			sealmark_player_lane(u.lane, 1)
+
+
+## Nominate Accused: clerks force highest ATK; otherwise keep valid picks or fill from highest ATK.
+func _nominate_accused() -> void:
+	accused_uids = []
+	accused_damage_this_round = 0
+	if not _has_living(ENEMY, "warden_eternal"):
 		return
-	if w.hp * 2 > w.max_hp:
-		var lane := rng.randi_range(0, LANES - 1)
-		for _i in LANES:
-			if unit_at(ENEMY, FRONT, lane) == null:
-				open_breach(ENEMY, lane, "Warden Eternal")
-				break
-			lane = (lane + 1) % LANES
+	var need: int = _warden_accused_count()
+	if _warden_clerks_alive():
+		for u in _highest_atk_player_units(need):
+			accused_uids.append(u.uid)
+		if not accused_uids.is_empty():
+			var names: Array = accused_uids.map(func(uid):
+				var u = _player_unit_by_uid(uid)
+				return u.display_name() if u != null else "?"
+			)
+			_log("The court names %s as Accused." % ", ".join(names))
+	else:
+		# Player may choose; seed with strongest so the round is never empty.
+		for u in _highest_atk_player_units(need):
+			accused_uids.append(u.uid)
+		if not accused_uids.is_empty():
+			_log("No Clerks remain — click your unit(s) to choose the Accused (default: highest ATK).")
+	_sealmark_accused()
+
+
+## Player assigns Accused while Clerks/Bailiffs are dead. Phase 2 needs two picks.
+func choose_accused(uid: int) -> String:
+	if phase != "plan":
+		return "You can only choose the Accused during planning."
+	if not _has_living(ENEMY, "warden_eternal"):
+		return ""
+	if _warden_clerks_alive():
+		return "Door Clerks nominate the Accused. Defeat them to choose."
+	var u = _player_unit_by_uid(uid)
+	if u == null or not u.alive:
+		return "Choose one of your units."
+	var need: int = _warden_accused_count()
+	if need <= 1:
+		accused_uids = [uid]
+	else:
+		if uid in accused_uids:
+			accused_uids.erase(uid)
+		else:
+			if accused_uids.size() >= need:
+				accused_uids.pop_front()
+			accused_uids.append(uid)
+	_sealmark_accused()
+	_log("%s is Accused." % u.display_name())
+	return ""
+
+
+func can_choose_accused() -> bool:
+	return phase == "plan" and _has_living(ENEMY, "warden_eternal") and not _warden_clerks_alive()
+
+
+## True when this hit on the Warden is refused (non-Accused). Clerks/Bailiffs remain fully hittable.
+func _tribunal_blocks_warden_hit(t, amount: int) -> bool:
+	if t == null or t.id != "warden_eternal" or amount <= 0:
+		return false
+	# Enemy-on-enemy / unbound effects still apply.
+	if actor != null and actor.side == ENEMY:
+		return false
+	# Only living Accused player units may damage the Warden.
+	if actor != null and actor.side == PLAYER and is_accused(actor):
+		return false
+	_log("The court refuses %s — only the Accused may strike the Warden." % (
+		_unit_label(actor) if actor != null else "the blow"))
+	return true
+
+
+func _warden_eternal_end(w) -> void:
+	if result != "":
+		return
+	# Authority tax even if the body just fell to husks — only while Warden lives.
+	if w == null or not w.alive:
+		return
+	if warden_authority > 0:
+		_damage_core(warden_authority, "Authority %d" % warden_authority)
+	var threshold: int = _warden_petition_threshold()
+	if accused_damage_this_round >= threshold:
+		var before: int = warden_authority
+		warden_authority = maxi(0, warden_authority - 2)
+		_log("The petition is heard: Authority %d → %d." % [before, warden_authority])
+	elif not accused_uids.is_empty() and accused_damage_this_round <= 0:
+		_log("Failure to Appear: the Accused did not petition.")
+		for uid in accused_uids:
+			var u = _player_unit_by_uid(uid)
+			if u != null and u.alive:
+				sealmark_player_lane(u.lane, 1)
+
+
+func _spawn_warden_bailiffs() -> void:
+	if warden_bailiffs_done or not _warden_phase_two():
+		return
+	warden_bailiffs_done = true
+	# Clear remaining clerks — court officers become Bailiffs.
+	for c in units(ENEMY).filter(func(e): return e.id == "door_clerk" and e.alive):
+		c.alive = false
+		_remove(c)
+	var spawned := 0
+	for lane in [1, 2, 0, 3]:
+		if spawned >= 2:
+			break
+		if unit_at(ENEMY, FRONT, lane) == null:
+			_spawn("door_bailiff", ENEMY, lane, FRONT, null)
+			spawned += 1
+	if spawned > 0:
+		_log("Open Court: Door Bailiffs take the floor.")
+	_nominate_accused()
+
+
+## Lanes currently held by Accused player units.
+func _accused_lanes() -> Array:
+	var lanes: Array = []
+	for uid in accused_uids:
+		var u = _player_unit_by_uid(uid)
+		if u != null and u.alive and not lanes.has(u.lane):
+			lanes.append(u.lane)
+	return lanes
+
+
+## Prefer empty enemy slots away from the Accused's lane(s), front before back.
+func _warden_minion_spawn_slots() -> Array:
+	var accused: Array = _accused_lanes()
+	var slots: Array = []
+	for away in [true, false]:
+		for row in [FRONT, BACK]:
+			for lane in LANES:
+				var is_accused_lane: bool = accused.has(lane)
+				if away and is_accused_lane:
+					continue
+				if not away and not is_accused_lane:
+					continue
+				if unit_at(ENEMY, row, lane) == null:
+					slots.append([row, lane])
+	return slots
+
+
+## Each round while the Warden lives: call Door Warders for non-Accused units to fight.
+## Back-row Warders get Ranged so they can actually strike.
+func _spawn_warden_minions() -> void:
+	if not _has_living(ENEMY, "warden_eternal"):
+		return
+	var count: int = 2 if _warden_phase_two() else 1
+	var slots: Array = _warden_minion_spawn_slots()
+	var spawned := 0
+	for slot in slots:
+		if spawned >= count:
+			break
+		var warder = _spawn("door_warder", ENEMY, slot[1], slot[0], null)
+		if warder != null and slot[0] == BACK and not warder.has_kw("ranged"):
+			warder.bonus_kw.append("ranged")
+		spawned += 1
+	if spawned > 0:
+		_log("The Warden calls %d Door Warder%s." % [spawned, "s" if spawned != 1 else ""])
 
 
 func _the_unbound_end(u) -> void:
-	if not u.alive:
-		# Phase 2 husks may still be up; bleed while any chain_broke lives or vault_bleed set.
-		return
-	if u.hp * 2 <= u.max_hp and not vault_bleed:
+	# Bleed and cascade are driven by Sunder / lineage; keep vault_bleed armed if husks somehow remain.
+	if not u.alive and _unbound_lineage_alive() and not vault_bleed:
 		vault_bleed = true
-		_log("The binding fails: empty slots bleed the Core.")
 
 
 func _seal_of_names_end(_s) -> void:
@@ -779,12 +1091,7 @@ func _seal_of_names_end(_s) -> void:
 func _act3_phase_summons() -> void:
 	for boss in units(ENEMY):
 		if boss.id == "warden_eternal" and boss.hp * 2 <= boss.max_hp:
-			if not _has_living(ENEMY, "key_acolyte"):
-				for lane in LANES:
-					if unit_at(ENEMY, FRONT, lane) == null:
-						_spawn("key_acolyte", ENEMY, lane, FRONT, null)
-						_log("The Warden summons a Key Acolyte.")
-						break
+			_spawn_warden_bailiffs()
 		if boss.id == "seal_of_names" and boss.hp * 2 <= boss.max_hp:
 			if not _has_living(ENEMY, "key_acolyte"):
 				for lane in LANES:
@@ -835,7 +1142,18 @@ func _seal_of_names_false_name() -> void:
 		deck.insert(rng.randi_range(0, maxi(0, deck.size())), _new_card("void_web"))
 		_log("False Name: the Seal spends 1 Faith and writes a Void Web into your draw pile.")
 	else:
-		open_breach(PLAYER, _lane_with_fewest_player_units(), "False Name")
+		# Locks next round only — this resolve can still damage the Seal.
+		seal_blank_round = round_num + 1
+		_log("Blank Cartouche: with no Faith left, the Seal locks next round (untargetable).",
+			{"seal_blank": seal_blank_round})
+
+
+func _seal_intent_text(e) -> String:
+	if seal_blank(e):
+		return "BLANK CARTOUCHE (untargetable), LITANY, FALSE NAME"
+	if phase == "plan" and faith <= 0:
+		return "LITANY emptiest lane; 0 Faith → BLANK CARTOUCHE next round"
+	return "LITANY emptiest lane, FALSE NAME (keep 1 Faith or lock)"
 
 
 func _hades_phase_two(h) -> bool:
@@ -1186,9 +1504,19 @@ func snapshot() -> Dictionary:
 		"rot_targets": _rot_targets(),
 		"void_tide": _void_tide(),
 		"breaches": breaches.keys().filter(func(k): return breaches[k]),
+		"rift_intensity": rift_intensity,
+		"rift_preview": rift_preview(),
+		"seal_blank": _has_living(ENEMY, "seal_of_names") and round_num == seal_blank_round,
+		"seal_blank_next": _has_living(ENEMY, "seal_of_names") and faith <= 0 and phase == "plan",
 		"sealmarks": sealmarks.duplicate(),
 		"vault_cell": card_def(vault_cell["card"])["name"] if not vault_cell.is_empty() else "",
 		"vault_bleed": vault_bleed,
+		"warden_authority": warden_authority if _has_living(ENEMY, "warden_eternal") else 0,
+		"accused_uids": accused_uids.duplicate(),
+		"accused_pickable": can_choose_accused(),
+		"accused_need": _warden_accused_count() if _has_living(ENEMY, "warden_eternal") else 0,
+		"accused_damage": accused_damage_this_round,
+		"petition_threshold": _warden_petition_threshold() if _has_living(ENEMY, "warden_eternal") else 0,
 		"power_uses": power_uses,
 		"power_ready": power.get("ready", true),
 		"power_ready_floor": power.get("ready_floor", 0),
@@ -1222,11 +1550,13 @@ func boss_enraged(u) -> bool:
 	return u != null and u.alive and u.id in ENRAGE_BOSSES and u.hp * 2 <= u.max_hp
 
 
-## Board art pose: helm (Hades untargetable) > breath (Nidhogg even rounds) > enraged (phase 2).
+## Board art pose: locked (Seal Blank Cartouche) > helm (Hades) > breath > enraged.
 func boss_sprite_pose(u) -> String:
 	if u == null or not u.alive:
 		return ""
-	if helm_active(u):
+	if seal_blank(u):
+		return "locked"
+	if u.id == "hades" and round_num % 3 == 0:
 		return "helm"
 	if u.id == "nidhogg" and intents.get(u.uid, {}).get("type", "") == "breath":
 		return "breath"
@@ -1236,7 +1566,10 @@ func boss_sprite_pose(u) -> String:
 
 
 func _unit_snapshot(u) -> Dictionary:
-	var intent: Dictionary = intents.get(u.uid, {})
+	var intent: Dictionary = intents.get(u.uid, {}).duplicate()
+	if u.id == "seal_of_names":
+		intent["type"] = "litany"
+		intent["text"] = _seal_intent_text(u)
 	var pose := boss_sprite_pose(u)
 	return {
 		"uid": u.uid, "id": u.id, "name": u.display_name(), "side": u.side,
@@ -1250,6 +1583,7 @@ func _unit_snapshot(u) -> Dictionary:
 		"hunted": u.side == PLAYER and u.uid == vengeance_uid and units(ENEMY).any(func(e): return e.has_kw("vengeance")),
 		"ferried": u.side == PLAYER and ferry_target() == u,
 		"celled": u.side == PLAYER and _has_living(ENEMY, "mad_turnkey") and _vault_cell_prey() == u,
+		"accused": u.side == PLAYER and is_accused(u),
 		"veil": u.has_kw("veil") and u.veil_round != round_num,
 		"helm": helm_active(u),
 		"airborne": u.has_kw("airborne"),
@@ -1287,10 +1621,16 @@ func _start_round() -> void:
 		faith_next = 0
 	_clear_unplayable()
 	_draw(5 if round_num == 1 else 2)
+	_act3_phase_summons()
+	_unbound_filament_pulse()
+	if _has_living(ENEMY, "warden_eternal"):
+		warden_authority += 2 if _warden_phase_two() else 1
+		_log("Authority rises to %d." % warden_authority)
+		_nominate_accused()
+		_spawn_warden_minions()
 	_declare_intents()
 	if round_num > 1:
 		_seal_of_names_litany()
-	_act3_phase_summons()
 	acted_this_plan = false
 	_plan_start = _capture()
 
@@ -1348,14 +1688,18 @@ func _capture() -> Dictionary:
 		"faith_next": faith_next, "horus_round": horus_round, "drowned_lanes": drowned_lanes.duplicate(),
 		"intents": intents.duplicate(true), "petrified_lane": petrified_lane, "sandstorm_row": sandstorm_row,
 		"aegis_used": aegis_used, "mead_used": mead_used, "valhalla_returned": valhalla_returned.duplicate(),
-		"styx_used": styx_used, "obol_used": obol_used, "armaments_played": armaments_played,
+		"styx_used": styx_used, "obol_used": obol_used, "ankh_blessed": ankh_blessed, "armaments_played": armaments_played,
 		"last_dead_ally": last_dead_ally.duplicate(true) if last_dead_ally != null else null, "next_uid": _next_uid, "next_cid": _next_cid, "rng": rng.state,
 		"terrain": terrain.duplicate(), "transformed_uid": transformed_uid,
 		"gate_damage": gate_damage, "extra_waves": extra_waves.duplicate(true),
 		"claimed": claimed.duplicate(true), "hades_damage": hades_damage, "hades_freed": hades_freed,
 		"breaches": breaches.duplicate(), "sealmarks": sealmarks.duplicate(), "manacle_used": manacle_used,
-		"breach_ward_charges": breach_ward_charges,
-		"vault_bleed": vault_bleed, "sundered": sundered.duplicate(), "ward_saves": ward_saves.duplicate(),
+		"breach_ward_charges": breach_ward_charges, "rift_intensity": rift_intensity,
+		"seal_blank_round": seal_blank_round,
+		"vault_bleed": vault_bleed, "filament_rounds_left": filament_rounds_left,
+		"warden_authority": warden_authority, "accused_uids": accused_uids.duplicate(),
+		"accused_damage_this_round": accused_damage_this_round, "warden_bailiffs_done": warden_bailiffs_done,
+		"sundered": sundered.duplicate(), "ward_saves": ward_saves.duplicate(),
 		"vault_cell": vault_cell.duplicate(true),
 		"power_uses": power_uses, "power_refunded": power_refunded, "power_invoked": power_invoked, "falls": falls,
 	}
@@ -1393,6 +1737,7 @@ func restart_plan() -> String:
 	mead_used = s["mead_used"]
 	styx_used = s["styx_used"]
 	obol_used = s["obol_used"]
+	ankh_blessed = s.get("ankh_blessed", false)
 	armaments_played = s["armaments_played"]
 	valhalla_returned = s["valhalla_returned"]
 	last_dead_ally = s["last_dead_ally"]
@@ -1410,7 +1755,14 @@ func restart_plan() -> String:
 	sealmarks = s.get("sealmarks", {}).duplicate()
 	manacle_used = s.get("manacle_used", false)
 	breach_ward_charges = s.get("breach_ward_charges", 0)
+	rift_intensity = int(s.get("rift_intensity", 0))
+	seal_blank_round = int(s.get("seal_blank_round", 0))
 	vault_bleed = s.get("vault_bleed", false)
+	filament_rounds_left = int(s.get("filament_rounds_left", 0))
+	warden_authority = int(s.get("warden_authority", 0))
+	accused_uids = s.get("accused_uids", []).duplicate()
+	accused_damage_this_round = int(s.get("accused_damage_this_round", 0))
+	warden_bailiffs_done = s.get("warden_bailiffs_done", false)
 	sundered = s.get("sundered", {}).duplicate()
 	ward_saves = s.get("ward_saves", {}).duplicate()
 	vault_cell = s.get("vault_cell", {}).duplicate(true)
@@ -1561,11 +1913,24 @@ func _declare_intents() -> void:
 				var names: Array = lanes.map(func(l): return str(l + 1))
 				it = {"type": "constrict", "lanes": lanes, "text": "CONSTRICT lane%s %s" % ["s" if lanes.size() > 1 else "", " and ".join(names)]}
 			"warden_eternal":
-				it = {"type": "sealmark", "text": "SEALMARK your strongest lane, BREACH tax"}
+				var acc_names: Array = []
+				for uid in accused_uids:
+					var au = _player_unit_by_uid(uid)
+					if au != null:
+						acc_names.append(au.display_name())
+				var acc_txt: String = ", ".join(acc_names) if not acc_names.is_empty() else "none"
+				it = {"type": "attack", "text": "AUTHORITY %d, Accused: %s" % [warden_authority, acc_txt]}
+			"door_clerk":
+				it = {"type": "attack", "text": "Attack lane %d (nominates Accused)" % (e.lane + 1)}
+			"door_bailiff":
+				it = {"type": "attack", "text": "Attack lane %d (Open Court)" % (e.lane + 1)}
+			"door_warder":
+				it = {"type": "attack", "text": "Attack lane %d" % (e.lane + 1)}
 			"the_unbound":
-				it = {"type": "attack", "text": "Attack lane %d, UNRAVEL, Rift Roar" % (e.lane + 1)}
+				var fil := " FILAMENT" if _filament_covers_unbound() else ""
+				it = {"type": "attack", "text": "Attack lane %d, UNRAVEL, Roar/Shatter%s" % [e.lane + 1, fil]}
 			"seal_of_names":
-				it = {"type": "litany", "text": "LITANY emptiest lane, FALSE NAME"}
+				it = {"type": "litany", "text": _seal_intent_text(e)}
 			"door_of_gleipnir":
 				it = {"type": "sealmark", "text": "SEALMARK a lane (Bound to Anchors)"}
 			"canopic_lock":
@@ -1586,6 +1951,13 @@ func _declare_intents() -> void:
 				it = {"type": "attack", "text": "Attack lane %d (+ATK if Breaches open)" % (e.lane + 1)}
 			"gold_seam":
 				it = {"type": "wait", "text": "BOUND: holds the largest enemy above half HP"}
+			"gold_filament":
+				it = {"type": "wait", "text": "FILAMENT: halves Unbound damage (%d round%s left)" % [
+					maxi(1, filament_rounds_left), "s" if filament_rounds_left != 1 else ""]}
+			"loose_link":
+				it = {"type": "attack", "text": "Attack lane %d (Pierce, Unravel)" % (e.lane + 1)}
+			"chain_broke":
+				it = {"type": "attack", "text": "Attack lane %d (Unravel; Sundering-splits at half)" % (e.lane + 1)}
 			"void_wisp":
 				it = {"type": "attack", "text": "Snipe lowest HP"}
 			"hollow_archer", "carrion_harpy":
@@ -2344,9 +2716,38 @@ func _detach_stats(u, card: Dictionary) -> void:
 	u.hp = clampi(u.hp, 1, u.max_hp)
 
 
-## The Ankh grants Revive to every ally, tokens included. The keyword does the same on its own.
 func _has_revive(u) -> bool:
-	return u.has_kw("revive") or (u.side == PLAYER and has_relic("ankh_of_eternity"))
+	return u.has_kw("revive")
+
+
+## Ankh: once per fight, after the first end_plan, grant Revive to the best non-token ally without it.
+func _ankh_bless() -> void:
+	if ankh_blessed or not has_relic("ankh_of_eternity"):
+		return
+	ankh_blessed = true
+	var best = null
+	for u in units(PLAYER):
+		if u.is_token or u.has_kw("revive"):
+			continue
+		if best == null or _ankh_bless_before(u, best):
+			best = u
+	if best == null:
+		return
+	best.bonus_kw.append("revive")
+	_log("Ankh of Eternity grants Revive to %s." % _unit_label(best))
+
+
+## Higher card cost, then ATK, then lower lane, then front before back.
+func _ankh_bless_before(a, b) -> bool:
+	var ca: int = int(Data.CARDS.get(a.id, {}).get("cost", 0))
+	var cb: int = int(Data.CARDS.get(b.id, {}).get("cost", 0))
+	if ca != cb:
+		return ca > cb
+	if a.atk != b.atk:
+		return a.atk > b.atk
+	if a.lane != b.lane:
+		return a.lane < b.lane
+	return a.row < b.row
 
 
 ## ATK and max HP earned in the fight, without Armament bonuses, so a later return can restore them.
@@ -2480,7 +2881,8 @@ func _on_moved(u, from_lane: int) -> void:
 			u.shield += 2
 			_log("Shieldthane: %s gains Shield 2." % u.display_name())
 		"reckless_charge":
-			_log("Doomrunner spends itself.")
+			u.atk += 1
+			_log("Doomrunner gains +1 ATK and spends itself.")
 			_deal_damage(u, 1, "effect")
 		"packrunner":
 			var front = unit_at(PLAYER, FRONT, u.lane)
@@ -2511,16 +2913,22 @@ func _resists_push(u) -> bool:
 
 
 ## Returns true if the unit moved, false if it hit the edge or another unit.
+## Width > 1: ignore the unit's own footprint so a right shove does not "collide" with itself.
 func _push(u, direction: int, impact := 3) -> bool:
 	if _resists_push(u):
 		_log("%s cannot be pushed." % _unit_label(u))
 		return false
 	var dest: int = u.lane + direction
-	if dest < 0 or dest >= LANES:
+	if dest < 0 or dest + u.width > LANES:
 		_log("%s is slammed against the edge." % _unit_label(u))
 		_deal_damage(u, impact, "effect")
 		return false
-	var other = unit_at(ENEMY, FRONT, dest)
+	var other = null
+	for i in u.width:
+		var o = unit_at(u.side, FRONT, dest + i)
+		if o != null and o != u:
+			other = o
+			break
 	if other != null and _resists_push(other):
 		var wall := "Immovable" if other.has_kw("immovable") else "Sealmarked"
 		_log("%s collides with the %s %s." % [_unit_label(u), wall, other.display_name()])
@@ -2655,6 +3063,7 @@ func end_plan() -> Array:
 	events.clear()
 	if phase != "plan":
 		return events
+	_ankh_bless()
 	phase = "resolve"
 	_log("--- Round %d ---" % round_num)
 	# Expire marks from earlier rounds before resolve applies new ones, so a mark
@@ -2668,15 +3077,6 @@ func end_plan() -> Array:
 	_seal_of_names_false_name()
 	if wingbeat_dir != 0 and _has_living(ENEMY, "hraesvelgr"):
 		_wingbeat(wingbeat_dir)
-	# Warden Eternal: Sealmark the lane with the most ATK when planning ends.
-	if _has_living(ENEMY, "warden_eternal"):
-		var wlanes: Array = range(LANES)
-		var marks := 2 if units(ENEMY).any(func(e): return e.id == "warden_eternal" and e.hp * 2 <= e.max_hp) else 1
-		wlanes.sort_custom(func(a, b): return _player_lane_atk(a) > _player_lane_atk(b) or ( _player_lane_atk(a) == _player_lane_atk(b) and a < b))
-		for i in marks:
-			if i < wlanes.size():
-				sealmark_player_lane(wlanes[i], 1)
-
 	if sandstorm_row != -1:
 		_log("Sandstorm: your %s row has -1 ATK this round." % ("front" if sandstorm_row == FRONT else "back"))
 
@@ -2775,6 +3175,8 @@ func end_plan() -> Array:
 		_close_breaches_by_presence()
 	if result == "":
 		_vault_bleed_tax()
+	if result == "":
+		_tick_gold_filament()
 	ward_saves.clear()
 
 	_end_round_checks()
@@ -2875,7 +3277,8 @@ func _start_of_round(u) -> void:
 	if u.id == "vault_scribe" and breaches.values().count(true) > 0:
 		u.atk += 1
 		_log("Vault Scribe feeds on the Rift (+1 ATK).")
-	if u.id == "the_unbound" and u.hp * 2 > u.max_hp:
+	# The Unbound has no Unravel keyword — +1 only while the body is still whole.
+	if u.id == "the_unbound":
 		u.atk += 1
 		_log("The Unbound Unravels (+1 ATK).")
 
@@ -3037,6 +3440,13 @@ func _act(u) -> void:
 		if hunted != null:
 			target = hunted
 			_log("%s takes Vengeance on %s." % [_unit_label(u), hunted.display_name()])
+	if u.id == "warden_eternal":
+		for uid in accused_uids:
+			var accused = _player_unit_by_uid(uid)
+			if accused != null and accused.alive and _can_target(u, accused):
+				target = accused
+				_log("%s turns the court on %s." % [_unit_label(u), accused.display_name()])
+				break
 	if target == null:
 		return
 	if target is String:
@@ -3250,15 +3660,25 @@ func _deal_damage(t, amount: int, kind: String) -> int:
 	if not t.alive or amount <= 0:
 		return 0
 	if helm_active(t):
-		_log("%s is hidden under the Helm of Darkness." % _unit_label(t))
+		if seal_blank(t):
+			_log("%s is locked behind a Blank Cartouche." % _unit_label(t))
+		else:
+			_log("%s is hidden under the Helm of Darkness." % _unit_label(t))
 		return 0
 	if t.has_kw("veil") and t.veil_round != round_num:
 		t.veil_round = round_num
 		_log("%s's Veil turns aside %d damage." % [_unit_label(t), amount])
 		return 0
+	# Warden Eternal Tribunal: only the Accused may damage the Warden (minions stay open).
+	if _tribunal_blocks_warden_hit(t, amount):
+		return 0
 	if t.has_kw("incorporeal") and kind in ["melee", "cleave"]:
 		amount = maxi(1, amount / 2)
 		_log("%s is Incorporeal: the blow passes half through." % _unit_label(t))
+	# Gold Filament: The Unbound takes half damage while the strand lives.
+	if t.id == "the_unbound" and _filament_covers_unbound():
+		amount = maxi(1, amount / 2)
+		_log("Gold Filament halves the blow.")
 	if t.id == "achilles":
 		if kind == "melee":
 			_log("Achilles shrugs off the melee attack.")
@@ -3285,6 +3705,8 @@ func _deal_damage(t, amount: int, kind: String) -> int:
 			_log("%s is Bound and cannot fall below %d HP." % [_unit_label(t), floor_hp])
 	if amount > 0 and actor != null and actor.side == PLAYER and t.side == ENEMY:
 		damage_dealt[actor.uid] = damage_dealt.get(actor.uid, 0) + amount
+	if amount > 0 and t.id == "warden_eternal" and actor != null and is_accused(actor):
+		accused_damage_this_round += amount
 	if t.id == "keeper_of_the_gate" and amount > 0:
 		var was_sealed: bool = gate_damage < SEAL_BREAK
 		gate_damage += amount
@@ -3298,18 +3720,22 @@ func _deal_damage(t, amount: int, kind: String) -> int:
 		_log("%s takes %d." % [_unit_label(t), amount])
 	if t.id == "hades" and t.hp > 0 and not hades_freed and hades_damage >= HADES_FREE and not claimed.is_empty():
 		_hades_free_claim()
-	# The Unbound: big hits open Breaches.
+	# The Unbound: big hits Rift Roar (Breach) and Shatter (Core).
 	if t.id == "the_unbound" and amount >= 5 and t.alive:
 		open_breach(PLAYER, t.lane, "Rift Roar")
-	if t.hp <= 0:
-		_kill(t)
-	elif _try_sunder(t, before):
+		_damage_core(3, "Shatter")
+	# Sunder before death so overkill past half still splits (no Bound gate required).
+	if _try_sunder(t, before):
 		pass
+	elif t.hp <= 0:
+		_kill(t)
 	elif amount > 0 and t.has_kw("frenzy"):
 		t.atk += 1
 		_log("%s is driven into a Frenzy (+1 ATK)." % _unit_label(t))
 	elif was_calm_boss and boss_enraged(t):
 		_log("%s enrages!" % _unit_label(t), {"enrage": true, "enrage_slot": [t.side, t.row, t.lane]})
+		if t.id == "warden_eternal":
+			_spawn_warden_bailiffs()
 	return excess
 
 
@@ -3374,7 +3800,7 @@ func _kill(u) -> void:
 				_log("Namesake blesses %s (+1 ATK)." % u.display_name())
 		_log("%s revives with %d HP!" % [_unit_label(u), u.hp])
 		if u.side == PLAYER and has_relic("ankh_of_eternity"):
-			_damage_core(2, "Ankh of Eternity")
+			_heal_core(2, "Ankh of Eternity")
 		_check_enemies_cleared()
 		return
 
@@ -3426,6 +3852,9 @@ func _kill(u) -> void:
 					c.bonus_kw.append("frenzy")
 				c.atk += 2
 				_log("%s breaks free (+2 ATK, Frenzy)." % _unit_label(c))
+	if u.id == "gold_filament":
+		filament_rounds_left = 0
+		_log("The Gold Filament is cut — The Unbound feels full blows again.")
 	if u.id in ["chain_anchor", "chain_thrall", "gold_seam"]:
 		_check_pending_sunders()
 	if u.id == "canopic_lock":
@@ -3456,16 +3885,15 @@ func _kill(u) -> void:
 	if u.id == "keeper_of_the_gate" and not extra_waves.is_empty():
 		extra_waves.clear()
 		_log("With the Keeper gone, the Gate Guardians stay down.")
-	# Warden Eternal phase 2: front Seal Wardens revive once as Door Guardians.
-	if u.id == "seal_warden" and _has_living(ENEMY, "warden_eternal"):
-		var warden = _living("warden_eternal")
-		if warden != null and warden.hp * 2 <= warden.max_hp:
-			extra_waves.append([round_num + 2, "door_guardian", u.lane, u.row, "return"])
-	if u.id == "door_guardian" and _has_living(ENEMY, "warden_eternal"):
-		# Once only: Door Guardians do not re-queue.
-		pass
+	# Tribunal Gavel: an Accused dying feeds Authority.
+	if u.side == PLAYER and is_accused(u) and _has_living(ENEMY, "warden_eternal"):
+		warden_authority += 1
+		_damage_core(3, "Gavel")
+		_log("The Gavel falls — Authority rises to %d." % warden_authority)
+		accused_uids.erase(u.uid)
 	if u.id == "warden_eternal":
-		extra_waves = extra_waves.filter(func(w): return w[1] != "door_guardian")
+		accused_uids.clear()
+		warden_authority = 0
 	if u.side == PLAYER and actor != null and actor.side == ENEMY and actor.alive and actor.has_kw("devour"):
 		actor.atk += 1
 		_heal(actor, 3, "Devour")

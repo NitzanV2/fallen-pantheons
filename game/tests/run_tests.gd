@@ -377,7 +377,7 @@ func test_revive() -> void:
 	c.end_plan()
 	check(mummy.alive and mummy.hp == 1 and mummy.revive_used, "revive: mummy returns with 1 HP")
 
-	c = fresh(50, false, ["ankh_of_eternity"])
+	c = fresh()
 	c.debug_place("hollowed_bulwark", E, 3, B)
 	var ein = c.debug_place("einherjar", P, 0, F)
 	var behind = c.debug_place("echo_archer", P, 0, B)
@@ -385,6 +385,8 @@ func test_revive() -> void:
 	var left = c.debug_place("ark_sentinel", P, 1, F)
 	var raven = c.debug_place("raven_of_odin", P, 3, B)
 	var swarm = c.debug_place("scarab_swarm", P, 1, B)
+	for u in [ein, maiden, raven, swarm]:
+		u.bonus_kw.append("revive")
 	c.deck = [c._new_card("ark_sentinel")]
 	c.hand = []
 	c._deal_damage(ein, 10, "effect")
@@ -403,17 +405,20 @@ func test_revive() -> void:
 	scarab = c.unit_at(P, B, 1)
 	check(not swarm.alive and scarab != null and scarab.id == "scarab", "revive on-death: a dead swarm leaves a Scarab in its slot")
 
-	c = fresh(50, false, ["ankh_of_eternity"])
+	c = fresh()
 	c.debug_place("hollowed_bulwark", E, 3, B)
 	swarm = c.debug_place("scarab_swarm", P, 2, F)
+	swarm.bonus_kw.append("revive")
 	c._deal_damage(swarm, 10, "effect")
 	scarab = c.unit_at(P, B, 2)
 	check(swarm.alive and swarm.row == F and scarab != null and scarab.id == "scarab", "revive on-death: reviving swarm summons its Scarab behind")
 
-	c = fresh(50, false, ["ankh_of_eternity", "mead_of_the_einherjar"])
+	c = fresh(50, false, ["mead_of_the_einherjar"])
 	var bulwark = c.debug_place("hollowed_bulwark", E, 0, F)
 	var sentinel = c.debug_place("ark_sentinel", P, 0, F)
+	sentinel.bonus_kw.append("revive")
 	var berserker = c.debug_place("berserker", P, 3, F)
+	berserker.bonus_kw.append("revive")
 	c.debug_place("odin", P, 2, B)
 	c._deal_damage(sentinel, 10, "effect")
 	check(sentinel.alive, "revive watchers: sentinel revives")
@@ -426,93 +431,104 @@ func test_revive() -> void:
 	c = fresh()
 	mummy = c.debug_place("mummy_guardian", P, 0, F)
 	c._deal_damage(mummy, 20, "effect")
-	check(mummy.alive and mummy.hp == 1 and c.core_hp == 50, "revive: keyword Revive does not damage the Core")
+	check(mummy.alive and mummy.hp == 1 and c.core_hp == 50, "revive: keyword Revive does not heal or damage the Core alone")
 
 	c = fresh(50, false, ["ankh_of_eternity"])
 	mummy = c.debug_place("mummy_guardian", P, 0, F)
-	var plain = c.debug_place("ark_sentinel", P, 1, F)
+	var cheap = c.debug_place("ark_sentinel", P, 1, F)
+	var costly = c.debug_place("osiris", P, 2, F)
+	c._ankh_bless()
+	check(c.ankh_blessed, "ankh: marks itself used after blessing")
+	check(not mummy.bonus_kw.has("revive"), "ankh: does not double-grant on a keyword Revive unit")
+	check(costly.bonus_kw.has("revive"), "ankh: highest-cost ally without Revive gains it")
+	check(not cheap.bonus_kw.has("revive"), "ankh: lower-cost ally is not blessed")
+	c.core_hp = 40
 	c._deal_damage(mummy, 20, "effect")
-	check(mummy.alive and mummy.hp == 1 and c.core_hp == 48, "ankh: a keyword Revive damages the Core once")
+	## Osiris is also on the board, so keyword Revive returns at full HP (+2 ATK); Ankh still heals the Core.
+	check(mummy.alive and mummy.hp == mummy.max_hp and mummy.atk == 4 and c.core_hp == 42, "ankh: keyword Revive heals the Core by 2")
 	c._deal_damage(mummy, 20, "effect")
-	check(not mummy.alive and c.core_hp == 48, "ankh: the second death does not Revive or damage the Core")
-	c._deal_damage(plain, 20, "effect")
-	check(plain.alive and plain.hp == 1 and c.core_hp == 46, "ankh: a unit without the keyword Revives and the Core takes 2")
-	c._deal_damage(plain, 20, "effect")
-	check(not plain.alive and c.core_hp == 46, "ankh: that unit's second death stays dead")
+	check(not mummy.alive and c.core_hp == 42, "ankh: second death stays dead and does not heal again")
+	c._deal_damage(costly, 20, "effect")
+	check(costly.alive and costly.hp == 1 and c.core_hp == 44, "ankh: blessed unit Revives and heals the Core")
+	c._deal_damage(costly, 20, "effect")
+	check(not costly.alive and c.core_hp == 44, "ankh: blessed unit's second death stays dead")
+	c._deal_damage(cheap, 20, "effect")
+	check(not cheap.alive and c.core_hp == 44, "ankh: unblessed unit without keyword stays dead")
 
 	c = fresh(50, false, ["ankh_of_eternity"])
 	scarab = c._spawn("scarab", P, 0, F)
 	var wolf = c._spawn("wolf", P, 1, F)
-	check(c.snapshot()["grid"][P][F][0]["revive"], "ankh: a Scarab shows Revive ready")
+	c._ankh_bless()
+	check(not scarab.has_kw("revive") and not wolf.has_kw("revive"), "ankh: tokens are never blessed")
 	c._deal_damage(scarab, 5, "effect")
-	check(scarab.alive and scarab.hp == 1 and scarab.revive_used and c.core_hp == 48, "ankh: a Scarab Revives and the Core takes 2")
-	check(not c.snapshot()["grid"][P][F][0]["revive"], "ankh: a spent Revive is no longer shown")
-	c._deal_damage(scarab, 5, "effect")
-	check(not scarab.alive and c.core_hp == 48 and c.last_dead_ally == null, "ankh: a Scarab's second death stays dead and is not a Book target")
-	c._deal_damage(wolf, 5, "effect")
-	check(wolf.alive and wolf.hp == 1 and c.core_hp == 46, "ankh: a Wolf token Revives and the Core takes 2")
+	check(not scarab.alive and c.core_hp == 50, "ankh: tokens do not Revive from Ankh alone")
 
 	c = fresh(50, false, ["ankh_of_eternity"])
-	swarm = c.debug_place("scarab_swarm", P, 0, F)
-	c._deal_damage(swarm, 10, "effect")
-	scarab = c.unit_at(P, B, 0)
-	check(swarm.alive and swarm.hp == 1 and scarab != null and scarab.id == "scarab" and c.core_hp == 48,
-		"ankh: a Swarm Revives, leaves a Scarab, and the Core takes 2")
-	c._deal_damage(scarab, 5, "effect")
-	check(scarab.alive and scarab.hp == 1 and c.core_hp == 46, "ankh: the Swarm's Scarab Revives and the Core takes 2")
-	c._deal_damage(scarab, 5, "effect")
-	check(not scarab.alive and c.core_hp == 46, "ankh: that Scarab then stays dead")
-
-	c = fresh(50, false, ["ankh_of_eternity"])
-	c.debug_place("khepri", P, 1, F)
-	scarab = c._spawn("scarab", P, 0, F)
-	c.core_hp = 40
-	c._deal_damage(scarab, 5, "effect")
-	check(scarab.alive and c.core_hp == 39, "ankh: Khepri heals 1 and the Ankh still deals 2")
+	mummy = c.debug_place("mummy_guardian", P, 0, F)
+	c._ankh_bless()
+	check(c.ankh_blessed and not mummy.bonus_kw.has("revive"), "ankh: if every non-token already has Revive, nothing is granted")
 
 	c = fresh(50, false, ["ankh_of_eternity"])
 	c.terrain[c._key(P, F, 0)] = "flooded"
 	var sunk = c.debug_place("ark_sentinel", P, 0, F)
+	c._ankh_bless()
+	check(sunk.bonus_kw.has("revive"), "ankh: Flooded unit can still be blessed")
 	c._deal_damage(sunk, 20, "effect")
-	check(not sunk.alive and c.core_hp == 50, "ankh: Flooded blocks Revive and the Core is not damaged")
+	check(not sunk.alive and c.core_hp == 50, "ankh: Flooded still blocks the Revive itself")
 
 	c = fresh(50, false, ["ankh_of_eternity", "charons_lantern"])
 	c.terrain[c._key(P, F, 0)] = "flooded"
 	sunk = c.debug_place("ark_sentinel", P, 0, F)
+	c._ankh_bless()
+	c.core_hp = 40
 	c._deal_damage(sunk, 20, "effect")
-	check(sunk.alive and sunk.hp == 1 and c.core_hp == 48, "ankh: Charon's Lantern lets the Revive happen, and the Core takes 2")
+	check(sunk.alive and sunk.hp == 1 and c.core_hp == 42, "ankh: Charon's Lantern lets the blessed Revive heal the Core")
 
 	c = fresh(50, false, ["ankh_of_eternity"])
 	var unmade = c.debug_place("mummy_guardian", P, 0, F)
+	c._ankh_bless()
 	c._unmaking = true
 	c._deal_damage(unmade, 20, "effect")
-	check(not unmade.alive and c.core_hp == 50, "ankh: Apep's unmaking blocks Revive and the Core is not damaged")
+	check(not unmade.alive and c.core_hp == 50, "ankh: Apep's unmaking blocks Revive and the Core is not healed")
 
 	c = fresh(50, false, ["ankh_of_eternity", "aegis_fragment"])
 	var saved = c.debug_place("ark_sentinel", P, 0, F)
+	c._ankh_bless()
+	c.core_hp = 40
 	c._deal_damage(saved, 20, "effect")
-	check(saved.alive and saved.hp == 1 and not saved.revive_used and c.core_hp == 50, "ankh: Aegis is not a Revive, so the Core is untouched")
+	check(saved.alive and saved.hp == 1 and not saved.revive_used and c.core_hp == 40, "ankh: Aegis is not a Revive, so the Core is untouched")
 	c._deal_damage(saved, 20, "effect")
-	check(saved.alive and saved.revive_used and c.core_hp == 48, "ankh: the next death Revives and the Core takes 2")
+	check(saved.alive and saved.revive_used and c.core_hp == 42, "ankh: the next death Revives and heals the Core")
 	c._deal_damage(saved, 20, "effect")
-	check(not saved.alive and c.core_hp == 48, "ankh: after Revive is spent, the Core is not damaged again")
+	check(not saved.alive and c.core_hp == 42, "ankh: after Revive is spent, no further heal")
 
 	c = fresh(50, false, ["ankh_of_eternity"])
 	c.debug_place("osiris", P, 3, B)
 	var risen = c.debug_place("ark_sentinel", P, 0, F)
-	c._deal_damage(risen, 20, "effect")
-	check(risen.alive and risen.hp == risen.max_hp and risen.atk == 4 and c.core_hp == 48, "ankh: Osiris returns it at full HP and the Core still takes 2")
+	c._ankh_bless()
+	check(c.unit_at(P, B, 3).bonus_kw.has("revive"), "ankh: Osiris is blessed over cheaper allies")
+	check(not risen.bonus_kw.has("revive"), "ankh: cheaper sentinel is not blessed")
+	c.core_hp = 40
+	var blessed_osiris = c.unit_at(P, B, 3)
+	c._deal_damage(blessed_osiris, 20, "effect")
+	## Osiris does not buff himself on Revive; Ankh still heals the Core.
+	check(blessed_osiris.alive and blessed_osiris.hp == 1 and blessed_osiris.atk == 3 and c.core_hp == 42,
+		"ankh: blessed Osiris Revives at 1 HP and Ankh heals the Core")
 
 	c = fresh(50, false, ["ankh_of_eternity", "styx_water"])
 	wolf = c._spawn("wolf", P, 0, F)
+	c._ankh_bless()
 	c._deal_damage(wolf, 5, "effect")
-	check(wolf.alive and wolf.hp == 1 and not wolf.has_kw("incorporeal") and not c.styx_used and c.core_hp == 48,
-		"ankh: a token Revives through the Ankh, and Styx Water stays unused")
+	check(not wolf.alive and not c.styx_used and c.core_hp == 50,
+		"ankh: tokens are not blessed; Styx ignores tokens")
 
-	c = fresh(2, false, ["ankh_of_eternity"])
-	var doomed = c.debug_place("ark_sentinel", P, 0, F)
-	c._deal_damage(doomed, 20, "effect")
-	check(doomed.alive and doomed.hp == 1 and c.core_hp == 0 and c.result == "defeat", "ankh: Core damage from a Revive can lose the fight")
+	c = fresh(50, false, ["ankh_of_eternity"])
+	c.debug_place("ark_sentinel", P, 0, F)
+	c.debug_place("void_spawn", E, 3, F)
+	check(not c.ankh_blessed, "ankh: not blessed before end_plan")
+	c.end_plan()
+	check(c.ankh_blessed and c.unit_at(P, F, 0) != null and c.unit_at(P, F, 0).bonus_kw.has("revive"),
+		"ankh: end_plan grants Revive to the deployed ally")
 
 	c = fresh()
 	c.debug_place("hollowed_bulwark", E, 3, B)
@@ -866,6 +882,9 @@ func test_boss_enrage() -> void:
 	check(ResourceLoader.exists("res://art/sprites/nidhogg_breath.png"), "art: nidhogg breath")
 	check(CardWidget.board_sprite_path("hades", false, false, "enraged").ends_with("hades_enraged.png"), "path: enraged")
 	check(CardWidget.board_sprite_path("hades", false, false, "helm").ends_with("hades_helm.png"), "path: helm")
+	check(ResourceLoader.exists("res://art/sprites/seal_of_names_locked.png"), "art: seal blank cartouche")
+	check(ResourceLoader.exists("res://art/sprites/seal_of_names_locked_attack.png"), "art: seal blank cartouche attack")
+	check(CardWidget.board_sprite_path("seal_of_names", false, false, "locked").ends_with("seal_of_names_locked.png"), "path: seal locked")
 	check(CardWidget.board_sprite_path("hel", false, false, "toll").ends_with("hel_toll.png"), "path: toll")
 	check(CardWidget.board_sprite_path("nidhogg", true, false, "breath").ends_with("nidhogg_breath_attack.png"), "path: breath attack")
 
@@ -895,6 +914,50 @@ func test_vault_verbs() -> void:
 	c.open_breach(P, 2, "test")
 	c._close_breaches_by_presence()
 	check(c.breaches.has("0:2"), "vault: Keybearer blocks reseal")
+	## Blank Cartouche: 0 Faith arms next-round lock; Void Web path keeps Seal damageable.
+	c = fresh(50, true)
+	var seal = c.debug_place("seal_of_names", E, 1, B)
+	c.debug_place("vault_scribe", E, 0, F)
+	c.faith = 0
+	c._seal_of_names_false_name()
+	check(c.seal_blank_round == c.round_num + 1, "vault: 0 Faith arms Blank Cartouche for next round")
+	check(not c.seal_blank(seal), "vault: Seal still hittable this resolve")
+	c._deal_damage(seal, 5, "effect")
+	check(seal.hp == seal.max_hp - 5, "vault: Blank Cartouche does not block this resolve")
+	c.round_num = c.seal_blank_round
+	check(c.seal_blank(seal), "vault: Seal locked on the armed round")
+	var locked_hp: int = seal.hp
+	c._deal_damage(seal, 5, "effect")
+	check(seal.hp == locked_hp, "vault: locked Seal takes no damage")
+	check(not c._can_target(c.debug_place("ark_sentinel", P, 1, F), seal), "vault: locked Seal is not a valid attack target")
+	c.round_num += 1
+	check(not c.seal_blank(seal), "vault: Blank Cartouche expires after one round")
+	c = fresh(50, true)
+	seal = c.debug_place("seal_of_names", E, 1, B)
+	c.faith = 2
+	var deck_before: int = c.deck.size()
+	c._seal_of_names_false_name()
+	check(c.faith == 1 and c.seal_blank_round == 0, "vault: spending Faith does not arm Blank Cartouche")
+	check(c.deck.size() == deck_before + 1, "vault: False Name inserts a Void Web")
+	c._deal_damage(seal, 4, "effect")
+	check(seal.hp == seal.max_hp - 4, "vault: Seal stays damageable after Void Web False Name")
+	## Rift tax: Core takes S+N, then S rises by N; S pauses (kept) when sealed.
+	c = fresh(40, true)
+	c.debug_place("key_acolyte", E, 0, B)
+	c.open_breach(P, 1, "test")
+	var core0: int = c.core_hp
+	c._rift_tax()
+	check(c.rift_intensity == 1 and c.core_hp == core0 - 1, "vault: first rift hit is S0+N1=1, then S+=1")
+	c._rift_tax()
+	check(c.rift_intensity == 2 and c.core_hp == core0 - 1 - 2, "vault: second rift hit is S1+N1=2, then S+=1")
+	c.breaches.clear()
+	var core1: int = c.core_hp
+	c._rift_tax()
+	check(c.rift_intensity == 2 and c.core_hp == core1, "vault: sealed Breaches pause intensity")
+	c.open_breach(P, 0, "test")
+	c.open_breach(P, 2, "test")
+	c._rift_tax()
+	check(c.rift_intensity == 4 and c.core_hp == core1 - 4, "vault: resume S2+N2=4, then S+=2")
 	## Gold Seam half-bind + Sunder when free.
 	c = fresh(50, true)
 	var seam = c.debug_place("gold_seam", E, 2, B)
@@ -903,6 +966,56 @@ func test_vault_verbs() -> void:
 	check(giant.alive and giant.hp == maxi(1, giant.max_hp / 2), "vault: Seam holds half HP")
 	c._deal_damage(seam, 99, "effect")
 	check(c.units(E).any(func(u): return u.id == "arm"), "vault: Sunder spawns Arms when Seam breaks")
+	## The Unbound: no Seam gate; Shatter on big hits; cascade Sunder; bleed while lineage lives.
+	c = fresh(50, true)
+	var unbound = c.debug_place("the_unbound", E, 1, F)
+	unbound.atk = 9
+	var core_before_roar: int = c.core_hp
+	c._deal_damage(unbound, 5, "effect")
+	check(c.open_breach_count() >= 1 and c.core_hp == core_before_roar - 3, "vault: Roar opens Breach and Shatter taxes Core 3")
+	c = fresh(50, true)
+	unbound = c.debug_place("the_unbound", E, 1, F)
+	unbound.atk = 9
+	var core_pre_sunder: int = c.core_hp
+	c._deal_damage(unbound, unbound.max_hp, "effect")
+	var broke: Array = c.units(E).filter(func(u): return u.id == "chain_broke")
+	check(broke.size() == 2, "vault: Unbound Sundering-splits into two Chain-Broke without Seam")
+	check(broke.all(func(u): return u.atk >= 9), "vault: Chain-Broke inherit Unbound ATK")
+	check(c.vault_bleed, "vault: empty-slot bleed starts on the split")
+	check(c.core_hp <= core_pre_sunder - 2, "vault: Sunder shock taxes Core")
+	## Cascade: each Chain-Broke Sundering-splits into Loose Links (partial inherit).
+	var parent_atk: int = broke[0].atk
+	c._deal_damage(broke[0], broke[0].max_hp, "effect")
+	var links: Array = c.units(E).filter(func(u): return u.id == "loose_link")
+	check(links.size() == 2, "vault: Chain-Broke cascades into two Loose Links")
+	check(links.all(func(u): return u.atk >= maxi(4, parent_atk - 2) and u.has_kw("pierce")), "vault: Loose Links Pierce and inherit ATK-2")
+	c._deal_damage(broke[1], 99, "effect")
+	for link in c.units(E).filter(func(u): return u.id == "loose_link"):
+		c._deal_damage(link, 99, "effect")
+	c._vault_bleed_tax()
+	check(not c.vault_bleed, "vault: bleed ends when lineage falls")
+	## Gold Filament: halves Unbound damage; snap taxes Core if ignored.
+	c = fresh(50, true)
+	unbound = c.debug_place("the_unbound", E, 1, F)
+	c.round_num = 2
+	c._unbound_filament_pulse()
+	check(c._has_living(E, "gold_filament"), "vault: Filament pulses on even round while whole")
+	var hp_before: int = unbound.hp
+	c._deal_damage(unbound, 10, "effect")
+	check(unbound.hp == hp_before - 5, "vault: Filament halves damage to Unbound")
+	c.filament_rounds_left = 1
+	var core_fil: int = c.core_hp
+	c._tick_gold_filament()
+	check(not c._has_living(E, "gold_filament") and c.core_hp == core_fil - 3, "vault: Filament snap taxes Core 3")
+	## Filament kill restores full damage.
+	c = fresh(50, true)
+	unbound = c.debug_place("the_unbound", E, 1, F)
+	c.round_num = 2
+	c._unbound_filament_pulse()
+	c._deal_damage(c.units(E).filter(func(u): return u.id == "gold_filament")[0], 99, "effect")
+	hp_before = unbound.hp
+	c._deal_damage(unbound, 10, "effect")
+	check(unbound.hp == hp_before - 10, "vault: cutting Filament restores full damage")
 	## Sealmark blocks move.
 	c = fresh(40, true)
 	var ally = c.debug_place("raider", P, 1, F)
@@ -936,13 +1049,58 @@ func test_vault_verbs() -> void:
 	check(c.play_spell(0, [[E, F, 0]], 1) == "", "vault: Rebuke neighbor into Guard")
 	check(pusher.hp == pusher.max_hp - 3, "vault: pusher takes collision into Sealmark")
 	check(guard.hp == guard.max_hp, "vault: Sealmarked Guard takes no collision damage")
-	## Door Guardians: Seal Wardens return once in Warden Eternal phase 2.
+	## Warden Eternal Tribunal: Accused gate, free hits on Clerks, Authority, Bailiffs.
 	c = fresh(50, true)
 	var we = c.debug_place("warden_eternal", E, 1, B)
-	we.hp = 1
-	var sw = c.debug_place("seal_warden", E, 1, F)
-	c._deal_damage(sw, 99, "effect")
-	check(c.extra_waves.any(func(w): return w[1] == "door_guardian"), "vault: Door Guardian queued in phase 2")
+	var clerk = c.debug_place("door_clerk", E, 1, F)
+	var carry = c.debug_place("ark_sentinel", P, 0, F)
+	carry.atk = 5
+	var chump = c.debug_place("echo_archer", P, 3, F)
+	chump.atk = 1
+	c._nominate_accused()
+	check(c.is_accused(carry) and not c.is_accused(chump), "vault: Clerks nominate highest ATK as Accused")
+	c.actor = chump
+	var we_hp: int = we.hp
+	var core_c: int = c.core_hp
+	c._deal_damage(we, 4, "melee")
+	check(we.hp == we_hp and c.core_hp == core_c, "vault: non-Accused Warden hit is refused (no Core tax)")
+	var clerk_hp: int = clerk.hp
+	c._deal_damage(clerk, 3, "melee")
+	check(clerk.hp == clerk_hp - 3, "vault: non-Accused can still damage Clerks")
+	c.actor = carry
+	c._deal_damage(we, 4, "melee")
+	check(we.hp == we_hp - 4 and c.accused_damage_this_round == 4, "vault: Accused damages the Warden")
+	c._deal_damage(clerk, 99, "effect")
+	check(c.can_choose_accused(), "vault: killing Clerk allows choosing Accused")
+	check(c.choose_accused(chump.uid) == "" and c.is_accused(chump), "vault: player chooses Accused")
+	## Warders spawn away from the Accused's lane.
+	c = fresh(50, true)
+	we = c.debug_place("warden_eternal", E, 1, B)
+	carry = c.debug_place("ark_sentinel", P, 0, F)
+	carry.atk = 5
+	c.accused_uids = [carry.uid]
+	c._spawn_warden_minions()
+	var warders: Array = c.units(E).filter(func(u): return u.id == "door_warder")
+	check(warders.size() == 1, "vault: Warden spawns a Door Warder")
+	check(warders[0].lane != 0, "vault: Warder prefers a lane that is not the Accused's")
+	## Fill fronts so the next Warder must go back — and be Ranged.
+	for lane in 4:
+		if c.unit_at(E, F, lane) == null:
+			c.debug_place("door_warder", E, lane, F)
+	c._spawn_warden_minions()
+	var back_warders: Array = c.units(E).filter(func(u): return u.id == "door_warder" and u.row == B)
+	check(back_warders.size() >= 1 and back_warders.any(func(u): return u.has_kw("ranged")),
+		"vault: back-row Door Warders are Ranged")
+	## Phase 2 Bailiffs.
+	c = fresh(50, true)
+	we = c.debug_place("warden_eternal", E, 1, B)
+	we.hp = we.max_hp
+	c.debug_place("door_clerk", E, 1, F)
+	c.actor = we
+	c._deal_damage(we, we.max_hp / 2 + 1, "effect")
+	c.actor = null
+	check(c._warden_phase_two() and c.warden_bailiffs_done, "vault: half HP summons Bailiffs")
+	check(c.units(E).any(func(u): return u.id == "door_bailiff"), "vault: Bailiffs on the board")
 	## Act 3 pools exist.
 	check(Data.ACTS.size() == 3 and Data.BATTLE_POOLS["warden_eternal"] == "act3_boss", "vault: act3 pools wired")
 	check(Data.battle("outer_seal").get("act", 0) == 3, "vault: early battle")
@@ -1030,6 +1188,13 @@ func test_spells() -> void:
 	check(herald.hp == herald.max_hp and herald.lane == 1, "immovable: boss takes no collision damage")
 	check(not spawn.alive, "immovable: pushed spawn takes the collision damage")
 	check(h.valid_targets(0).is_empty(), "immovable: transposition cannot target the boss")
+	## Width-2 units must push both ways without colliding with their own footprint.
+	c = fresh(50, true)
+	var unbound = c.debug_place("the_unbound", E, 1, F)
+	check(c._push(unbound, 1), "rebuke: width-2 Unbound can push right")
+	check(unbound.lane == 2, "rebuke: Unbound lands on lane 3 after right push")
+	check(c._push(unbound, -1), "rebuke: width-2 Unbound can push left")
+	check(unbound.lane == 1, "rebuke: Unbound returns to lane 2 after left push")
 
 
 func _hand_index(c, id: String) -> int:
@@ -2625,7 +2790,9 @@ func _fuzz_one(battle: Dictionary, deck_ids: Array, relics: Array, seed_value: i
 
 func _autoplay(c, rng: RandomNumberGenerator, total_cards: int, tag: String) -> void:
 	var guard := 0
-	while c.phase == "plan" and guard < 40:
+	## Bosses have no round timeout; Act 3 splits (e.g. Chain-Broke) need a longer fuzz budget.
+	var limit := 55 if c.is_boss else 40
+	while c.phase == "plan" and guard < limit:
 		guard += 1
 		for attempt in 10:
 			if c.hand.is_empty() or c.phase != "plan":
@@ -3212,6 +3379,32 @@ func test_economy() -> void:
 	run.finish_combat(c)
 	check(run.reward["gold"] == 40, "economy: an elite finished with 2 rounds spare pays 30 plus 10")
 	run = Run.new()
+	run.setup(41, "myrmidon", "zeus_lightning_bolt")
+	run.relics = ["titans_marrow"]
+	run.core_hp = 40
+	var max_before: int = run.max_hp
+	run.enter_node(run.available_nodes()[0])
+	run.nodes[run.current]["type"] = "fight"
+	c = run.make_combat()
+	c.result = "win"
+	c.round_num = 3
+	c.max_rounds = 3
+	run.finish_combat(c)
+	check(run.max_hp == max_before and run.core_hp == 40, "economy: Titan's Marrow ignores normal fights")
+	run = Run.new()
+	run.setup(42, "shieldmaiden", "tyrs_oath")
+	run.relics = ["titans_marrow"]
+	run.core_hp = 40
+	max_before = run.max_hp
+	run.enter_node(run.available_nodes()[0])
+	run.nodes[run.current]["type"] = "elite"
+	c = run.make_combat()
+	c.result = "win"
+	c.round_num = 3
+	c.max_rounds = 3
+	run.finish_combat(c)
+	check(run.max_hp == max_before + 3 and run.core_hp == 43, "economy: Titan's Marrow grants +3 max Core HP after an elite")
+	run = Run.new()
 	run.setup(5, "mummy_guardian", "osiris_return")
 	run.enter_node(run.available_nodes()[0])
 	c = run.make_combat()
@@ -3311,11 +3504,11 @@ func test_fusion_cards() -> void:
 
 	c = fresh()
 	var charge = c.debug_place("reckless_charge", P, 0, F)
-	check(c.move_unit(0, F, 1, F) == "" and charge.hp == 3, "fusion: Doomrunner takes 1 when it moves")
+	check(c.move_unit(0, F, 1, F) == "" and charge.hp == 3 and charge.atk == 4, "fusion: Doomrunner +1 ATK and takes 1 when it moves")
 	var front_foe = c.debug_place("hollowed_bulwark", E, 1, F)
 	var back_foe = c.debug_place("hollowed_bulwark", E, 1, B)
 	c._deal_damage(charge, 99, "effect")
-	check(front_foe.hp == 5 and back_foe.hp == 5, "fusion: Doomrunner blasts its lane for its ATK")
+	check(front_foe.hp == 4 and back_foe.hp == 4, "fusion: Doomrunner blasts its lane for its ATK")
 
 	c = fresh()
 	var wolf = c.debug_place("wolf", P, 0, F)

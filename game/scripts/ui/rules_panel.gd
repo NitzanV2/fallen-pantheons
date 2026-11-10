@@ -224,7 +224,7 @@ func _keywords(page: VBoxContainer) -> void:
 		["support", "Support", "Start of round: helps the ally directly in front of it (same lane). Works from the back row."],
 		["reinforce", "Reinforce", "When the ally in front of it dies, it immediately steps into the front slot and attacks, if it has not already attacked this round. That swing is bonus — it still attacks normally later in the round. If it Reinforces or attacks during planning (Tyr's Oath), it loses free reposition and is locked in place for the rest of planning."],
 		["on_death", "On-Death", "Triggers when the unit dies (and also when it Revives)."],
-		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP. Ankh of Eternity gives this to every ally, and the Core takes 2 each time one Revives. Book of the Dead instead returns the last ally that died for good, at full HP, keeping ATK and HP it had gained (not Armaments)."],
+		["revive", "Revive", "Once per fight: when it dies, its On-Death and other units' \"whenever an ally dies\" effects trigger, then it returns in the same slot with 1 HP. Ankh of Eternity grants Revive to your highest-cost non-token ally without it the first time you end planning, and heals the Core by 2 whenever one of your units Revives. Book of the Dead instead returns the last ally that died for good, at full HP, keeping ATK and HP it had gained (not Armaments)."],
 		["growth", "Growth", "End of round: gains the listed stats."],
 		["summon", "Summon", "Creates a token in an empty slot. Tokens never join your deck."],
 		["pack", "Wolf and Pack", "Wolves are a Norse tribe (the card text starts with \"Wolf\"). Pack: gains +1 ATK for each of your other Wolves, up to +%d. Wolf tokens count." % Combat.PACK_MAX],
@@ -264,8 +264,9 @@ func _keywords(page: VBoxContainer) -> void:
 		["bound_floor", "Bound", "Act 3. While the binder lives, a named ally cannot drop below 1 HP (or below half HP for Gold Seam). Kill the binder — or race once the floor is gone."],
 		["bound_half", "Bound (half)", "Act 3. Gold Seam: the largest other enemy cannot fall below half HP until the Seam dies."],
 		["sealmark", "Sealmark", "Act 3. Marked player lane: your units there can't leave by move during the next planning phase(s). Marked enemies can't be pushed or swapped and take no collision damage from pushes."],
-		["breach_on_death", "Breach", "Act 3. Opens a Breach. End of round: Core takes 1 per open Breach. A living unit of yours in that lane closes one unless a Keybearer lives."],
+		["breach_on_death", "Breach", "Act 3. Opens a Breach. While any Breach is open at end of round, the Core takes intensity (S) + open Breaches (N), then S rises by N. Intensity does not reset when you reseal. A living unit of yours in that lane closes a Breach unless a Keybearer lives."],
 		["keybearer", "Keybearer", "Act 3. While it lives, Breaches cannot be closed by presence."],
+		["helm", "Blank Cartouche", "Act 3 boss (Seal of Names). If you end planning at 0 Faith, the Seal locks next round: untargetable and undamageable (Litany and False Name still fire). Leave ≥1 Faith to keep damaging it; False Name then spends 1 Faith and inserts a Void Web."],
 		["unravel", "Unravel", "Act 3. +1 ATK at the start of each round."],
 		["sunder", "Sunder", "Act 3. At half HP the body leaves without dying (no On-Death / Revive) and splits into lesser units."],
 	])
@@ -371,9 +372,9 @@ func _enemies(page: VBoxContainer) -> void:
 	], 72)
 	page.add_child(_rich("[b]Act 3 bosses[/b] (the Binding Vault):"))
 	_grid(page, 3, [
-		["map/void.png", "Warden Eternal", "Sealmarks your strongest lane and taxes Breaches. Race the Warden (aggressive) or kill front Wardens, keep lanes filled, and reseal (patient). Phase 2 adds a Key Acolyte."],
-		["map/void.png", "The Unbound", "Gold Seam holds half HP while Unravel grows. Big hits open Breaches. Cut the Seam and dump into Sunder husks, or chip patiently and keep every slot filled for phase-2 bleed."],
-		["map/void.png", "Seal of Names", "Litany punishes empty lanes; False Name steals Faith or opens a Breach. Wide decks fill and grind; Faith decks dump or race. Phase 2 Key Acolyte: kill to reseal, or ignore Breaches and finish the Seal."],
+		["map/void.png", "Warden Eternal", "Tribunal: only the Accused may damage the Warden (others still clear Clerks/Bailiffs). Clerks force your highest ATK; kill them to choose. Authority taxes the Core unless you petition hard. Phase 2: Bailiffs, two Accused, Gavel."],
+		["map/void.png", "The Unbound", "Unravel while whole. Hits of 5+ Roar (Breach) and Shatter (Core). Cascade Sunder into Chain-Broke then Pierce Loose Links; empty slots bleed. Gold Filaments pulse behind it — cut them for full damage or pay when they snap."],
+		["map/void.png", "Seal of Names", "Litany punishes empty lanes. Leave ≥1 Faith or Blank Cartouche locks the Seal next round. Wide decks build then punch; chip decks keep Faith under Void Webs. Phase 2 Key Acolyte: kill to reseal, or ignore Breaches and finish the Seal."],
 	], 92)
 	_tip(page, "When a boss falls, its minions go with it.")
 

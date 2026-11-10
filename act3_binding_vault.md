@@ -191,15 +191,16 @@ Each boss is a face of the vault: **Warden**, **Prisoner**, **Seal**. Same patte
 
 **Fiction.** The god who stayed behind to hold the door. Centuries of watch turned them into the hinge. They believe anyone approaching the vault is a jailbreak — including you. Defeat them to inherit the authority to close the lock.
 
-**Board.** Immovable, back lanes 2–3 (width 2). Two Seal Wardens open in front.
+**Board.** Immovable, back width 2. Two **Door Clerks** in front (nomination officers — not Bound).
 
-**Rules.**
+**Rules (Tribunal).**
 
-- **Authority of the Door.** When you end planning, the Warden Sealmarks your lane with the most ATK. Marked units cannot move or Embark that round.
-- **Breach Tax.** End of round: Core takes 1 per open Breach. The Warden opens one Breach in a random empty enemy front slot each round they are above half HP.
-- **Phase 2 (half HP).** Summons a Key Acolyte; while it lives, Breaches cannot be closed and the Warden’s Sealmark hits two lanes. Wardens in front revive once as “Door Guardians” (returns in 2 rounds) until the Warden falls.
+- **Accused.** Only the Accused may damage the Warden; other hits on the Warden are refused (no Core tax). Clerks, Bailiffs, and Warders can still be attacked by anyone. While any Clerk/Bailiff lives, the court nominates your highest-ATK unit(s). Kill them to choose the Accused yourself (Shift-click). The Accused is Sealmarked that planning phase. Warden prefers attacking the Accused.
+- **Door Warders.** Each round the Warden calls Warders (1, or 2 in phase 2) into empty slots, preferring lanes that are **not** the Accused’s — fodder for everyone else.
+- **Authority.** +1/round (+2 in phase 2). End of round: Core takes Authority. If the Accused dealt ≥6 (≥8 in phase 2) to the Warden, Authority −2. **Failure to Appear** (0 damage): Sealmark the Accused’s lane again.
+- **Phase 2 (half HP).** Door Bailiffs take the floor (forced nomination returns); two Accused; faster Authority; **Gavel** — if an Accused dies, Core 3 and Authority +1.
 
-**What it checks.** Formation decks that refuse to spread; Voyage decks that need Embark; anyone who ignores Rift drip.
+**What it checks.** Who may strike the boss; carry vs chump petitioner; clearing Clerks for agency; Authority clock vs petition burst.
 
 **Victory read.** The Warden’s key falls to the Reliquary. The outer authority of the vault is yours — the door can be commanded shut.
 
@@ -209,16 +210,16 @@ Each boss is a face of the vault: **Warden**, **Prisoner**, **Seal**. Same patte
 
 **Fiction.** What the gods chained and could not kill. The Void pouring into Act 1 is its breath through the cracks. It is almost free. You do not negotiate. You drive it back under the gold before the last chain snaps.
 
-**Board.** Width 2–3 front or centre; not Immovable (it *strains*). Gold Seam support in the back on spawn.
+**Board.** Width 2 front; not Immovable (it *strains*). Light support (Rift Mite); no permanent Gold Seam.
 
 **Rules.**
 
-- **Last Chains.** Bound to the Gold Seam: cannot go below half HP until the Seam dies (or until phase 2 forced break).
-- **Unravel.** +1 ATK at the start of each round while above half HP. Intent shows the rising ATK.
-- **Rift Roar.** Whenever it takes 5+ damage in one hit, open a Breach in that lane.
-- **Phase 2 (half HP / Seam broken).** The binding fails visibly: it Sundering-splits into two **Chain-Broke** husks (real units). Empty player slots deal 1 to the Core at end of round until the husks die (Ymir-like bleed, but framed as Void leaking through broken links — slots are not deleted).
+- **Unravel.** +1 ATK at the start of each round while the body is still whole. Intent shows the rising ATK.
+- **Rift Roar / Shatter.** Whenever it takes 5+ damage in one hit, open a Breach in its lane **and** the Core takes 3.
+- **Gold Filament.** On even rounds while whole, a short-lived Filament (6 HP, 2 rounds) strands behind it. While it lives, Unbound takes half damage. Kill it early for full damage; if it expires unkilled, Core takes 3 and a Breach opens.
+- **Cascade Sunder.** At half HP it splits into two **Chain-Broke** (inherit ATK, Unravel). Each Chain-Broke at half splits into two **Loose Links** (Pierce, partial ATK inherit). Each Sunder event deals 2 to the Core and opens a Breach. Empty player slots deal 1 to the Core at end of round until the last husk dies.
 
-**What it checks.** Single-target burst vs. Bound gates; Doomed/sacrifice decks that leave holes in phase 2; slow scaling into Unravel.
+**What it checks.** Burst vs chip (Shatter tax vs Unravel clock); backline tempo vs Filament snaps; finishing gen-1 husks before Pierce gen-2; formation vs empty-slot bleed.
 
 **Victory read.** The prisoner is driven under again. The Reliquary’s light pours into the empty manacles. The portal in the living world starves.
 

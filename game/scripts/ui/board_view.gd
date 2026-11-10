@@ -554,6 +554,8 @@ func _make_token(u: Dictionary, sc: float, width: float, is_selected: bool) -> C
 
 	if fresh:
 		root.add_child(_fresh_badge(sc, size.x))
+	if u.get("accused", false):
+		root.add_child(_accused_badge(sc, size.x))
 
 	var icons := HBoxContainer.new()
 	icons.add_theme_constant_override("separation", int(3 * sc))
@@ -624,6 +626,31 @@ func _fresh_badge(sc: float, token_w: float) -> Control:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.position = Vector2(18 * sc, 1 * sc)
 	label.size = Vector2(bw - 20 * sc, bh - 2 * sc)
+	badge.add_child(label)
+	return badge
+
+
+## Corner tag: Warden Eternal Tribunal petitioner (only they may damage the Warden).
+func _accused_badge(sc: float, token_w: float) -> Control:
+	var badge := Panel.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var gold := Color(0.92, 0.78, 0.35)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.2, 0.14, 0.06, 0.92)
+	sb.border_color = gold
+	sb.set_border_width_all(max(1, int(round(2 * sc))))
+	sb.set_corner_radius_all(int(6 * sc))
+	sb.shadow_color = Color(gold, 0.45)
+	sb.shadow_size = int(6 * sc)
+	badge.add_theme_stylebox_override("panel", sb)
+	var bw: float = 72 * sc
+	var bh: float = 22 * sc
+	badge.size = Vector2(bw, bh)
+	badge.position = Vector2(2 * sc, 8 * sc)
+	var label := CardWidget.number_label("ACCUSED", 9 * sc, gold)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.position = Vector2(2 * sc, 1 * sc)
+	label.size = Vector2(bw - 4 * sc, bh - 2 * sc)
 	badge.add_child(label)
 	return badge
 
@@ -721,6 +748,8 @@ func _pose_flash_color(pose: String) -> Color:
 			return Color(0.55, 0.15, 0.75)
 		"helm":
 			return Color(0.25, 0.2, 0.55)
+		"locked":
+			return Color(0.75, 0.55, 0.2)
 		"breath":
 			return Color(0.35, 0.85, 0.35)
 		_:

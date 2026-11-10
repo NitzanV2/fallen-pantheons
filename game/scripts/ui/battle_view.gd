@@ -49,6 +49,10 @@ var restart_button: Button
 var void_row: HBoxContainer
 var void_icon: TextureRect
 var void_label: Label
+var rift_row: HBoxContainer
+var rift_label: Label
+var authority_row: HBoxContainer
+var authority_label: Label
 var push_panel: PanelContainer
 var push_title: Label
 var push_outcomes := {}
@@ -297,6 +301,34 @@ func _build_sidebar() -> void:
 	void_label = CardWidget._label("", 13, Color(0.8, 0.75, 0.9), false)
 	void_box.add_child(void_label)
 
+	rift_row = HBoxContainer.new()
+	rift_row.add_theme_constant_override("separation", 8)
+	rift_row.mouse_filter = Control.MOUSE_FILTER_STOP
+	rift_row.visible = false
+	box.add_child(rift_row)
+	rift_row.add_child(CardWidget.icon("void_tide", 40))
+	var rift_box := VBoxContainer.new()
+	rift_box.add_theme_constant_override("separation", 0)
+	rift_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	rift_row.add_child(rift_box)
+	rift_box.add_child(CardWidget._label("RIFT", 18, Color(0.95, 0.7, 1.0), true))
+	rift_label = CardWidget._label("", 13, Color(0.85, 0.75, 0.95), false)
+	rift_box.add_child(rift_label)
+
+	authority_row = HBoxContainer.new()
+	authority_row.add_theme_constant_override("separation", 8)
+	authority_row.mouse_filter = Control.MOUSE_FILTER_STOP
+	authority_row.visible = false
+	box.add_child(authority_row)
+	authority_row.add_child(CardWidget.icon("judgement", 40))
+	var auth_box := VBoxContainer.new()
+	auth_box.add_theme_constant_override("separation", 0)
+	auth_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	authority_row.add_child(auth_box)
+	auth_box.add_child(CardWidget._label("AUTHORITY", 18, Color(0.95, 0.82, 0.45), true))
+	authority_label = CardWidget._label("", 13, Color(0.9, 0.82, 0.6), false)
+	auth_box.add_child(authority_label)
+
 	info_label = RichTextLabel.new()
 	info_label.bbcode_enabled = true
 	info_label.fit_content = true
@@ -464,11 +496,17 @@ func _update_push_panel() -> void:
 	var impact: int = combat.power_push_damage() if sel_power else 3
 	for direction in push_outcomes:
 		var dest: int = push_target[2] + direction
-		var other = combat.unit_at(push_target[0], push_target[1], dest)
+		var other = null
+		if dest >= 0 and dest + u.width <= Combat.LANES:
+			for i in u.width:
+				var o = combat.unit_at(push_target[0], push_target[1], dest + i)
+				if o != null and o != u:
+					other = o
+					break
 		var text := "Moves to lane %d" % (dest + 1)
 		if sel_power and combat._up("wave_2"):
 			text += ": %d damage" % impact
-		if dest < 0 or dest >= Combat.LANES:
+		if dest < 0 or dest + u.width > Combat.LANES:
 			text = "Slams into the edge: %d damage" % impact
 		elif other != null and other.has_kw("immovable"):
 			text = "Hits the Immovable %s: %d damage" % [other.display_name(), impact]
@@ -602,12 +640,19 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 			out.append(["vengeance", "Hunted", "It dealt the most damage last round, so every Fury attacks it this round, wherever it stands."])
 		if u.get("ferried", false):
 			out.append(["ferry", "Charon's passenger", "Your lowest-HP back-row unit: at the end of the round Charon ferries it out of the fight, and its card goes to your discard pile. Heal it, or put a weaker unit in the back row."])
+		if u.get("accused", false):
+			out.append(["judgement", "Accused", "The Warden Eternal's Tribunal named this unit. Only the Accused may damage the Warden; your other units still fight Clerks and Bailiffs. Sealmarked this planning phase. Deal enough damage to the Warden to lower Authority."])
 		if u.get("spellward", false):
 			out.append(["spellward", "Spellwarded", "Your spells can't target it."])
 		if u.get("helm", false):
-			out.append(["helm", "Helm of Darkness", "Every 3rd round Hades can't be targeted or damaged. Hit his Shades this round."])
+			if u["id"] == "seal_of_names":
+				out.append(["helm", "Blank Cartouche", "Locked this round: can't be targeted or damaged. Litany and False Name still fire. Leave Faith next planning to keep it writable."])
+			else:
+				out.append(["helm", "Helm of Darkness", "Every 3rd round Hades can't be targeted or damaged. Hit his Shades this round."])
 		if u["id"] == "hades" and not snap.get("claimed", []).is_empty():
 			out.append(["claim", "Claimed cards", "%s. Deal Hades %d damage in one round to free the latest one." % [", ".join(snap["claimed"]), combat.HADES_FREE]])
+		if u["id"] == "warden_eternal":
+			out.append(["judgement", "Tribunal", "Only the Accused may damage the Warden; everyone else can still clear Clerks and Bailiffs. Authority taxes the Core each round; a strong petition lowers it. Kill Door Clerks to choose the Accused yourself."])
 		for arm_id in u.get("armaments", []):
 			out.append(["armament", "Armed: %s" % Data.CARDS[arm_id]["name"], Data.CARDS[arm_id]["text"].trim_prefix("Armament. ")])
 		if u.get("swine", false):
@@ -651,7 +696,7 @@ func _slot_extras(snap: Dictionary, slot: Array, u) -> Array:
 		if mark_left > 0:
 			out.append(["sealmark", "Sealmarked (%d)" % mark_left, "Units here cannot leave this lane by move until the mark ends.", Color(1.0, 0.88, 0.45)])
 	if ("%d:%d" % [side, lane]) in snap.get("breaches", []):
-		out.append(["breach_on_death", "Breach", "Open Breach in this lane. End of round: Core takes 1 per open Breach. Your presence here closes it unless a Keybearer lives.", Color(0.95, 0.7, 1.0)])
+		out.append(["breach_on_death", "Breach", "Open Breach in this lane. End of round: Core takes intensity + open Breaches, then intensity rises by the open count. Your presence here closes it unless a Keybearer lives.", Color(0.95, 0.7, 1.0)])
 	if side == E:
 		for w in snap.get("waves", []):
 			if w["lane"] == lane and w["row"] == row and w.get("returning", false):
@@ -780,8 +825,19 @@ func _render_status(snap: Dictionary) -> void:
 	var toll: int = snap.get("toll", 0)
 	if toll > 0:
 		faith_label.text += "  (Toll %d)" % toll
-	faith_label.tooltip_text = CardWidget.wrap_text("Toll: when you end planning, each Obol Collector takes 1 unspent Faith. Without it, the Core takes 2.") if toll > 0 else ""
-	faith_label.mouse_filter = Control.MOUSE_FILTER_STOP if toll > 0 else Control.MOUSE_FILTER_IGNORE
+	if snap.get("seal_blank", false):
+		faith_label.text += "  (Blank)"
+	elif snap.get("seal_blank_next", false):
+		faith_label.text += "  (locks Seal)"
+	var faith_tips: Array = []
+	if toll > 0:
+		faith_tips.append("Toll: when you end planning, each Obol Collector takes 1 unspent Faith. Without it, the Core takes 2.")
+	if snap.get("seal_blank", false):
+		faith_tips.append("Blank Cartouche: the Seal of Names cannot be targeted or damaged this round.")
+	elif snap.get("seal_blank_next", false):
+		faith_tips.append("Seal of Names: ending planning at 0 Faith arms Blank Cartouche for next round (this resolve can still hit it). Leave 1 Faith to keep it writable (it spends that Faith for a Void Web).")
+	faith_label.tooltip_text = CardWidget.wrap_text("\n".join(faith_tips)) if not faith_tips.is_empty() else ""
+	faith_label.mouse_filter = Control.MOUSE_FILTER_STOP if not faith_tips.is_empty() else Control.MOUSE_FILTER_IGNORE
 	var core: int = max(snap["core_hp"], 0)
 	core_bar.max_value = max(combat.core_max, core, 1)
 	core_bar.value = core
@@ -790,6 +846,28 @@ func _render_status(snap: Dictionary) -> void:
 	void_row.visible = tide > 0
 	void_label.text = "The Core takes %d at the end of each round" % tide
 	void_row.tooltip_text = CardWidget.wrap_text("Void Tide: while the boss lives, your Core takes %d damage at the end of every round. Win quickly!" % tide)
+	var rift_s: int = int(snap.get("rift_intensity", 0))
+	var rift_n: int = snap.get("breaches", []).size() if snap.get("breaches", []) is Array else 0
+	var rift_hit: int = int(snap.get("rift_preview", 0))
+	rift_row.visible = rift_s > 0 or rift_n > 0
+	if rift_hit > 0:
+		rift_label.text = "Intensity %d · %d open · next hit %d" % [rift_s, rift_n, rift_hit]
+	elif rift_s > 0:
+		rift_label.text = "Intensity %d · sealed (paused)" % rift_s
+	else:
+		rift_label.text = "%d Breach%s open" % [rift_n, "es" if rift_n != 1 else ""]
+	var auth: int = int(snap.get("warden_authority", 0))
+	authority_row.visible = auth > 0 or snap.get("accused_need", 0) > 0
+	if authority_row.visible:
+		var need: int = int(snap.get("petition_threshold", 6))
+		var dealt: int = int(snap.get("accused_damage", 0))
+		authority_label.text = "%d · petition %d/%d" % [auth, dealt, need]
+		if snap.get("accused_pickable", false):
+			authority_label.text += " · Shift-click to choose Accused"
+		authority_row.tooltip_text = CardWidget.wrap_text(
+			"Authority: Core takes this much at end of round. The Accused must deal at least %d to the Warden this round to lower Authority by 2. Hits on the Warden from anyone else are refused; Clerks and Bailiffs can still be attacked. Kill Clerks/Bailiffs to choose the Accused." % need)
+	rift_row.tooltip_text = CardWidget.wrap_text(
+		"Rift: while any Breach is open, the Core takes intensity + open Breaches, then intensity rises by the number of open Breaches. Intensity stays when you reseal; it only rises again once a Breach is open.")
 	var fresh_note := ""
 	if combat.phase == "plan":
 		for row in snap["grid"][P]:
@@ -1030,10 +1108,18 @@ func _on_slot_pressed(side: int, row: int, lane: int) -> void:
 	if sel_move == null:
 		if u == null:
 			return
+		# Tribunal: with no Clerks, click a unit to name the Accused (Shift/Alt not required).
+		if combat.can_choose_accused() and Input.is_key_pressed(KEY_SHIFT):
+			_apply(combat.choose_accused(u.uid))
+			return
 		if combat.moves_left <= 0 and not combat.is_fresh(u):
 			_set_hint("No moves left this round.")
 		elif not combat.can_move(u):
-			_set_hint("%s can't move: %s." % [u.display_name(), combat.move_block(u).to_lower()])
+			# Immobile Accused can still be reassigned with Shift; otherwise explain.
+			if combat.can_choose_accused():
+				_set_hint("%s can't move: %s. Shift-click to name them Accused." % [u.display_name(), combat.move_block(u).to_lower()])
+			else:
+				_set_hint("%s can't move: %s." % [u.display_name(), combat.move_block(u).to_lower()])
 		else:
 			sel_move = [row, lane]
 			if combat.can_reposition(u):
@@ -1134,6 +1220,8 @@ func _on_end_pressed() -> void:
 			var delay := STEP_DELAY
 			if ev.has("void_tide"):
 				_play_void_tide(ev["void_tide"])
+			elif ev.has("rift"):
+				_play_void_tide(int(ev["rift"]))
 				delay = VOID_TIDE_DELAY
 			elif ev.get("enrage", false) or ev.get("boss_pose", "") != "":
 				delay = 0.7

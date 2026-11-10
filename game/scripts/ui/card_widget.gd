@@ -71,7 +71,7 @@ const KEYWORD_INFO := {
 	"bound_floor": ["Bound", "While this binder lives, another enemy cannot drop below 1 HP."],
 	"bound_half": ["Bound", "While this lives, the largest other enemy cannot fall below half HP."],
 	"sealmark": ["Sealmark", "Marked player lanes: your units there can't leave by move for that many planning phases. Marked enemies can't be pushed or swapped and take no collision damage from pushes."],
-	"breach_on_death": ["Breach", "On death, opens a Breach. Core takes 1 per open Breach each round; presence reseals unless a Keybearer lives."],
+	"breach_on_death": ["Breach", "On death, opens a Breach. While any Breach is open, the Core takes intensity + open Breaches, then intensity rises by the open count; presence reseals unless a Keybearer lives."],
 	"keybearer": ["Keybearer", "While it lives, Breaches cannot be closed."],
 	"unravel": ["Unravel", "+1 ATK at the start of each round."],
 	"sunder": ["Sunder", "At half HP it leaves without dying and splits into lesser units."],
@@ -113,11 +113,16 @@ const BOARD_SPRITE_WIDE_ASPECT := 1.4
 static func board_sprite_stem(id: String) -> String:
 	if id.begins_with("amalgam_"):
 		return "amalgam"
+	# Unbound cascade / filament reuse existing vault art until bespoke sprites exist.
+	if id == "loose_link":
+		return "husk"
+	if id == "gold_filament":
+		return "gold_seam"
 	return id
 
 
 ## Path for a board sprite. Prefer `{id}_airborne[.png|_attack.png]` when `airborne`.
-## Prefer `{id}_{pose}[.png|_attack.png]` when `pose` is set (enraged / helm / toll / breath).
+## Prefer `{id}_{pose}[.png|_attack.png]` when `pose` is set (enraged / helm / locked / toll / breath).
 static func board_sprite_path(id: String, attack := false, airborne := false, pose := "") -> String:
 	var stem := board_sprite_stem(id)
 	var suffix := "_attack" if attack else ""
@@ -139,7 +144,7 @@ static func board_sprite_path(id: String, attack := false, airborne := false, po
 ## Frameless board sprite when `res://art/sprites/{id}.png` exists. Null otherwise.
 ## Pass `attack` true for the strike pose used during the lunge / shot (`{id}_attack.png`).
 ## Pass `airborne` true to use `{id}_airborne` art when present (Erinyes flying Fury).
-## Pass `pose` for boss state art: enraged, helm, toll, breath (`{id}_{pose}.png`).
+## Pass `pose` for boss state art: enraged, helm, locked, toll, breath (`{id}_{pose}.png`).
 ## Returns a host Control; the TextureRect is in meta `board_tex` (aspect-fit, floor-pinned).
 static func board_sprite(id: String, attack := false, airborne := false, pose := "") -> Control:
 	var path := board_sprite_path(id, attack, airborne, pose)

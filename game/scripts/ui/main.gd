@@ -81,17 +81,32 @@ var power_option: OptionButton
 var power_upgraded: CheckBox
 var relic_checks := {}
 var deck_keys: Array = []
+## Saved sandbox decks: [{ "name": String, "cards": Array, "relics": Array }].
+var custom_decks: Array = []
+## Cards of the custom deck currently selected / being edited.
 var custom_deck: Array = []
+## Relics saved with the selected custom deck.
+var custom_relics: Array = []
+## Index into custom_decks for the selected custom deck, or -1.
+var custom_deck_index: int = -1
 var deck_builder: Control = null
 var builder_deck_box: VBoxContainer
 var builder_title: Label
+var builder_name: LineEdit
+var builder_filter := "all"
 var act_option: OptionButton
 var floor_box: SpinBox
 var core_box: SpinBox
 var core_max_box: SpinBox
 var scaling_label: Label
+var fight_act_filter: OptionButton
+var fight_kind_filter: OptionButton
+var battles_box: VBoxContainer
+var edit_deck_btn: Button
+var delete_deck_btn: Button
 
-const CUSTOM_DECK_FILE := "user://sandbox_deck.json"
+const CUSTOM_DECKS_FILE := "user://sandbox_decks.json"
+const CUSTOM_DECK_FILE_LEGACY := "user://sandbox_deck.json"
 
 
 func _ready() -> void:
@@ -787,7 +802,7 @@ func _build_sandbox() -> void:
 	header.add_child(back)
 
 	var subtitle := Label.new()
-	subtitle.text = "Single test battles and events. The deck and relic choices on the right apply only to battles."
+	subtitle.text = "Pick fights by act and type. Saved custom decks and relics on the right apply to battles only."
 	subtitle.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
 	root.add_child(subtitle)
 
@@ -837,25 +852,33 @@ func _build_sandbox() -> void:
 					tb.remove_theme_color_override(c)
 				CardWidget.style_button(tb, j == i, 16))
 	tab_buttons[0].pressed.emit()
-	for battle in Data.BATTLES:
-		var row := HBoxContainer.new()
-		var button := Button.new()
-		button.text = battle["name"]
-		button.custom_minimum_size = Vector2(320, 44)
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.pressed.connect(_start_battle.bind(battle))
-		CardWidget.style_button(button, false, 16)
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		row.add_child(button)
-		var blurb := Label.new()
-		blurb.text = "%s  (default deck: %s, Core %d)" % [battle["blurb"], Data.DECKS[battle["deck"]]["name"], battle["core"]]
-		blurb.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
-		blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		blurb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		blurb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 12)
-		row.add_child(blurb)
-		battles.add_child(row)
+	var filters := HBoxContainer.new()
+	filters.add_theme_constant_override("separation", 10)
+	battles.add_child(filters)
+	var act_label := Label.new()
+	act_label.text = "Act"
+	act_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	filters.add_child(act_label)
+	fight_act_filter = OptionButton.new()
+	fight_act_filter.add_item("All")
+	for i in Data.ACTS.size():
+		fight_act_filter.add_item("Act %d" % (i + 1))
+	fight_act_filter.item_selected.connect(func(_i): _refresh_battle_list())
+	filters.add_child(fight_act_filter)
+	var kind_label := Label.new()
+	kind_label.text = "Type"
+	kind_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	filters.add_child(kind_label)
+	fight_kind_filter = OptionButton.new()
+	for label in ["All", "Normal", "Elite", "Boss"]:
+		fight_kind_filter.add_item(label)
+	fight_kind_filter.item_selected.connect(func(_i): _refresh_battle_list())
+	filters.add_child(fight_kind_filter)
+	battles_box = VBoxContainer.new()
+	battles_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	battles_box.add_theme_constant_override("separation", 8)
+	battles.add_child(battles_box)
+	_refresh_battle_list()
 	_build_event_tests(events)
 
 	var options_scroll := ScrollContainer.new()
@@ -869,20 +892,40 @@ func _build_sandbox() -> void:
 
 	options.add_child(_heading("Deck"))
 	deck_option = OptionButton.new()
-	deck_option.add_item("Battle default")
+	deck_keys.clear()
 	for key in Data.DECKS:
 		deck_keys.append(key)
-		deck_option.add_item(Data.DECKS[key]["name"])
-	_load_custom_deck()
-	deck_option.add_item("")
-	_refresh_custom_deck_item()
+	_load_custom_decks()
+	_refresh_deck_option()
+	if custom_deck_index >= 0:
+		deck_option.select(deck_keys.size() + 1 + custom_deck_index)
+	deck_option.item_selected.connect(_on_deck_option_selected)
 	options.add_child(deck_option)
-	var edit_deck := Button.new()
-	edit_deck.text = "Build custom deck"
-	edit_deck.custom_minimum_size = Vector2(0, 38)
-	edit_deck.pressed.connect(_open_deck_builder)
-	CardWidget.style_button(edit_deck, false, 15)
-	options.add_child(edit_deck)
+	var deck_tools := HBoxContainer.new()
+	deck_tools.add_theme_constant_override("separation", 8)
+	options.add_child(deck_tools)
+	edit_deck_btn = Button.new()
+	edit_deck_btn.text = "Edit"
+	edit_deck_btn.custom_minimum_size = Vector2(0, 38)
+	edit_deck_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	edit_deck_btn.pressed.connect(_edit_selected_custom_deck)
+	CardWidget.style_button(edit_deck_btn, false, 15)
+	deck_tools.add_child(edit_deck_btn)
+	var new_deck := Button.new()
+	new_deck.text = "New"
+	new_deck.custom_minimum_size = Vector2(0, 38)
+	new_deck.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	new_deck.pressed.connect(_new_custom_deck)
+	CardWidget.style_button(new_deck, false, 15)
+	deck_tools.add_child(new_deck)
+	delete_deck_btn = Button.new()
+	delete_deck_btn.text = "Delete"
+	delete_deck_btn.custom_minimum_size = Vector2(0, 38)
+	delete_deck_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	delete_deck_btn.pressed.connect(_delete_selected_custom_deck)
+	CardWidget.style_button(delete_deck_btn, false, 15)
+	deck_tools.add_child(delete_deck_btn)
+	_update_deck_tool_buttons()
 
 	options.add_child(_heading("Run conditions"))
 	var act_row := HBoxContainer.new()
@@ -1164,15 +1207,24 @@ func _hide_menus() -> void:
 
 func _start_battle(battle: Dictionary) -> void:
 	var deck: Variant = battle["deck"]
-	if deck_option.selected > deck_keys.size():
+	var preset_relics: Array = []
+	var custom_i := _deck_option_custom_index(deck_option.selected)
+	if custom_i >= 0:
+		_select_custom_deck(custom_i)
 		if custom_deck.is_empty():
 			_open_deck_builder()
 			return
 		deck = custom_deck
+		preset_relics = custom_relics
 	elif deck_option.selected > 0:
-		deck = deck_keys[deck_option.selected - 1]
+		var deck_key: String = deck_keys[deck_option.selected - 1]
+		deck = deck_key
+		preset_relics = Data.deck_relics(deck_key)
 	battle = _apply_run_conditions(battle)
 	var relics: Array = battle["relics"].duplicate()
+	for id in preset_relics:
+		if not relics.has(id):
+			relics.append(id)
 	for id in relic_checks:
 		if relic_checks[id].button_pressed and not relics.has(id):
 			relics.append(id)
@@ -1242,27 +1294,233 @@ func _labeled_spin(parent: Control, text: String, lo: int, hi: int, value: int) 
 	return box
 
 
-func _refresh_custom_deck_item() -> void:
-	deck_option.set_item_text(deck_keys.size() + 1, "Custom deck (%d cards)" % custom_deck.size())
+## Act / kind for sandbox fight filters. Kind is normal, elite, or boss.
+func _battle_act(battle: Dictionary) -> int:
+	if battle.has("act"):
+		return int(battle["act"])
+	var pool := str(Data.BATTLE_POOLS.get(battle["id"], ""))
+	if pool.begins_with("act2"):
+		return 2
+	if pool.begins_with("act3"):
+		return 3
+	return 1
 
 
-func _load_custom_deck() -> void:
-	if not FileAccess.file_exists(CUSTOM_DECK_FILE):
+func _battle_kind(battle: Dictionary) -> String:
+	var pool := str(Data.BATTLE_POOLS.get(battle["id"], ""))
+	if battle.get("boss", false) or pool.ends_with("boss"):
+		return "boss"
+	if pool.ends_with("elite") or String(battle.get("name", "")).find("(elite)") >= 0:
+		return "elite"
+	return "normal"
+
+
+func _refresh_battle_list() -> void:
+	if battles_box == null:
 		return
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(CUSTOM_DECK_FILE))
-	if parsed is Array:
-		custom_deck = parsed.filter(func(id): return id is String and Data.CARDS.has(id))
+	for child in battles_box.get_children():
+		child.queue_free()
+	var want_act := fight_act_filter.selected  # 0 = All, else act number
+	var kind_keys := ["", "normal", "elite", "boss"]
+	var want_kind: String = kind_keys[fight_kind_filter.selected]
+	var shown := 0
+	for battle in Data.BATTLES:
+		if want_act > 0 and _battle_act(battle) != want_act:
+			continue
+		if want_kind != "" and _battle_kind(battle) != want_kind:
+			continue
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		var button := Button.new()
+		button.text = battle["name"]
+		button.custom_minimum_size = Vector2(320, 44)
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.pressed.connect(_start_battle.bind(battle))
+		CardWidget.style_button(button, false, 16)
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row.add_child(button)
+		var blurb := Label.new()
+		blurb.text = "%s  (default deck: %s, Core %d)" % [battle["blurb"], Data.DECKS[battle["deck"]]["name"], battle["core"]]
+		blurb.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+		blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		blurb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		blurb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(blurb)
+		battles_box.add_child(row)
+		shown += 1
+	if shown == 0:
+		var empty := Label.new()
+		empty.text = "No fights match these filters."
+		empty.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7))
+		battles_box.add_child(empty)
 
 
-func _save_custom_deck() -> void:
-	var f := FileAccess.open(CUSTOM_DECK_FILE, FileAccess.WRITE)
+func _deck_option_custom_index(selected: int) -> int:
+	var first_custom := deck_keys.size() + 1
+	if selected < first_custom:
+		return -1
+	return selected - first_custom
+
+
+func _refresh_deck_option() -> void:
+	var keep := deck_option.selected if deck_option.item_count > 0 else 0
+	deck_option.clear()
+	deck_option.add_item("Battle default")
+	for key in deck_keys:
+		var def: Dictionary = Data.DECKS[key]
+		var label: String = def["name"]
+		var relic_n: int = def.get("relics", []).size()
+		if relic_n > 0 and def.has("cards"):
+			label = "%s (%d · %d relics)" % [def["name"], def["cards"].size(), relic_n]
+		deck_option.add_item(label)
+	for i in custom_decks.size():
+		var d: Dictionary = custom_decks[i]
+		var relic_n: int = d.get("relics", []).size()
+		var label := "%s (%d)" % [d["name"], d["cards"].size()]
+		if relic_n > 0:
+			label = "%s (%d · %d relics)" % [d["name"], d["cards"].size(), relic_n]
+		deck_option.add_item(label)
+	if keep >= 0 and keep < deck_option.item_count:
+		deck_option.select(keep)
+	elif custom_deck_index >= 0 and custom_deck_index < custom_decks.size():
+		deck_option.select(deck_keys.size() + 1 + custom_deck_index)
+	_update_deck_tool_buttons()
+
+
+func _on_deck_option_selected(i: int) -> void:
+	var custom_i := _deck_option_custom_index(i)
+	if custom_i >= 0:
+		_select_custom_deck(custom_i)
+	else:
+		custom_deck_index = -1
+	_update_deck_tool_buttons()
+
+
+func _update_deck_tool_buttons() -> void:
+	var has_custom := _deck_option_custom_index(deck_option.selected) >= 0
+	if edit_deck_btn != null:
+		edit_deck_btn.disabled = not has_custom
+	if delete_deck_btn != null:
+		delete_deck_btn.disabled = not has_custom
+
+
+func _select_custom_deck(index: int) -> void:
+	if index < 0 or index >= custom_decks.size():
+		custom_deck_index = -1
+		custom_deck = []
+		custom_relics = []
+		return
+	custom_deck_index = index
+	custom_deck = custom_decks[index]["cards"].duplicate()
+	custom_relics = custom_decks[index].get("relics", []).duplicate()
+
+
+func _unique_custom_deck_name(base := "Custom deck") -> String:
+	var names := {}
+	for d in custom_decks:
+		names[d["name"]] = true
+	if not names.has(base):
+		return base
+	var n := 2
+	while names.has("%s %d" % [base, n]):
+		n += 1
+	return "%s %d" % [base, n]
+
+
+func _new_custom_deck() -> void:
+	custom_decks.append({"name": _unique_custom_deck_name(), "cards": [], "relics": []})
+	custom_deck_index = custom_decks.size() - 1
+	custom_deck = []
+	custom_relics = []
+	_save_custom_decks()
+	_refresh_deck_option()
+	deck_option.select(deck_keys.size() + 1 + custom_deck_index)
+	_update_deck_tool_buttons()
+	_open_deck_builder()
+
+
+func _edit_selected_custom_deck() -> void:
+	var custom_i := _deck_option_custom_index(deck_option.selected)
+	if custom_i < 0:
+		_new_custom_deck()
+		return
+	_select_custom_deck(custom_i)
+	_open_deck_builder()
+
+
+func _delete_selected_custom_deck() -> void:
+	var custom_i := _deck_option_custom_index(deck_option.selected)
+	if custom_i < 0:
+		return
+	custom_decks.remove_at(custom_i)
+	custom_deck_index = -1
+	custom_deck = []
+	custom_relics = []
+	_save_custom_decks()
+	_refresh_deck_option()
+	deck_option.select(0)
+	_update_deck_tool_buttons()
+
+
+func _load_custom_decks() -> void:
+	custom_decks.clear()
+	custom_deck_index = -1
+	custom_deck = []
+	custom_relics = []
+	if FileAccess.file_exists(CUSTOM_DECKS_FILE):
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string(CUSTOM_DECKS_FILE))
+		if parsed is Dictionary and parsed.get("decks") is Array:
+			for entry in parsed["decks"]:
+				if not entry is Dictionary:
+					continue
+				var cards: Array = entry.get("cards", []).filter(func(id): return id is String and Data.CARDS.has(id))
+				var relics: Array = entry.get("relics", []).filter(func(id): return id is String and Data.RELICS.has(id))
+				var name := str(entry.get("name", "Custom deck")).strip_edges()
+				if name == "":
+					name = "Custom deck"
+				custom_decks.append({"name": name, "cards": cards, "relics": relics})
+			var sel := int(parsed.get("selected", 0))
+			if sel >= 0 and sel < custom_decks.size():
+				_select_custom_deck(sel)
+			return
+	## Migrate the old single-deck save.
+	if FileAccess.file_exists(CUSTOM_DECK_FILE_LEGACY):
+		var legacy = JSON.parse_string(FileAccess.get_file_as_string(CUSTOM_DECK_FILE_LEGACY))
+		if legacy is Array:
+			var cards: Array = legacy.filter(func(id): return id is String and Data.CARDS.has(id))
+			if not cards.is_empty():
+				custom_decks.append({"name": "Custom deck", "cards": cards, "relics": []})
+				_select_custom_deck(0)
+				_save_custom_decks()
+
+
+func _persist_open_custom_deck() -> void:
+	if custom_deck_index < 0 or custom_deck_index >= custom_decks.size():
+		return
+	custom_decks[custom_deck_index]["cards"] = custom_deck.duplicate()
+	custom_decks[custom_deck_index]["relics"] = custom_relics.duplicate()
+
+
+func _save_custom_decks() -> void:
+	_persist_open_custom_deck()
+	var payload := {"selected": maxi(custom_deck_index, 0), "decks": custom_decks}
+	var f := FileAccess.open(CUSTOM_DECKS_FILE, FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify(custom_deck))
+		f.store_string(JSON.stringify(payload))
 
 
-## Full card grid on the left (click to add a copy), the deck on the right (click to remove one).
+## Full card/relic grid on the left (click to add), the deck on the right (click to remove).
 func _open_deck_builder(filter := "all") -> void:
+	if custom_deck_index < 0 or custom_deck_index >= custom_decks.size():
+		custom_decks.append({"name": _unique_custom_deck_name(), "cards": [], "relics": []})
+		custom_deck_index = custom_decks.size() - 1
+		custom_deck = []
+		custom_relics = []
+		_save_custom_decks()
+		_refresh_deck_option()
+		deck_option.select(deck_keys.size() + 1 + custom_deck_index)
 	_close_deck_builder()
+	builder_filter = filter
 	deck_builder = PanelContainer.new()
 	deck_builder.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var sb := StyleBoxFlat.new()
@@ -1280,9 +1538,15 @@ func _open_deck_builder(filter := "all") -> void:
 	builder_title = CardWidget._label("", 32, GOLD, true)
 	builder_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(builder_title)
-	for key in ["all"] + LIST_GROUPS.keys():
+	var filter_keys: Array = ["all", "relics"] + LIST_GROUPS.keys()
+	for key in filter_keys:
 		var b := Button.new()
-		b.text = "All" if key == "all" else LIST_GROUPS[key]
+		if key == "all":
+			b.text = "All"
+		elif key == "relics":
+			b.text = "Relics"
+		else:
+			b.text = LIST_GROUPS[key]
 		b.custom_minimum_size = Vector2(0, 40)
 		b.disabled = key == filter
 		b.pressed.connect(_open_deck_builder.bind(key))
@@ -1306,26 +1570,51 @@ func _open_deck_builder(filter := "all") -> void:
 	var sections := VBoxContainer.new()
 	sections.add_theme_constant_override("separation", 10)
 	scroll.add_child(sections)
-	for group in LIST_GROUPS:
-		if filter != "all" and filter != group:
-			continue
-		var ids: Array = Data.CARDS.keys().filter(func(id): return _list_group(id) == group)
-		ids.sort_custom(_card_before)
-		sections.add_child(_heading("%s - %d" % [LIST_GROUPS[group], ids.size()]))
-		var grid := GridContainer.new()
-		grid.columns = 6
-		grid.add_theme_constant_override("h_separation", 10)
-		grid.add_theme_constant_override("v_separation", 10)
-		for id in ids:
-			var b := CardWidget.card_button(id)
-			b.pressed.connect(_builder_add.bind(id))
-			grid.add_child(b)
-		sections.add_child(grid)
+	if filter == "all" or filter == "relics":
+		var relic_ids: Array = Data.RELICS.keys()
+		relic_ids.sort_custom(_relic_before)
+		sections.add_child(_heading("Relics - %d" % relic_ids.size()))
+		var relic_grid := GridContainer.new()
+		relic_grid.columns = 4
+		relic_grid.add_theme_constant_override("h_separation", 10)
+		relic_grid.add_theme_constant_override("v_separation", 10)
+		for id in relic_ids:
+			var rb := CardWidget.relic_button(id)
+			if custom_relics.has(id):
+				rb.modulate = Color(0.55, 0.85, 0.6)
+			rb.pressed.connect(_builder_toggle_relic.bind(id))
+			relic_grid.add_child(rb)
+		sections.add_child(relic_grid)
+	if filter != "relics":
+		for group in LIST_GROUPS:
+			if filter != "all" and filter != group:
+				continue
+			var ids: Array = Data.CARDS.keys().filter(func(id): return _list_group(id) == group)
+			ids.sort_custom(_card_before)
+			sections.add_child(_heading("%s - %d" % [LIST_GROUPS[group], ids.size()]))
+			var grid := GridContainer.new()
+			grid.columns = 6
+			grid.add_theme_constant_override("h_separation", 10)
+			grid.add_theme_constant_override("v_separation", 10)
+			for id in ids:
+				var b := CardWidget.card_button(id)
+				b.pressed.connect(_builder_add.bind(id))
+				grid.add_child(b)
+			sections.add_child(grid)
 
 	var side := VBoxContainer.new()
 	side.custom_minimum_size = Vector2(340, 0)
 	side.add_theme_constant_override("separation", 8)
 	columns.add_child(side)
+	var name_label := Label.new()
+	name_label.text = "Deck name"
+	name_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	side.add_child(name_label)
+	builder_name = LineEdit.new()
+	builder_name.text = custom_decks[custom_deck_index]["name"]
+	builder_name.placeholder_text = "Custom deck"
+	builder_name.text_changed.connect(_builder_rename)
+	side.add_child(builder_name)
 	var tools := HBoxContainer.new()
 	tools.add_theme_constant_override("separation", 8)
 	side.add_child(tools)
@@ -1336,8 +1625,12 @@ func _open_deck_builder(filter := "all") -> void:
 	preset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preset.item_selected.connect(func(i):
 		if i > 0:
-			custom_deck = Data.deck_cards(deck_keys[i - 1]).duplicate()
+			var key: String = deck_keys[i - 1]
+			custom_deck = Data.deck_cards(key)
+			custom_relics = Data.deck_relics(key)
 			_builder_changed()
+			if deck_builder != null and builder_filter in ["all", "relics"]:
+				call_deferred("_open_deck_builder", builder_filter)
 		preset.select(0))
 	tools.add_child(preset)
 	var clear := Button.new()
@@ -1345,11 +1638,12 @@ func _open_deck_builder(filter := "all") -> void:
 	clear.custom_minimum_size = Vector2(90, 36)
 	clear.pressed.connect(func():
 		custom_deck.clear()
+		custom_relics.clear()
 		_builder_changed())
 	CardWidget.style_button(clear, false, 15)
 	tools.add_child(clear)
 	var hint := Label.new()
-	hint.text = "Click a card on the left to add a copy. Click a card here to remove one."
+	hint.text = "Click a card or relic on the left to add it. Click an entry here to remove it."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
 	side.add_child(hint)
@@ -1365,9 +1659,18 @@ func _open_deck_builder(filter := "all") -> void:
 
 
 func _close_deck_builder() -> void:
-	if deck_builder != null:
-		deck_builder.queue_free()
-		deck_builder = null
+	if deck_builder == null:
+		return
+	_save_custom_decks()
+	deck_builder.queue_free()
+	deck_builder = null
+	builder_deck_box = null
+	builder_title = null
+	builder_name = null
+	_refresh_deck_option()
+	if custom_deck_index >= 0:
+		deck_option.select(deck_keys.size() + 1 + custom_deck_index)
+	_update_deck_tool_buttons()
 
 
 func _builder_add(id: String) -> void:
@@ -1380,22 +1683,105 @@ func _builder_remove(id: String) -> void:
 	_builder_changed()
 
 
-func _builder_changed() -> void:
-	_save_custom_deck()
-	_refresh_custom_deck_item()
-	deck_option.select(deck_keys.size() + 1)
+func _builder_toggle_relic(id: String) -> void:
+	if custom_relics.has(id):
+		custom_relics.erase(id)
+	else:
+		custom_relics.append(id)
+	_builder_changed()
+	## Rebuild after the click finishes so selected relics stay highlighted.
+	if deck_builder != null and builder_filter in ["all", "relics"]:
+		call_deferred("_open_deck_builder", builder_filter)
+
+
+func _builder_remove_relic(id: String) -> void:
+	custom_relics.erase(id)
+	_builder_changed()
+	if deck_builder != null and builder_filter in ["all", "relics"]:
+		call_deferred("_open_deck_builder", builder_filter)
+
+
+func _builder_rename(text: String) -> void:
+	if custom_deck_index < 0 or custom_deck_index >= custom_decks.size():
+		return
+	var name := text.strip_edges()
+	if name == "":
+		name = "Custom deck"
+	custom_decks[custom_deck_index]["name"] = name
+	_save_custom_decks()
+	_refresh_deck_option()
+	deck_option.select(deck_keys.size() + 1 + custom_deck_index)
 	_refresh_builder_deck()
 
 
+func _builder_changed() -> void:
+	_save_custom_decks()
+	_refresh_deck_option()
+	if custom_deck_index >= 0:
+		deck_option.select(deck_keys.size() + 1 + custom_deck_index)
+	_update_deck_tool_buttons()
+	_refresh_builder_deck()
+
+
+func _relic_before(a: String, b: String) -> bool:
+	var ra: String = Data.RELICS[a].get("rarity", "")
+	var rb: String = Data.RELICS[b].get("rarity", "")
+	var ia := RARITY_ORDER.find(ra)
+	var ib := RARITY_ORDER.find(rb)
+	ia = ia if ia >= 0 else RARITY_ORDER.size()
+	ib = ib if ib >= 0 else RARITY_ORDER.size()
+	if ia != ib:
+		return ia < ib
+	return Data.RELICS[a]["name"] < Data.RELICS[b]["name"]
+
+
+func _builder_relic_row(id: String) -> Button:
+	var def: Dictionary = Data.RELICS[id]
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.text = def["name"]
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.custom_minimum_size = Vector2(0, 40)
+	b.tooltip_text = CardWidget.wrap_text("%s\n%s" % [def["name"], def["text"]])
+	CardWidget.style_button(b, false, 15)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	for pattern in ["res://art/%s/%s.png", "res://art/%s/%s.jpg"]:
+		var path: String = pattern % ["relics", id]
+		if ResourceLoader.exists(path):
+			b.icon = load(path)
+			b.expand_icon = true
+			b.add_theme_constant_override("icon_max_width", 28)
+			break
+	b.pressed.connect(_builder_remove_relic.bind(id))
+	return b
+
+
 func _refresh_builder_deck() -> void:
-	builder_title.text = "Custom deck - %d cards" % custom_deck.size()
+	if builder_title == null or builder_deck_box == null:
+		return
+	var name := "Custom deck"
+	if custom_deck_index >= 0 and custom_deck_index < custom_decks.size():
+		name = custom_decks[custom_deck_index]["name"]
+	var relic_n := custom_relics.size()
+	if relic_n > 0:
+		builder_title.text = "%s — %d cards · %d relics" % [name, custom_deck.size(), relic_n]
+	else:
+		builder_title.text = "%s — %d cards" % [name, custom_deck.size()]
 	for child in builder_deck_box.get_children():
 		child.queue_free()
+	if not custom_relics.is_empty():
+		builder_deck_box.add_child(_heading("Relics"))
+		var relic_ids: Array = custom_relics.duplicate()
+		relic_ids.sort_custom(_relic_before)
+		for id in relic_ids:
+			builder_deck_box.add_child(_builder_relic_row(id))
 	var counts := {}
 	for id in custom_deck:
 		counts[id] = counts.get(id, 0) + 1
 	var ids: Array = counts.keys()
 	ids.sort_custom(_card_before)
+	if not ids.is_empty():
+		builder_deck_box.add_child(_heading("Cards"))
 	for id in ids:
 		var def: Dictionary = Data.CARDS[id]
 		var b := Button.new()
@@ -1407,9 +1793,9 @@ func _refresh_builder_deck() -> void:
 		CardWidget.style_button(b, false, 15)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		builder_deck_box.add_child(b)
-	if ids.is_empty():
+	if ids.is_empty() and custom_relics.is_empty():
 		var empty := Label.new()
-		empty.text = "Empty. A custom deck needs at least one card."
+		empty.text = "Empty. Add cards and optional relics from the left."
 		empty.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65))
 		builder_deck_box.add_child(empty)
 
